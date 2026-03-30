@@ -52,6 +52,11 @@ def init_db():
                 name TEXT UNIQUE NOT NULL
             );
 
+            CREATE TABLE IF NOT EXISTS brands (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name TEXT UNIQUE NOT NULL
+            );
+
             CREATE TABLE IF NOT EXISTS products (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 name TEXT NOT NULL,
@@ -88,6 +93,14 @@ def init_db():
                 qty REAL DEFAULT 1,
                 rate REAL DEFAULT 0,
                 amount REAL DEFAULT 0
+            );
+
+            CREATE TABLE IF NOT EXISTS product_variants (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                product_id INTEGER REFERENCES products(id),
+                size TEXT,
+                flavor TEXT,
+                price_adjustment REAL DEFAULT 0
             );
             """
         )

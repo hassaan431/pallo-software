@@ -11,6 +11,7 @@
   .row-low-stock th {
     background: #fff8e1 !important;
   }
+
   .btn-edit {
     background: #2563eb;
     color: #fff;
@@ -19,6 +20,57 @@
     background: #1d4ed8;
     color: #fff;
   }
+
+  .variants-badge {
+    border: 1px solid rgba(26, 35, 50, 0.15);
+    background: rgba(26, 35, 50, 0.04);
+    color: var(--color-text);
+    font-weight: 900;
+    font-size: 0.8rem;
+    padding: 0.35rem 0.6rem;
+    border-radius: 999px;
+    cursor: pointer;
+    margin-right: 0.5rem;
+    user-select: none;
+  }
+  .variants-badge:hover {
+    border-color: rgba(232, 128, 10, 0.35);
+  }
+
+  .variants-subrow {
+    background: #fff;
+  }
+
+  .brand-search-wrap {
+    position: relative;
+  }
+  .brand-suggestions {
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: calc(100% + 6px);
+    background: #fff;
+    border: 1px solid var(--color-border);
+    border-radius: 12px;
+    z-index: 1000;
+    box-shadow: 0 18px 40px rgba(26, 35, 50, 0.12);
+    max-height: 240px;
+    overflow: auto;
+    display: none;
+  }
+  .brand-suggestion-item {
+    padding: 0.65rem 0.85rem;
+    cursor: pointer;
+    font-weight: 700;
+    font-size: 0.9rem;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .brand-suggestion-item:hover {
+    background: rgba(232, 128, 10, 0.08);
+  }
+
   .inline-flex {
     display: flex;
     align-items: center;
@@ -40,6 +92,38 @@
     margin-bottom: 0.35rem;
     font-size: 0.8rem;
     font-weight: 600;
+    color: var(--color-text-muted);
+  }
+
+  .variant-row {
+    display: grid;
+    grid-template-columns: 1.2fr 1.2fr 0.9fr 0.3fr;
+    gap: 0.6rem;
+    align-items: end;
+    margin-bottom: 0.75rem;
+  }
+
+  .variant-row .btn {
+    padding: 0.45rem 0.7rem;
+  }
+
+  .variants-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.88rem;
+  }
+  .variants-table th,
+  .variants-table td {
+    padding: 0.55rem 0.7rem;
+    border-bottom: 1px solid var(--color-border);
+    text-align: left;
+    vertical-align: top;
+  }
+  .variants-table th {
+    background: var(--color-bg-muted);
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
     color: var(--color-text-muted);
   }
 </style>
@@ -94,13 +178,14 @@
           </tr>
           {% else %}
           {% for p in products %}
-          {% set qty = p.stock_quantity|default(0)|float %}
+          {% set qty_int = (p.stock_quantity|default(0)|int) %}
           {% set row_class = '' %}
-          {% if qty == 0 %}
+          {% if qty_int == 0 %}
             {% set row_class = 'row-out-of-stock' %}
-          {% elif qty > 0 and qty < 5 %}
+          {% elif qty_int > 0 and qty_int < 5 %}
             {% set row_class = 'row-low-stock' %}
           {% endif %}
+          {% set variant_count = (variants_by_product.get(p.id, [])|length) %}
           <tr id="product-row-{{ p.id }}" class="{{ row_class }}">
             <td>{{ loop.index }}</td>
             <td>{{ p.name }}</td>
@@ -109,8 +194,17 @@
             <td>{{ p.unit or 'Each' }}</td>
             <td>${{ '%.2f' % (p.cost_price|default(0)|float) }}</td>
             <td>${{ '%.2f' % (p.selling_price|default(0)|float) }}</td>
-            <td>{{ '%.2f' % qty }}</td>
+            <td>{{ qty_int }}</td>
             <td>
+              <button
+                type="button"
+                class="variants-badge"
+                data-action="toggle-variants"
+                data-product-id="{{ p.id }}"
+                {% if variant_count == 0 %}style="opacity:0.55; cursor:default;" disabled{% endif %}
+              >
+                {{ variant_count }} variants
+              </button>
               <button type="button" class="btn btn-edit" data-action="edit-product"
                 data-id="{{ p.id }}"
                 data-name="{{ p.name|e }}"
@@ -119,7 +213,7 @@
                 data-unit="{{ p.unit or 'Each' }}"
                 data-cost-price="{{ p.cost_price|default(0)|float }}"
                 data-selling-price="{{ p.selling_price|default(0)|float }}"
-                data-stock-quantity="{{ qty|float }}"
+                data-stock-quantity="{{ qty_int }}"
               >
                 Edit
               </button>
@@ -131,6 +225,37 @@
               </button>
             </td>
           </tr>
+          <tr id="variants-row-{{ p.id }}" class="variants-subrow" style="display:none;">
+            <td colspan="9">
+              {% if variant_count == 0 %}
+                <div style="padding: 0.8rem 0.2rem; color: var(--color-text-muted); font-weight:600;">No variants.</div>
+              {% else %}
+                <div style="padding: 0.8rem 0.2rem;">
+                  <table class="variants-table">
+                    <thead>
+                      <tr>
+                        <th>Size</th>
+                        <th>Flavor</th>
+                        <th style="text-align:right;">Adjustment</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {% for v in variants_by_product.get(p.id, []) %}
+                      <tr>
+                        <td>{{ v.size or '' }}</td>
+                        <td>{{ v.flavor or '' }}</td>
+                        <td style="text-align:right; font-weight:800;">
+                          {% set adj = v.price_adjustment|default(0)|float %}
+                          {% if adj > 0 %}+{% endif %}{{ adj|round(2) }}
+                        </td>
+                      </tr>
+                      {% endfor %}
+                    </tbody>
+                  </table>
+                </div>
+              {% endif %}
+            </td>
+          </tr>
           {% endfor %}
           {% endif %}
         </tbody>
@@ -139,6 +264,7 @@
   </div>
 </section>
 
+<!-- Add Product Modal -->
 <div id="addProductModal" class="modal-backdrop" aria-hidden="true">
   <div class="modal" role="dialog" aria-modal="true" aria-label="Add Product">
     <div class="modal-header">
@@ -148,13 +274,28 @@
     <div class="modal-body">
       <form id="addProductForm" method="post" action="{{ url_for('inventory_add') }}">
         <div class="modal-field">
-          <label for="addProductName">Product Name</label>
-          <input class="form-control" type="text" id="addProductName" name="product_name" required>
+          <label for="addProductNameSelect">Product Name</label>
+          <select class="form-control" id="addProductNameSelect">
+            <option value="" selected disabled>-- Select Product --</option>
+            <option value="__add_new__">+ Add New Product Name</option>
+          </select>
+          <input type="hidden" id="addProductNameHidden" name="product_name" value="">
+          <div id="addNewProductNameInline" class="inline-add" style="display:none; margin-top:0.65rem;">
+            <input class="form-control" type="text" id="addNewProductNameInput" placeholder="Product name">
+            <button type="button" class="btn btn-primary" id="addNewProductNameCreateBtn">Create</button>
+          </div>
         </div>
 
         <div class="modal-field">
-          <label for="addBrand">Brand</label>
-          <input class="form-control" type="text" id="addBrand" name="brand">
+          <label for="addBrandSelect">Brand</label>
+          <select class="form-control" id="addBrandSelect" name="brand">
+            <option value="" selected disabled>-- Select Brand --</option>
+            <option value="__add_new__">+ Add New Brand</option>
+          </select>
+          <div id="addNewBrandInline" class="inline-add" style="display:none; margin-top:0.65rem;">
+            <input class="form-control" type="text" id="addNewBrandName" placeholder="Brand name">
+            <button type="button" class="btn btn-primary" id="addNewBrandCreateBtn">Create</button>
+          </div>
         </div>
 
         <div class="modal-field">
@@ -194,7 +335,17 @@
 
         <div class="modal-field">
           <label for="addStockQuantity">Stock Quantity</label>
-          <input class="form-control" type="number" step="0.01" id="addStockQuantity" name="stock_quantity" required>
+          <input class="form-control" type="number" step="1" min="0" id="addStockQuantity" name="stock_quantity" required>
+        </div>
+
+        <div class="modal-field">
+          <label>Variants (optional)</label>
+          <div style="display:flex; justify-content:space-between; align-items:center; gap:1rem; flex-wrap:wrap;">
+            <div style="color: var(--color-text-muted); font-weight:600; font-size:0.85rem;">Add size/flavor variations for this product.</div>
+            <button type="button" class="btn btn-primary" id="addVariantBtn">Add Variant</button>
+          </div>
+          <div id="addVariantsContainer" style="margin-top:0.9rem;"></div>
+          <input type="hidden" id="addVariantsJson" name="variants_json" value="[]">
         </div>
 
         <div class="inline-flex" style="justify-content: flex-end; gap: 0.65rem; margin-top: 0.25rem;">
@@ -206,6 +357,7 @@
   </div>
 </div>
 
+<!-- Edit Product Modal -->
 <div id="editProductModal" class="modal-backdrop" aria-hidden="true">
   <div class="modal" role="dialog" aria-modal="true" aria-label="Edit Product">
     <div class="modal-header">
@@ -215,13 +367,28 @@
     <div class="modal-body">
       <form id="editProductForm" method="post" action="">
         <div class="modal-field">
-          <label for="editProductName">Product Name</label>
-          <input class="form-control" type="text" id="editProductName" name="product_name" required>
+          <label for="editProductNameSelect">Product Name</label>
+          <select class="form-control" id="editProductNameSelect">
+            <option value="" selected disabled>-- Select Product --</option>
+            <option value="__add_new__">+ Add New Product Name</option>
+          </select>
+          <input type="hidden" id="editProductNameHidden" name="product_name" value="">
+          <div id="editNewProductNameInline" class="inline-add" style="display:none; margin-top:0.65rem;">
+            <input class="form-control" type="text" id="editNewProductNameInput" placeholder="Product name">
+            <button type="button" class="btn btn-primary" id="editNewProductNameCreateBtn">Create</button>
+          </div>
         </div>
 
         <div class="modal-field">
-          <label for="editBrand">Brand</label>
-          <input class="form-control" type="text" id="editBrand" name="brand">
+          <label for="editBrandSelect">Brand</label>
+          <select class="form-control" id="editBrandSelect" name="brand">
+            <option value="" selected disabled>-- Select Brand --</option>
+            <option value="__add_new__">+ Add New Brand</option>
+          </select>
+          <div id="editNewBrandInline" class="inline-add" style="display:none; margin-top:0.65rem;">
+            <input class="form-control" type="text" id="editNewBrandName" placeholder="Brand name">
+            <button type="button" class="btn btn-primary" id="editNewBrandCreateBtn">Create</button>
+          </div>
         </div>
 
         <div class="modal-field">
@@ -261,7 +428,17 @@
 
         <div class="modal-field">
           <label for="editStockQuantity">Stock Quantity</label>
-          <input class="form-control" type="number" step="0.01" id="editStockQuantity" name="stock_quantity" required>
+          <input class="form-control" type="number" step="1" min="0" id="editStockQuantity" name="stock_quantity" required>
+        </div>
+
+        <div class="modal-field">
+          <label>Variants (optional)</label>
+          <div style="display:flex; justify-content:space-between; align-items:center; gap:1rem; flex-wrap:wrap;">
+            <div style="color: var(--color-text-muted); font-weight:600; font-size:0.85rem;">Add size/flavor variations for this product.</div>
+            <button type="button" class="btn btn-primary" id="editVariantBtn">Add Variant</button>
+          </div>
+          <div id="editVariantsContainer" style="margin-top:0.9rem;"></div>
+          <input type="hidden" id="editVariantsJson" name="variants_json" value="[]">
         </div>
 
         <div class="inline-flex" style="justify-content: flex-end; gap: 0.65rem; margin-top: 0.25rem;">
@@ -291,15 +468,16 @@
         <thead>
           <tr>
             <th>Category</th>
-            <th style="width: 160px;">Actions</th>
+            <th style="width: 220px;">Actions</th>
           </tr>
         </thead>
         <tbody id="categoriesTbody">
           {% for cat in categories %}
           <tr id="category-row-{{ cat.id }}">
-            <td>{{ cat.name }}</td>
+            <td class="category-name-cell">{{ cat.name }}</td>
             <td>
-              <button type="button" class="btn btn-danger" data-action="delete-category" data-id="{{ cat.id }}">Delete</button>
+              <button type="button" class="btn btn-edit" data-action="edit-category" data-id="{{ cat.id }}">Edit</button>
+              <button type="button" class="btn btn-danger" data-action="delete-category" data-id="{{ cat.id }}" style="margin-left:0.5rem;">Delete</button>
             </td>
           </tr>
           {% endfor %}
@@ -310,6 +488,8 @@
 </section>
 
 <script>
+  const variantsByProduct = {{ variants_by_product | tojson }};
+
   const addProductModal = document.getElementById('addProductModal');
   const editProductModal = document.getElementById('editProductModal');
   const openAddProductModalBtn = document.getElementById('openAddProductModal');
@@ -317,24 +497,11 @@
 
   function openModal(modalEl) {
     modalEl.classList.add('is-open');
+    modalEl.setAttribute('aria-hidden', 'false');
   }
-
   function closeModal(modalEl) {
     modalEl.classList.remove('is-open');
-  }
-
-  if (openAddProductModalBtn) {
-    openAddProductModalBtn.addEventListener('click', () => {
-      resetAddModalCategoryInline();
-      document.getElementById('addProductName').value = '';
-      document.getElementById('addBrand').value = '';
-      document.getElementById('addCategorySelect').value = '';
-      document.getElementById('addUnitSelect').value = 'Each';
-      document.getElementById('addCostPrice').value = '';
-      document.getElementById('addSellingPrice').value = '';
-      document.getElementById('addStockQuantity').value = '';
-      openModal(addProductModal);
-    });
+    modalEl.setAttribute('aria-hidden', 'true');
   }
 
   closeModalButtons.forEach((btn) => {
@@ -352,54 +519,126 @@
     });
   });
 
-  function resetAddModalCategoryInline() {
-    const addSelect = document.getElementById('addCategorySelect');
-    const inlineWrap = document.getElementById('addNewCategoryInline');
-    const input = document.getElementById('addNewCategoryName');
-    if (!addSelect || !inlineWrap || !input) return;
-    inlineWrap.style.display = 'none';
-    input.value = '';
-    if (addSelect.value === '__add_new__') addSelect.value = '';
+  const addBrandSelect = document.getElementById('addBrandSelect');
+  const editBrandSelect = document.getElementById('editBrandSelect');
+
+  const addNewBrandInline = document.getElementById('addNewBrandInline');
+  const addNewBrandName = document.getElementById('addNewBrandName');
+  const addNewBrandCreateBtn = document.getElementById('addNewBrandCreateBtn');
+
+  const editNewBrandInline = document.getElementById('editNewBrandInline');
+  const editNewBrandName = document.getElementById('editNewBrandName');
+  const editNewBrandCreateBtn = document.getElementById('editNewBrandCreateBtn');
+
+  function hideInline(inlineEl) {
+    if (!inlineEl) return;
+    inlineEl.style.display = 'none';
   }
 
-  function resetEditModalCategoryInline() {
-    const editSelect = document.getElementById('editCategorySelect');
-    const inlineWrap = document.getElementById('editNewCategoryInline');
-    const input = document.getElementById('editNewCategoryName');
-    if (!editSelect || !inlineWrap || !input) return;
-    inlineWrap.style.display = 'none';
-    input.value = '';
+  function ensureBrandOption(selectEl, brandName) {
+    if (!selectEl || !brandName) return;
+    if (Array.from(selectEl.options).some((o) => o.value === String(brandName))) return;
+    const opt = document.createElement('option');
+    opt.value = String(brandName);
+    opt.textContent = brandName;
+    selectEl.insertBefore(opt, selectEl.querySelector('option[value="__add_new__"]') || null);
   }
 
-  const addCategorySelect = document.getElementById('addCategorySelect');
-  const addNewCategoryInline = document.getElementById('addNewCategoryInline');
-  const addNewCategoryName = document.getElementById('addNewCategoryName');
-  const addNewCategoryCreateBtn = document.getElementById('addNewCategoryCreateBtn');
+  async function createBrandViaAjax(name) {
+    const res = await fetch('/brands/add', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
+        'X-Requested-With': 'fetch'
+      },
+      credentials: 'same-origin',
+      body: new URLSearchParams({ name: name })
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok || !data || !data.id) {
+      throw new Error((data && data.error) ? data.error : 'Failed to create brand.');
+    }
+    return { id: data.id, name: data.name };
+  }
 
-  if (addCategorySelect) {
-    addCategorySelect.addEventListener('change', () => {
-      if (addCategorySelect.value === '__add_new__') {
-        addNewCategoryInline.style.display = 'flex';
-        addNewCategoryName.focus();
+  async function loadBrandsIntoSelect() {
+    const res = await fetch('/brands/list', { credentials: 'same-origin' });
+    const brands = await res.json();
+    if (!Array.isArray(brands)) return [];
+
+    const apply = (selectEl) => {
+      if (!selectEl) return;
+      Array.from(selectEl.options).forEach((opt) => {
+        const v = opt.value;
+        if (v !== '' && v !== '__add_new__') opt.remove();
+      });
+      brands.forEach((b) => {
+        if (!b || !b.name) return;
+        const opt = document.createElement('option');
+        opt.value = String(b.name);
+        opt.textContent = b.name;
+        selectEl.insertBefore(opt, selectEl.querySelector('option[value="__add_new__"]') || null);
+      });
+    };
+
+    apply(addBrandSelect);
+    apply(editBrandSelect);
+    return brands;
+  }
+
+  const brandsLoadPromise = loadBrandsIntoSelect();
+
+  if (addBrandSelect) {
+    addBrandSelect.addEventListener('change', () => {
+      if (addBrandSelect.value === '__add_new__') {
+        if (addNewBrandInline) {
+          addNewBrandInline.style.display = 'flex';
+          addNewBrandName?.focus();
+        }
       } else {
-        addNewCategoryInline.style.display = 'none';
+        hideInline(addNewBrandInline);
       }
     });
   }
 
-  const editCategorySelect = document.getElementById('editCategorySelect');
-  const editNewCategoryInline = document.getElementById('editNewCategoryInline');
-  const editNewCategoryName = document.getElementById('editNewCategoryName');
-  const editNewCategoryCreateBtn = document.getElementById('editNewCategoryCreateBtn');
-
-  if (editCategorySelect) {
-    editCategorySelect.addEventListener('change', () => {
-      if (editCategorySelect.value === '__add_new__') {
-        editNewCategoryInline.style.display = 'flex';
-        editNewCategoryName.focus();
+  if (editBrandSelect) {
+    editBrandSelect.addEventListener('change', () => {
+      if (editBrandSelect.value === '__add_new__') {
+        if (editNewBrandInline) {
+          editNewBrandInline.style.display = 'flex';
+          editNewBrandName?.focus();
+        }
       } else {
-        editNewCategoryInline.style.display = 'none';
+        hideInline(editNewBrandInline);
       }
+    });
+  }
+
+  if (addNewBrandCreateBtn) {
+    addNewBrandCreateBtn.addEventListener('click', async () => {
+      const name = (addNewBrandName?.value || '').trim();
+      if (!name) return;
+      const created = await createBrandViaAjax(name);
+      ensureBrandOption(addBrandSelect, created.name);
+      ensureBrandOption(editBrandSelect, created.name);
+      if (addBrandSelect) addBrandSelect.value = created.name;
+      if (editBrandSelect) editBrandSelect.value = created.name;
+      if (addNewBrandName) addNewBrandName.value = '';
+      hideInline(addNewBrandInline);
+    });
+  }
+
+  if (editNewBrandCreateBtn) {
+    editNewBrandCreateBtn.addEventListener('click', async () => {
+      const name = (editNewBrandName?.value || '').trim();
+      if (!name) return;
+      const created = await createBrandViaAjax(name);
+      ensureBrandOption(addBrandSelect, created.name);
+      ensureBrandOption(editBrandSelect, created.name);
+      if (editBrandSelect) editBrandSelect.value = created.name;
+      if (addBrandSelect) addBrandSelect.value = created.name;
+      if (editNewBrandName) editNewBrandName.value = '';
+      hideInline(editNewBrandInline);
     });
   }
 
@@ -421,11 +660,14 @@
     if (!tbody || !cat) return;
     const existing = document.getElementById('category-row-' + cat.id);
     if (existing) return;
-
     const tr = document.createElement('tr');
     tr.id = 'category-row-' + cat.id;
-    tr.innerHTML = '<td>' + cat.name + '</td>' +
-      '<td><button type="button" class="btn btn-danger" data-action="delete-category" data-id="' + cat.id + '">Delete</button></td>';
+    tr.innerHTML =
+      '<td class="category-name-cell">' + cat.name + '</td>' +
+      '<td>' +
+        '<button type="button" class="btn btn-edit" data-action="edit-category" data-id="' + cat.id + '">Edit</button>' +
+        '<button type="button" class="btn btn-danger" data-action="delete-category" data-id="' + cat.id + '" style="margin-left:0.5rem;">Delete</button>' +
+      '</td>';
     tbody.appendChild(tr);
   }
 
@@ -441,10 +683,55 @@
     });
     const data = await res.json();
     if (!res.ok || !data.ok && data.id === undefined) {
-      const msg = data.error || 'Failed to create category.';
-      throw new Error(msg);
+      throw new Error(data.error || 'Failed to create category.');
     }
     return { id: data.id, name: data.name };
+  }
+
+  const addCategorySelect = document.getElementById('addCategorySelect');
+  const editCategorySelect = document.getElementById('editCategorySelect');
+
+  const addNewCategoryInline = document.getElementById('addNewCategoryInline');
+  const addNewCategoryName = document.getElementById('addNewCategoryName');
+  const addNewCategoryCreateBtn = document.getElementById('addNewCategoryCreateBtn');
+
+  const editNewCategoryInline = document.getElementById('editNewCategoryInline');
+  const editNewCategoryName = document.getElementById('editNewCategoryName');
+  const editNewCategoryCreateBtn = document.getElementById('editNewCategoryCreateBtn');
+
+  function resetAddModalCategoryInline() {
+    if (!addCategorySelect || !addNewCategoryInline || !addNewCategoryName) return;
+    addNewCategoryInline.style.display = 'none';
+    addNewCategoryName.value = '';
+    if (addCategorySelect.value === '__add_new__') addCategorySelect.value = '';
+  }
+
+  function resetEditModalCategoryInline() {
+    if (!editCategorySelect || !editNewCategoryInline || !editNewCategoryName) return;
+    editNewCategoryInline.style.display = 'none';
+    editNewCategoryName.value = '';
+  }
+
+  if (addCategorySelect) {
+    addCategorySelect.addEventListener('change', () => {
+      if (addCategorySelect.value === '__add_new__') {
+        addNewCategoryInline.style.display = 'flex';
+        addNewCategoryName.focus();
+      } else {
+        addNewCategoryInline.style.display = 'none';
+      }
+    });
+  }
+
+  if (editCategorySelect) {
+    editCategorySelect.addEventListener('change', () => {
+      if (editCategorySelect.value === '__add_new__') {
+        editNewCategoryInline.style.display = 'flex';
+        editNewCategoryName.focus();
+      } else {
+        editNewCategoryInline.style.display = 'none';
+      }
+    });
   }
 
   async function createAndSelectCategory(name, selectEl, inlineWrap, inputEl) {
@@ -461,9 +748,8 @@
 
   if (addNewCategoryCreateBtn) {
     addNewCategoryCreateBtn.addEventListener('click', async () => {
-      const name = addNewCategoryName.value;
       try {
-        await createAndSelectCategory(name, addCategorySelect, addNewCategoryInline, addNewCategoryName);
+        await createAndSelectCategory(addNewCategoryName.value, addCategorySelect, addNewCategoryInline, addNewCategoryName);
       } catch (e) {
         alert(e.message);
       }
@@ -472,15 +758,440 @@
 
   if (editNewCategoryCreateBtn) {
     editNewCategoryCreateBtn.addEventListener('click', async () => {
-      const name = editNewCategoryName.value;
       try {
-        await createAndSelectCategory(name, editCategorySelect, editNewCategoryInline, editNewCategoryName);
+        await createAndSelectCategory(editNewCategoryName.value, editCategorySelect, editNewCategoryInline, editNewCategoryName);
       } catch (e) {
         alert(e.message);
       }
     });
   }
 
+  // -------- Products (Name Dropdown + Inline Create) --------
+  const addProductNameSelect = document.getElementById('addProductNameSelect');
+  const editProductNameSelect = document.getElementById('editProductNameSelect');
+  const addProductNameHidden = document.getElementById('addProductNameHidden');
+  const editProductNameHidden = document.getElementById('editProductNameHidden');
+
+  const addNewProductNameInline = document.getElementById('addNewProductNameInline');
+  const addNewProductNameInput = document.getElementById('addNewProductNameInput');
+  const addNewProductNameCreateBtn = document.getElementById('addNewProductNameCreateBtn');
+
+  const editNewProductNameInline = document.getElementById('editNewProductNameInline');
+  const editNewProductNameInput = document.getElementById('editNewProductNameInput');
+  const editNewProductNameCreateBtn = document.getElementById('editNewProductNameCreateBtn');
+
+  const productsById = {};
+
+  function hideProductInline(inlineEl) {
+    if (!inlineEl) return;
+    inlineEl.style.display = 'none';
+  }
+
+  function setHiddenProductName(hiddenEl, productName) {
+    if (!hiddenEl) return;
+    hiddenEl.value = productName || '';
+  }
+
+  function populateProductSelect(selectEl) {
+    if (!selectEl) return;
+    // Remove existing product options but keep blank + "__add_new__".
+    Array.from(selectEl.options).forEach((opt) => {
+      const v = opt.value;
+      // Only remove options that look like real product ids (numeric).
+      // Custom user-created names use non-numeric values (e.g. "custom:..."),
+      // and should stay if the user creates them before the async fetch completes.
+      if (v !== '' && v !== '__add_new__' && /^\d+$/.test(v)) opt.remove();
+    });
+
+    const addNewOpt = selectEl.querySelector('option[value="__add_new__"]');
+    const refNode = addNewOpt || null;
+
+    Object.values(productsById).forEach((p) => {
+      if (!p || p.id === null || p.id === undefined) return;
+      const opt = document.createElement('option');
+      opt.value = String(p.id);
+      opt.textContent = p.name || '';
+      selectEl.insertBefore(opt, refNode);
+    });
+  }
+
+  async function loadProductsIntoSelect() {
+    const res = await fetch('/products/list', { credentials: 'same-origin' });
+    const data = await res.json();
+    if (!Array.isArray(data)) return [];
+
+    // Build map by id; this is used for autofill.
+    Object.keys(productsById).forEach((k) => delete productsById[k]);
+    data.forEach((p) => {
+      if (!p || p.id === null || p.id === undefined) return;
+      productsById[String(p.id)] = p;
+    });
+
+    populateProductSelect(addProductNameSelect);
+    populateProductSelect(editProductNameSelect);
+    return data;
+  }
+
+  const productsLoadPromise = loadProductsIntoSelect();
+
+  function autofillFromProduct(p, mode) {
+    if (!p) return;
+    const brandName = (p.brand_name || '').trim();
+    const categoryId = p.category_id;
+    const unitVal = (p.unit || 'Each').toString();
+    const costVal = p.cost_price ?? '';
+    const sellingVal = p.selling_price ?? '';
+
+    if (mode === 'add') {
+      hideInline(addNewBrandInline);
+      resetAddModalCategoryInline();
+
+      // Ensure brand exists in dropdown; values are brand names.
+      if (brandName) ensureBrandOption(addBrandSelect, brandName);
+      addBrandSelect.value = brandName;
+      addCategorySelect.value = categoryId !== null && categoryId !== undefined ? String(categoryId) : '';
+      document.getElementById('addUnitSelect').value = unitVal;
+      document.getElementById('addCostPrice').value = costVal;
+      document.getElementById('addSellingPrice').value = sellingVal;
+      if (addNewProductNameInline) hideProductInline(addNewProductNameInline);
+    } else {
+      hideInline(editNewBrandInline);
+      resetEditModalCategoryInline();
+
+      if (brandName) ensureBrandOption(editBrandSelect, brandName);
+      editBrandSelect.value = brandName;
+      editCategorySelect.value = categoryId !== null && categoryId !== undefined ? String(categoryId) : '';
+      document.getElementById('editUnitSelect').value = unitVal;
+      document.getElementById('editCostPrice').value = costVal;
+      document.getElementById('editSellingPrice').value = sellingVal;
+      if (editNewProductNameInline) hideProductInline(editNewProductNameInline);
+    }
+  }
+
+  function clearProductFields(mode) {
+    if (mode === 'add') {
+      if (addBrandSelect) addBrandSelect.value = '';
+      hideInline(addNewBrandInline);
+      if (addCategorySelect) {
+        resetAddModalCategoryInline();
+        addCategorySelect.value = '';
+      }
+      const unitEl = document.getElementById('addUnitSelect');
+      if (unitEl) unitEl.value = 'Each';
+      const costEl = document.getElementById('addCostPrice');
+      const sellEl = document.getElementById('addSellingPrice');
+      const stockEl = document.getElementById('addStockQuantity');
+      if (costEl) costEl.value = '';
+      if (sellEl) sellEl.value = '';
+      if (stockEl) stockEl.value = '';
+      clearVariants(addVariantsContainer, addVariantsJson);
+      if (addNewProductNameInline) hideProductInline(addNewProductNameInline);
+    } else {
+      if (editBrandSelect) editBrandSelect.value = '';
+      hideInline(editNewBrandInline);
+      if (editCategorySelect) {
+        resetEditModalCategoryInline();
+        editCategorySelect.value = '';
+      }
+      const unitEl = document.getElementById('editUnitSelect');
+      if (unitEl) unitEl.value = 'Each';
+      const costEl = document.getElementById('editCostPrice');
+      const sellEl = document.getElementById('editSellingPrice');
+      const stockEl = document.getElementById('editStockQuantity');
+      if (costEl) costEl.value = '';
+      if (sellEl) sellEl.value = '';
+      if (stockEl) stockEl.value = '';
+      clearVariants(editVariantsContainer, editVariantsJson);
+      if (editNewProductNameInline) hideProductInline(editNewProductNameInline);
+    }
+  }
+
+  if (addProductNameSelect) {
+    addProductNameSelect.addEventListener('change', async () => {
+      if (!addProductNameSelect) return;
+      const selectedVal = addProductNameSelect.value;
+
+      if (selectedVal === '__add_new__') {
+        if (addNewProductNameInline) {
+          addNewProductNameInline.style.display = 'flex';
+          addNewProductNameInput?.focus();
+        }
+        return;
+      }
+
+      const opt = addProductNameSelect.selectedOptions[0];
+      const productName = (opt?.textContent || '').trim();
+      setHiddenProductName(addProductNameHidden, productName);
+      hideProductInline(addNewProductNameInline);
+
+      const p = productsById[selectedVal];
+      if (p) autofillFromProduct(p, 'add');
+    });
+  }
+
+  if (editProductNameSelect) {
+    editProductNameSelect.addEventListener('change', async () => {
+      if (!editProductNameSelect) return;
+      const selectedVal = editProductNameSelect.value;
+
+      if (selectedVal === '__add_new__') {
+        if (editNewProductNameInline) {
+          editNewProductNameInline.style.display = 'flex';
+          editNewProductNameInput?.focus();
+        }
+        return;
+      }
+
+      const opt = editProductNameSelect.selectedOptions[0];
+      const productName = (opt?.textContent || '').trim();
+      setHiddenProductName(editProductNameHidden, productName);
+      hideProductInline(editNewProductNameInline);
+
+      const p = productsById[selectedVal];
+      if (p) autofillFromProduct(p, 'edit');
+    });
+  }
+
+  if (addNewProductNameCreateBtn) {
+    addNewProductNameCreateBtn.addEventListener('click', () => {
+      const name = (addNewProductNameInput?.value || '').trim();
+      if (!name) return;
+
+      const customValue = 'custom:' + name + ':' + Date.now();
+      const opt = document.createElement('option');
+      opt.value = customValue;
+      opt.textContent = name;
+
+      const ref = addProductNameSelect.querySelector('option[value="__add_new__"]');
+      addProductNameSelect.insertBefore(opt, ref);
+      addProductNameSelect.value = customValue;
+      setHiddenProductName(addProductNameHidden, name);
+
+      addNewProductNameInput.value = '';
+      hideProductInline(addNewProductNameInline);
+
+      // Clear other fields for a fresh entry.
+      clearProductFields('add');
+    });
+  }
+
+  if (editNewProductNameCreateBtn) {
+    editNewProductNameCreateBtn.addEventListener('click', () => {
+      const name = (editNewProductNameInput?.value || '').trim();
+      if (!name) return;
+
+      const customValue = 'custom:' + name + ':' + Date.now();
+      const opt = document.createElement('option');
+      opt.value = customValue;
+      opt.textContent = name;
+
+      const ref = editProductNameSelect.querySelector('option[value="__add_new__"]');
+      editProductNameSelect.insertBefore(opt, ref);
+      editProductNameSelect.value = customValue;
+      setHiddenProductName(editProductNameHidden, name);
+
+      editNewProductNameInput.value = '';
+      hideProductInline(editNewProductNameInline);
+
+      clearProductFields('edit');
+    });
+  }
+
+  // -------- Variants (Add) --------
+  const addVariantsContainer = document.getElementById('addVariantsContainer');
+  const addVariantsJson = document.getElementById('addVariantsJson');
+  const addVariantBtn = document.getElementById('addVariantBtn');
+
+  function createVariantRowHtml({ size = '', flavor = '', price_adjustment = 0 } = {}) {
+    return `
+      <div class="variant-row">
+        <input class="form-control variant-size" type="text" placeholder="Size (e.g. 500gm)" value="${String(size).replace(/"/g, '&quot;')}">
+        <input class="form-control variant-flavor" type="text" placeholder="Flavor (e.g. Mango)" value="${String(flavor).replace(/"/g, '&quot;')}">
+        <input class="form-control variant-adjustment" type="number" step="0.01" placeholder="Adj" value="${price_adjustment}">
+        <button type="button" class="btn btn-danger variant-delete-btn">✕</button>
+      </div>
+    `;
+  }
+
+  function syncVariantsJson(containerEl, hiddenEl) {
+    const rows = containerEl ? Array.from(containerEl.querySelectorAll('.variant-row')) : [];
+    const variants = [];
+    rows.forEach((row) => {
+      const size = (row.querySelector('.variant-size')?.value || '').trim();
+      const flavor = (row.querySelector('.variant-flavor')?.value || '').trim();
+      const adjRaw = row.querySelector('.variant-adjustment')?.value || '0';
+      let adj = 0;
+      try { adj = parseFloat(adjRaw); } catch (e) { adj = 0; }
+      if (!size && !flavor) return;
+      variants.push({ size: size, flavor: flavor, price_adjustment: adj });
+    });
+    hiddenEl.value = JSON.stringify(variants);
+  }
+
+  function clearVariants(containerEl, hiddenEl) {
+    if (!containerEl) return;
+    containerEl.innerHTML = '';
+    if (hiddenEl) hiddenEl.value = '[]';
+  }
+
+  if (addVariantBtn) {
+    addVariantBtn.addEventListener('click', () => {
+      if (!addVariantsContainer) return;
+      addVariantsContainer.insertAdjacentHTML('beforeend', createVariantRowHtml({}));
+    });
+  }
+
+  if (addVariantsContainer) {
+    addVariantsContainer.addEventListener('click', (e) => {
+      const btn = e.target.closest('.variant-delete-btn');
+      if (!btn) return;
+      btn.closest('.variant-row')?.remove();
+    });
+  }
+
+  const addProductForm = document.getElementById('addProductForm');
+  if (addProductForm && addVariantsContainer && addVariantsJson) {
+    addProductForm.addEventListener('submit', () => {
+      syncVariantsJson(addVariantsContainer, addVariantsJson);
+    });
+  }
+
+  // -------- Variants (Edit) --------
+  const editVariantsContainer = document.getElementById('editVariantsContainer');
+  const editVariantsJson = document.getElementById('editVariantsJson');
+  const editVariantBtn = document.getElementById('editVariantBtn');
+
+  if (editVariantBtn) {
+    editVariantBtn.addEventListener('click', () => {
+      if (!editVariantsContainer) return;
+      editVariantsContainer.insertAdjacentHTML('beforeend', createVariantRowHtml({}));
+    });
+  }
+
+  if (editVariantsContainer) {
+    editVariantsContainer.addEventListener('click', (e) => {
+      const btn = e.target.closest('.variant-delete-btn');
+      if (!btn) return;
+      btn.closest('.variant-row')?.remove();
+    });
+  }
+
+  const editProductForm = document.getElementById('editProductForm');
+  if (editProductForm && editVariantsContainer && editVariantsJson) {
+    editProductForm.addEventListener('submit', () => {
+      syncVariantsJson(editVariantsContainer, editVariantsJson);
+    });
+  }
+
+  // -------- Open Add Modal --------
+  if (openAddProductModalBtn) {
+    openAddProductModalBtn.addEventListener('click', () => {
+      resetAddModalCategoryInline();
+      if (addProductNameSelect) addProductNameSelect.value = '';
+      setHiddenProductName(addProductNameHidden, '');
+      hideProductInline(addNewProductNameInline);
+      if (addNewProductNameInput) addNewProductNameInput.value = '';
+      if (document.getElementById('addBrandSelect')) document.getElementById('addBrandSelect').value = '';
+      hideInline(addNewBrandInline);
+      if (addNewBrandName) addNewBrandName.value = '';
+      if (addCategorySelect) addCategorySelect.value = '';
+      document.getElementById('addUnitSelect').value = 'Each';
+      document.getElementById('addCostPrice').value = '';
+      document.getElementById('addSellingPrice').value = '';
+      document.getElementById('addStockQuantity').value = '';
+      clearVariants(addVariantsContainer, addVariantsJson);
+      openModal(addProductModal);
+    });
+  }
+
+  // -------- Product Table Events --------
+  const productsTbody = document.getElementById('productsTbody');
+  if (productsTbody) {
+    productsTbody.addEventListener('click', async (e) => {
+      const toggleBtn = e.target.closest('[data-action="toggle-variants"]');
+      if (toggleBtn) {
+        const pid = toggleBtn.getAttribute('data-product-id');
+        const row = document.getElementById('variants-row-' + pid);
+        if (!row) return;
+        row.style.display = (row.style.display === 'none' || !row.style.display) ? 'table-row' : 'none';
+        return;
+      }
+
+      const editBtn = e.target.closest('[data-action="edit-product"]');
+      if (editBtn) {
+        const productId = editBtn.getAttribute('data-id');
+
+        document.getElementById('editProductForm').action = '/inventory/edit/' + productId;
+        try {
+          await productsLoadPromise;
+        } catch (err) {}
+        if (editProductNameSelect) editProductNameSelect.value = String(productId);
+        setHiddenProductName(editProductNameHidden, editBtn.getAttribute('data-name') || '');
+        hideProductInline(editNewProductNameInline);
+        if (editNewProductNameInput) editNewProductNameInput.value = '';
+        const brandName = editBtn.getAttribute('data-brand') || '';
+        try {
+          await brandsLoadPromise;
+          if (editBrandSelect) {
+            ensureBrandOption(editBrandSelect, brandName);
+            editBrandSelect.value = brandName;
+          }
+        } catch (err) {}
+        editCategorySelect.value = editBtn.getAttribute('data-category-id') || '';
+        document.getElementById('editUnitSelect').value = editBtn.getAttribute('data-unit') || 'Each';
+        document.getElementById('editCostPrice').value = editBtn.getAttribute('data-cost-price') || 0;
+        document.getElementById('editSellingPrice').value = editBtn.getAttribute('data-selling-price') || 0;
+        document.getElementById('editStockQuantity').value = editBtn.getAttribute('data-stock-quantity') || 0;
+
+        resetEditModalCategoryInline();
+        const chosenCat = editCategorySelect.value;
+        if (chosenCat === '__add_new__') {
+          editNewCategoryInline.style.display = 'flex';
+        }
+
+        // Preload variants for this product
+        clearVariants(editVariantsContainer, editVariantsJson);
+        const existing = variantsByProduct[String(productId)] || [];
+        existing.forEach((v) => {
+          editVariantsContainer.insertAdjacentHTML('beforeend', createVariantRowHtml({
+            size: v.size || '',
+            flavor: v.flavor || '',
+            price_adjustment: v.price_adjustment ?? 0,
+          }));
+        });
+        syncVariantsJson(editVariantsContainer, editVariantsJson);
+        hideInline(editNewBrandInline);
+        openModal(editProductModal);
+        return;
+      }
+
+      const deleteBtn = e.target.closest('[data-action="delete-product"]');
+      if (deleteBtn) {
+        const productId = deleteBtn.getAttribute('data-id');
+        const name = deleteBtn.getAttribute('data-name') || 'this product';
+        if (!confirm('Are you sure you want to delete ' + name + '?')) return;
+
+        try {
+          const res = await fetch('/inventory/delete/' + productId, {
+            method: 'POST',
+            headers: { 'X-Requested-With': 'fetch' },
+            credentials: 'same-origin'
+          });
+          const data = await res.json().catch(() => ({}));
+          if (!res.ok || data.ok === false) {
+            alert(data.error || 'Delete failed.');
+            return;
+          }
+          document.getElementById('product-row-' + productId)?.remove();
+          document.getElementById('variants-row-' + productId)?.remove();
+        } catch (err) {
+          alert(err.message || 'Delete failed.');
+        }
+      }
+    });
+  }
+
+  // -------- Categories Inline Add (bottom) --------
   const openAddCategoryInlineBtn = document.getElementById('openAddCategoryInlineBtn');
   const inlineCategoryAdd = document.getElementById('inlineCategoryAdd');
   const inlineCategoryName = document.getElementById('inlineCategoryName');
@@ -495,9 +1206,9 @@
 
   if (inlineCategoryCreateBtn) {
     inlineCategoryCreateBtn.addEventListener('click', async () => {
-      const name = inlineCategoryName.value;
+      const name = (inlineCategoryName.value || '').trim();
       try {
-        const cat = await createCategoryViaAjax((name || '').trim());
+        const cat = await createCategoryViaAjax(name);
         appendCategoryOption(addCategorySelect, cat);
         appendCategoryOption(editCategorySelect, cat);
         appendCategoryRowToTable(cat);
@@ -509,89 +1220,115 @@
     });
   }
 
-  document.getElementById('categoriesTbody').addEventListener('click', async (e) => {
-    const btn = e.target.closest('[data-action="delete-category"]');
-    if (!btn) return;
-    const categoryId = btn.getAttribute('data-id');
-    const tr = document.getElementById('category-row-' + categoryId);
-    const name = tr ? tr.querySelector('td')?.textContent?.trim() : 'this category';
-    if (!confirm('Are you sure you want to delete ' + (name || 'this category') + '?')) return;
+  // -------- Categories bottom: Delete + Edit --------
+  const categoriesTbody = document.getElementById('categoriesTbody');
+  if (categoriesTbody) {
+    categoriesTbody.addEventListener('click', async (e) => {
+      const delBtn = e.target.closest('[data-action="delete-category"]');
+      if (delBtn) {
+        const categoryId = delBtn.getAttribute('data-id');
+        const tr = document.getElementById('category-row-' + categoryId);
+        const nameEl = tr ? tr.querySelector('.category-name-cell') : null;
+        const name = (nameEl?.textContent || 'this category').trim();
+        if (!confirm('Are you sure you want to delete ' + name + '?')) return;
 
-    try {
-      const res = await fetch('/categories/delete/' + categoryId, {
-        method: 'POST',
-        headers: {
-          'X-Requested-With': 'fetch'
-        },
-        credentials: 'same-origin'
-      });
-      const data = await res.json();
-      if (!res.ok || !data.ok) {
-        alert(data.error || 'Delete failed.');
-        return;
-      }
+        try {
+          const res = await fetch('/categories/delete/' + categoryId, {
+            method: 'POST',
+            headers: { 'X-Requested-With': 'fetch' },
+            credentials: 'same-origin'
+          });
+          const data = await res.json().catch(() => ({}));
+          if (!res.ok || !data.ok) {
+            alert(data.error || 'Delete failed.');
+            return;
+          }
 
-      if (tr) tr.remove();
-      if (addCategorySelect) {
-        const opt = Array.from(addCategorySelect.options).find((o) => o.value === String(categoryId));
-        if (opt) opt.remove();
-        if (String(addCategorySelect.value) === String(categoryId)) addCategorySelect.selectedIndex = 0;
-      }
-      if (editCategorySelect) {
-        const opt = Array.from(editCategorySelect.options).find((o) => o.value === String(categoryId));
-        if (opt) opt.remove();
-        if (String(editCategorySelect.value) === String(categoryId)) editCategorySelect.selectedIndex = 0;
-      }
-    } catch (err) {
-      alert(err.message || 'Delete failed.');
-    }
-  });
-
-  const productsTbody = document.getElementById('productsTbody');
-
-  if (productsTbody) {
-    productsTbody.addEventListener('click', async (e) => {
-      const editBtn = e.target.closest('[data-action="edit-product"]');
-      if (editBtn) {
-        const productId = editBtn.getAttribute('data-id');
-        document.getElementById('editProductForm').action = '/inventory/edit/' + productId;
-        document.getElementById('editProductName').value = editBtn.getAttribute('data-name') || '';
-        document.getElementById('editBrand').value = editBtn.getAttribute('data-brand') || '';
-        document.getElementById('editCategorySelect').value = editBtn.getAttribute('data-category-id') || '';
-        document.getElementById('editUnitSelect').value = editBtn.getAttribute('data-unit') || 'Each';
-        document.getElementById('editCostPrice').value = editBtn.getAttribute('data-cost-price') || 0;
-        document.getElementById('editSellingPrice').value = editBtn.getAttribute('data-selling-price') || 0;
-        document.getElementById('editStockQuantity').value = editBtn.getAttribute('data-stock-quantity') || 0;
-        resetEditModalCategoryInline();
-        if (document.getElementById('editCategorySelect').value === '__add_new__') {
-          document.getElementById('editNewCategoryInline').style.display = 'flex';
+          tr?.remove();
+          if (addCategorySelect) {
+            Array.from(addCategorySelect.options).filter((o) => o.value === String(categoryId)).forEach((o) => o.remove());
+          }
+          if (editCategorySelect) {
+            Array.from(editCategorySelect.options).filter((o) => o.value === String(categoryId)).forEach((o) => o.remove());
+          }
+        } catch (err) {
+          alert(err.message || 'Delete failed.');
         }
-        openModal(editProductModal);
         return;
       }
 
-      const deleteBtn = e.target.closest('[data-action="delete-product"]');
-      if (!deleteBtn) return;
+      const editBtn = e.target.closest('[data-action="edit-category"]');
+      if (editBtn) {
+        const categoryId = editBtn.getAttribute('data-id');
+        const tr = document.getElementById('category-row-' + categoryId);
+        if (!tr) return;
+        const nameCell = tr.querySelector('.category-name-cell');
+        const currentName = (nameCell?.textContent || '').trim();
+        nameCell.innerHTML = '<input type="text" class="form-control" value="' + currentName.replace(/"/g, '&quot;') + '" id="editCategoryNameInput-' + categoryId + '">';
 
-      const productId = deleteBtn.getAttribute('data-id');
-      const name = deleteBtn.getAttribute('data-name') || 'this product';
-      if (!confirm('Are you sure you want to delete ' + name + '?')) return;
+        const actionsCell = tr.querySelector('td:last-child');
+        actionsCell.innerHTML =
+          '<button type="button" class="btn btn-primary" data-action="save-category-edit" data-id="' + categoryId + '">Save</button>' +
+          '<button type="button" class="btn btn-secondary" style="margin-left:0.5rem;" data-action="cancel-category-edit" data-id="' + categoryId + '">Cancel</button>';
+        return;
+      }
 
-      try {
-        const res = await fetch('/inventory/delete/' + productId, {
-          method: 'POST',
-          headers: { 'X-Requested-With': 'fetch' },
-          credentials: 'same-origin'
-        });
-        const data = await res.json().catch(() => ({}));
-        if (!res.ok || data.ok === false) {
-          alert(data.error || 'Delete failed.');
+      const saveBtn = e.target.closest('[data-action="save-category-edit"]');
+      if (saveBtn) {
+        const categoryId = saveBtn.getAttribute('data-id');
+        const tr = document.getElementById('category-row-' + categoryId);
+        if (!tr) return;
+        const input = document.getElementById('editCategoryNameInput-' + categoryId);
+        const name = (input?.value || '').trim();
+        if (!name) {
+          alert('Category name is required.');
           return;
         }
-        const row = document.getElementById('product-row-' + productId);
-        if (row) row.remove();
-      } catch (err) {
-        alert(err.message || 'Delete failed.');
+
+        try {
+          const res = await fetch('/categories/edit/' + categoryId, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
+              'X-Requested-With': 'fetch'
+            },
+            credentials: 'same-origin',
+            body: new URLSearchParams({ name: name })
+          });
+          const data = await res.json().catch(() => ({}));
+          if (!res.ok || data.ok === false) {
+            alert(data.error || 'Update failed.');
+            return;
+          }
+
+          const newName = data.name || name;
+          const nameCell = tr.querySelector('.category-name-cell');
+          nameCell.textContent = newName;
+
+          // Restore actions
+          const actionsCell = tr.querySelector('td:last-child');
+          actionsCell.innerHTML =
+            '<button type="button" class="btn btn-edit" data-action="edit-category" data-id="' + categoryId + '">Edit</button>' +
+            '<button type="button" class="btn btn-danger" data-action="delete-category" data-id="' + categoryId + '" style="margin-left:0.5rem;">Delete</button>';
+
+          // Update dropdowns in modals
+          [addCategorySelect, editCategorySelect].forEach((sel) => {
+            if (!sel) return;
+            const opt = Array.from(sel.options).find((o) => o.value === String(categoryId));
+            if (opt) opt.textContent = newName;
+          });
+        } catch (err) {
+          alert(err.message || 'Update failed.');
+        }
+        return;
+      }
+
+      const cancelBtn = e.target.closest('[data-action="cancel-category-edit"]');
+      if (cancelBtn) {
+        const categoryId = cancelBtn.getAttribute('data-id');
+        // Reload row content by refreshing the page section is simplest; for now restore to empty.
+        location.reload();
+        return;
       }
     });
   }

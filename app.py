@@ -109,6 +109,33 @@ def inventory():
         )
         products = [dict(row) for row in cur.fetchall()]
 
+        variants_by_product = {}
+        product_ids = [int(p["id"]) for p in products]
+        if product_ids:
+            placeholders = ",".join(["?"] * len(product_ids))
+            v_cur = conn.execute(
+                f"""
+                SELECT
+                    product_id,
+                    size,
+                    flavor,
+                    price_adjustment
+                FROM product_variants
+                WHERE product_id IN ({placeholders})
+                ORDER BY id ASC
+                """,
+                tuple(product_ids),
+            )
+            for v in v_cur.fetchall():
+                pid = int(v["product_id"])
+                variants_by_product.setdefault(pid, []).append(
+                    {
+                        "size": v["size"] or "",
+                        "flavor": v["flavor"] or "",
+                        "price_adjustment": float(v["price_adjustment"] or 0),
+                    }
+                )
+
         cur = conn.execute("SELECT COUNT(*) AS total_products FROM products")
         total_products = int(cur.fetchone()["total_products"] or 0)
 
@@ -138,6 +165,7 @@ def inventory():
         "inventory.html",
         products=products,
         categories=categories,
+        variants_by_product=variants_by_product,
         total_products=total_products,
         total_stock_value=total_stock_value,
         low_stock_count=low_stock_count,
@@ -149,14 +177,17 @@ def inventory():
 def inventory_add():
     product_name = (request.form.get("product_name") or "").strip()
     brand = (request.form.get("brand") or "").strip()
+    if brand == "__add_new__":
+        brand = ""
     unit = (request.form.get("unit") or "Each").strip()
     category_id_raw = (request.form.get("category_id") or "").strip()
+    variants_json = (request.form.get("variants_json") or "").strip()
 
     try:
         category_id = int(category_id_raw)
         cost_price = float(request.form.get("cost_price") or 0)
         selling_price = float(request.form.get("selling_price") or 0)
-        stock_quantity = float(request.form.get("stock_quantity") or 0)
+        stock_quantity = int(float(request.form.get("stock_quantity") or 0))
     except ValueError:
         return redirect(url_for("inventory"))
 
@@ -165,7 +196,8 @@ def inventory_add():
 
     conn = get_connection()
     try:
-        conn.execute(
+        conn.execute("BEGIN")
+        cur = conn.execute(
             """
             INSERT INTO products
                 (name, category_id, brand, unit, cost_price, selling_price, stock_quantity)
@@ -174,6 +206,38 @@ def inventory_add():
             """,
             (product_name, category_id, brand or None, unit, cost_price, selling_price, stock_quantity),
         )
+        product_id = int(cur.lastrowid)
+
+        # Keep brands table in sync for the Brand dropdown.
+        if brand:
+            conn.execute("INSERT OR IGNORE INTO brands (name) VALUES (?)", (brand,))
+
+        # Save variants (optional)
+        try:
+            variants = json.loads(variants_json) if variants_json else []
+        except Exception:
+            variants = []
+
+        conn.execute("DELETE FROM product_variants WHERE product_id = ?", (product_id,))
+        for v in variants if isinstance(variants, list) else []:
+            if not isinstance(v, dict):
+                continue
+            size = (v.get("size") or "").strip()
+            flavor = (v.get("flavor") or "").strip()
+            raw_adj = v.get("price_adjustment", 0)
+            try:
+                adj = float(raw_adj or 0)
+            except (TypeError, ValueError):
+                adj = 0.0
+            if not size and not flavor:
+                continue
+            conn.execute(
+                """
+                INSERT INTO product_variants (product_id, size, flavor, price_adjustment)
+                VALUES (?, ?, ?, ?)
+                """,
+                (product_id, size or None, flavor or None, adj),
+            )
         conn.commit()
     finally:
         conn.close()
@@ -186,14 +250,17 @@ def inventory_add():
 def inventory_edit(product_id: int):
     product_name = (request.form.get("product_name") or "").strip()
     brand = (request.form.get("brand") or "").strip()
+    if brand == "__add_new__":
+        brand = ""
     unit = (request.form.get("unit") or "Each").strip()
     category_id_raw = (request.form.get("category_id") or "").strip()
+    variants_json = (request.form.get("variants_json") or "").strip()
 
     try:
         category_id = int(category_id_raw)
         cost_price = float(request.form.get("cost_price") or 0)
         selling_price = float(request.form.get("selling_price") or 0)
-        stock_quantity = float(request.form.get("stock_quantity") or 0)
+        stock_quantity = int(float(request.form.get("stock_quantity") or 0))
     except ValueError:
         return redirect(url_for("inventory"))
 
@@ -202,6 +269,7 @@ def inventory_edit(product_id: int):
 
     conn = get_connection()
     try:
+        conn.execute("BEGIN")
         conn.execute(
             """
             UPDATE products
@@ -226,6 +294,37 @@ def inventory_edit(product_id: int):
                 product_id,
             ),
         )
+
+        # Keep brands table in sync for the Brand dropdown.
+        if brand:
+            conn.execute("INSERT OR IGNORE INTO brands (name) VALUES (?)", (brand,))
+
+        # Save variants (optional)
+        try:
+            variants = json.loads(variants_json) if variants_json else []
+        except Exception:
+            variants = []
+
+        conn.execute("DELETE FROM product_variants WHERE product_id = ?", (product_id,))
+        for v in variants if isinstance(variants, list) else []:
+            if not isinstance(v, dict):
+                continue
+            size = (v.get("size") or "").strip()
+            flavor = (v.get("flavor") or "").strip()
+            raw_adj = v.get("price_adjustment", 0)
+            try:
+                adj = float(raw_adj or 0)
+            except (TypeError, ValueError):
+                adj = 0.0
+            if not size and not flavor:
+                continue
+            conn.execute(
+                """
+                INSERT INTO product_variants (product_id, size, flavor, price_adjustment)
+                VALUES (?, ?, ?, ?)
+                """,
+                (product_id, size or None, flavor or None, adj),
+            )
         conn.commit()
     finally:
         conn.close()
@@ -242,6 +341,7 @@ def inventory_delete(product_id: int):
     ok = False
     error = None
     try:
+        conn.execute("DELETE FROM product_variants WHERE product_id = ?", (product_id,))
         cur = conn.execute("DELETE FROM products WHERE id = ?", (product_id,))
         conn.commit()
         ok = cur.rowcount > 0
@@ -331,6 +431,167 @@ def categories_delete(category_id: int):
             if is_ajax
             else redirect(url_for("inventory"))
         )
+    finally:
+        conn.close()
+
+
+@app.route("/categories/edit/<int:category_id>", methods=["POST"])
+@login_required
+def categories_edit(category_id: int):
+    is_ajax = request.headers.get("X-Requested-With") == "fetch"
+    data = request.get_json(silent=True) or {}
+    if not data:
+        data = request.form or {}
+
+    name = (data.get("name") or "").strip()
+    if not name:
+        if is_ajax:
+            return jsonify({"ok": False, "error": "Category name is required."}), 400
+        return redirect(url_for("inventory"))
+
+    conn = get_connection()
+    try:
+        try:
+            cur = conn.execute(
+                "UPDATE categories SET name = ? WHERE id = ?",
+                (name, category_id),
+            )
+            conn.commit()
+            if cur.rowcount == 0:
+                if is_ajax:
+                    return jsonify({"ok": False, "error": "Category not found."}), 404
+                return redirect(url_for("inventory"))
+        except sqlite3.IntegrityError:
+            # Unique constraint on categories.name
+            if is_ajax:
+                return jsonify({"ok": False, "error": "Category name already exists."}), 409
+            return redirect(url_for("inventory"))
+    finally:
+        conn.close()
+
+    if is_ajax:
+        return jsonify({"ok": True, "id": category_id, "name": name})
+    return redirect(url_for("inventory"))
+
+
+@app.route("/brands/list", methods=["GET"])
+@login_required
+def brands_list():
+    """
+    Returns all brands as JSON [{id, name}].
+    If brands table is empty (fresh DB), derive initial values from products.brand.
+    """
+    conn = get_connection()
+    try:
+        # Backfill brands from existing products (idempotent).
+        conn.execute(
+            """
+            INSERT OR IGNORE INTO brands (name)
+            SELECT DISTINCT TRIM(brand)
+            FROM products
+            WHERE brand IS NOT NULL AND TRIM(brand) != ''
+            """
+        )
+        conn.commit()
+
+        cur = conn.execute(
+            "SELECT id, name FROM brands ORDER BY name COLLATE NOCASE"
+        )
+        return jsonify([{"id": int(r["id"]), "name": r["name"]} for r in cur.fetchall()])
+    finally:
+        conn.close()
+
+
+@app.route("/brands/add", methods=["POST"])
+@login_required
+def brands_add():
+    is_json = request.is_json
+    data = request.get_json(silent=True) if is_json else {}
+    if not data:
+        data = request.form or {}
+
+    name = (data.get("name") or "").strip()
+    if not name:
+        return jsonify({"ok": False, "error": "Brand name is required."}), 400
+
+    conn = get_connection()
+    try:
+        conn.execute("INSERT OR IGNORE INTO brands (name) VALUES (?)", (name,))
+        conn.commit()
+
+        cur = conn.execute("SELECT id, name FROM brands WHERE name = ?", (name,))
+        row = cur.fetchone()
+        if row is None:
+            return jsonify({"ok": False, "error": "Failed to create brand."}), 500
+
+        return jsonify({"ok": True, "id": int(row["id"]), "name": row["name"]})
+    finally:
+        conn.close()
+
+
+@app.route("/products/list", methods=["GET"])
+@login_required
+def products_list():
+    conn = get_connection()
+    try:
+        cur = conn.execute(
+            """
+            SELECT
+                p.id AS id,
+                p.name AS name,
+                b.id AS brand_id,
+                p.brand AS brand_name,
+                p.category_id AS category_id,
+                p.unit AS unit,
+                p.cost_price AS cost_price,
+                p.selling_price AS selling_price
+            FROM products p
+            LEFT JOIN brands b
+                ON LOWER(b.name) = LOWER(p.brand)
+            ORDER BY p.name COLLATE NOCASE, p.id ASC
+            """
+        )
+        rows = cur.fetchall()
+        return jsonify(
+            [
+                {
+                    "id": int(r["id"]),
+                    "name": r["name"],
+                    "brand_id": int(r["brand_id"]) if r["brand_id"] is not None else None,
+                    "brand_name": r["brand_name"],
+                    "category_id": int(r["category_id"]) if r["category_id"] is not None else None,
+                    "unit": r["unit"] or "Each",
+                    "cost_price": float(r["cost_price"] or 0),
+                    "selling_price": float(r["selling_price"] or 0),
+                }
+                for r in rows
+            ]
+        )
+    finally:
+        conn.close()
+
+
+@app.route("/brands/search", methods=["GET"])
+@login_required
+def brands_search():
+    q = (request.args.get("q") or "").strip()
+    if not q:
+        return jsonify([])
+
+    like = f"%{q}%"
+    conn = get_connection()
+    try:
+        rows = conn.execute(
+            """
+            SELECT DISTINCT brand
+            FROM products
+            WHERE brand IS NOT NULL AND TRIM(brand) != '' AND brand LIKE ?
+            ORDER BY brand COLLATE NOCASE
+            LIMIT 15
+            """,
+            (like,),
+        ).fetchall()
+        return jsonify([r["brand"] for r in rows if r["brand"]])
     finally:
         conn.close()
 
