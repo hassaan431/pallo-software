@@ -609,6 +609,7 @@ def customers():
                 bill_address,
                 ship_address,
                 area,
+                state,
                 phone,
                 email,
                 terms,
@@ -646,17 +647,24 @@ def customers():
 @login_required
 def customers_add():
     full_name = (request.form.get("full_name") or "").strip()
+    bill_address = (request.form.get("bill_address") or "").strip()
+    phone = (request.form.get("phone") or "").strip()
+    
+    # Server-side validation for mandatory fields
     if not full_name:
-        return redirect(url_for("customers"))
+        return redirect(url_for("customers", error="Full Name is required."))
+    if not bill_address:
+        return redirect(url_for("customers", error="Billing Address is required."))
+    if not phone:
+        return redirect(url_for("customers", error="Phone is required."))
 
-    bill_address = request.form.get("bill_address") or ""
     ship_address = request.form.get("ship_address") or ""
     same_as_billing = request.form.get("same_as_billing") == "on"
     if same_as_billing:
         ship_address = bill_address
 
     area = (request.form.get("area") or "").strip() or None
-    phone = (request.form.get("phone") or "").strip() or None
+    state = (request.form.get("state") or "").strip() or None
     email = (request.form.get("email") or "").strip() or None
     terms_raw = (request.form.get("terms") or "").strip()
     terms = terms_raw if terms_raw else None
@@ -666,11 +674,11 @@ def customers_add():
         conn.execute(
             """
             INSERT INTO customers
-                (name, bill_address, ship_address, area, phone, email, terms)
+                (name, bill_address, ship_address, area, state, phone, email, terms)
             VALUES
-                (?, ?, ?, ?, ?, ?, ?)
+                (?, ?, ?, ?, ?, ?, ?, ?)
             """,
-            (full_name, bill_address or None, ship_address or None, area, phone, email, terms),
+            (full_name, bill_address or None, ship_address or None, area, state, phone, email, terms),
         )
         conn.commit()
     finally:
@@ -683,17 +691,24 @@ def customers_add():
 @login_required
 def customers_edit(customer_id: int):
     full_name = (request.form.get("full_name") or "").strip()
+    bill_address = (request.form.get("bill_address") or "").strip()
+    phone = (request.form.get("phone") or "").strip()
+    
+    # Server-side validation for mandatory fields
     if not full_name:
-        return redirect(url_for("customers"))
+        return redirect(url_for("customers", error="Full Name is required."))
+    if not bill_address:
+        return redirect(url_for("customers", error="Billing Address is required."))
+    if not phone:
+        return redirect(url_for("customers", error="Phone is required."))
 
-    bill_address = request.form.get("bill_address") or ""
     ship_address = request.form.get("ship_address") or ""
     same_as_billing = request.form.get("same_as_billing") == "on"
     if same_as_billing:
         ship_address = bill_address
 
     area = (request.form.get("area") or "").strip() or None
-    phone = (request.form.get("phone") or "").strip() or None
+    state = (request.form.get("state") or "").strip() or None
     email = (request.form.get("email") or "").strip() or None
     terms_raw = (request.form.get("terms") or "").strip()
     terms = terms_raw if terms_raw else None
@@ -708,12 +723,13 @@ def customers_edit(customer_id: int):
                 bill_address = ?,
                 ship_address = ?,
                 area = ?,
+                state = ?,
                 phone = ?,
                 email = ?,
                 terms = ?
             WHERE id = ?
             """,
-            (full_name, bill_address or None, ship_address or None, area, phone, email, terms, customer_id),
+            (full_name, bill_address or None, ship_address or None, area, state, phone, email, terms, customer_id),
         )
         conn.commit()
     finally:

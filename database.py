@@ -41,6 +41,7 @@ def init_db():
                 bill_address TEXT,
                 ship_address TEXT,
                 area TEXT,
+                state TEXT,
                 phone TEXT,
                 email TEXT,
                 terms TEXT DEFAULT 'Due on Receipt',
@@ -105,9 +106,21 @@ def init_db():
             """
         )
         conn.commit()
+        _migrate_database(conn)
         _seed_default_data(conn)
     finally:
         conn.close()
+
+
+def _migrate_database(conn):
+    """Add state column to customers table if it doesn't exist"""
+    cur = conn.cursor()
+    # Check if state column exists in customers table
+    cur.execute("PRAGMA table_info(customers)")
+    columns = [row[1] for row in cur.fetchall()]
+    if 'state' not in columns:
+        cur.execute("ALTER TABLE customers ADD COLUMN state TEXT")
+        conn.commit()
 
 
 def _seed_default_data(conn):

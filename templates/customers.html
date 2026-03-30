@@ -30,6 +30,69 @@
     gap: 1rem;
     margin-bottom: 1rem;
   }
+  .modal-field {
+    margin-bottom: 16px;
+  }
+  .modal-field label {
+    font-weight: bold;
+    font-size: 13px;
+    color: #374151;
+    display: block;
+    margin-bottom: 4px;
+  }
+  .modal-field .form-control {
+    width: 100%;
+    padding: 10px 12px;
+    border-radius: 6px;
+    border: 1px solid #d1d5db;
+    font-size: 14px;
+  }
+  .modal-field .form-control:focus {
+    outline: none;
+    border-color: #3b82f6;
+    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+  }
+  .required {
+    color: #dc2626;
+  }
+  .history-modal {
+    width: 85vw;
+    max-width: 900px;
+  }
+  .history-modal .modal-body {
+    max-height: 70vh;
+    overflow-y: auto;
+  }
+  .history-summary {
+    background: #f8fafc;
+    padding: 16px;
+    border-radius: 8px;
+    margin-bottom: 16px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  .history-summary-item {
+    text-align: center;
+  }
+  .history-summary-label {
+    font-size: 12px;
+    color: #6b7280;
+    font-weight: 600;
+    margin-bottom: 4px;
+  }
+  .history-summary-value {
+    font-size: 18px;
+    font-weight: 700;
+    color: #111827;
+  }
+  .history-table th:nth-child(1) { width: 15%; }
+  .history-table th:nth-child(2) { width: 12%; }
+  .history-table th:nth-child(3) { width: 8%; }
+  .history-table th:nth-child(4) { width: 15%; }
+  .history-table th:nth-child(5) { width: 15%; }
+  .history-table th:nth-child(6) { width: 12%; }
+  .history-table th:nth-child(7) { width: 10%; }
 </style>
 
 <div class="section-header">
@@ -66,6 +129,7 @@
             <th>#</th>
             <th>Name</th>
             <th>Area</th>
+            <th>City, State</th>
             <th>Phone</th>
             <th>Email</th>
             <th>Terms</th>
@@ -75,7 +139,7 @@
         <tbody>
           {% if customers|length == 0 %}
           <tr>
-            <td colspan="7" class="empty-state">No customers found.</td>
+            <td colspan="8" class="empty-state">No customers found.</td>
           </tr>
           {% else %}
           {% for c in customers %}
@@ -83,6 +147,7 @@
             <td>{{ loop.index }}</td>
             <td>{{ c.name }}</td>
             <td>{{ c.area or '' }}</td>
+            <td>{{ (c.area or '') + ((', ' + c.state) if c.state else '') }}</td>
             <td>{{ c.phone or '' }}</td>
             <td>{{ c.email or '' }}</td>
             <td>{{ c.terms or '' }}</td>
@@ -91,7 +156,7 @@
                 type="button"
                 class="btn btn-edit"
                 data-action="edit-customer"
-                data-customer='{{ {"id": c.id, "name": c.name, "bill_address": c.bill_address or "", "ship_address": c.ship_address or "", "area": c.area or "", "phone": c.phone or "", "email": c.email or "", "terms": c.terms or ""} | tojson }}'
+                data-customer='{{ {"id": c.id, "name": c.name, "bill_address": c.bill_address or "", "ship_address": c.ship_address or "", "area": c.area or "", "state": c.state or "", "phone": c.phone or "", "email": c.email or "", "terms": c.terms or ""} | tojson }}'
               >
                 Edit
               </button>
@@ -129,13 +194,13 @@
     <div class="modal-body">
       <form id="addCustomerForm" method="post" action="{{ url_for('customers_add') }}">
         <div class="modal-field">
-          <label for="addFullName">Full Name</label>
+          <label for="addFullName">Full Name <span class="required">*</span></label>
           <input class="form-control" type="text" id="addFullName" name="full_name" required>
         </div>
 
         <div class="modal-field">
-          <label for="addBillingAddress">Billing Address</label>
-          <textarea class="form-control" id="addBillingAddress" name="bill_address" rows="3"></textarea>
+          <label for="addBillingAddress">Billing Address <span class="required">*</span></label>
+          <textarea class="form-control" id="addBillingAddress" name="bill_address" rows="3" required></textarea>
         </div>
 
         <div class="modal-field">
@@ -156,8 +221,13 @@
         </div>
 
         <div class="modal-field">
-          <label for="addPhone">Phone</label>
-          <input class="form-control" type="text" id="addPhone" name="phone">
+          <label for="addState">State</label>
+          <input class="form-control" type="text" id="addState" name="state">
+        </div>
+
+        <div class="modal-field">
+          <label for="addPhone">Phone <span class="required">*</span></label>
+          <input class="form-control" type="text" id="addPhone" name="phone" required>
         </div>
 
         <div class="modal-field">
@@ -190,13 +260,13 @@
         <input type="hidden" id="editCustomerId" name="customer_id" value="0">
 
         <div class="modal-field">
-          <label for="editFullName">Full Name</label>
+          <label for="editFullName">Full Name <span class="required">*</span></label>
           <input class="form-control" type="text" id="editFullName" name="full_name" required>
         </div>
 
         <div class="modal-field">
-          <label for="editBillingAddress">Billing Address</label>
-          <textarea class="form-control" id="editBillingAddress" name="bill_address" rows="3"></textarea>
+          <label for="editBillingAddress">Billing Address <span class="required">*</span></label>
+          <textarea class="form-control" id="editBillingAddress" name="bill_address" rows="3" required></textarea>
         </div>
 
         <div class="modal-field">
@@ -217,8 +287,13 @@
         </div>
 
         <div class="modal-field">
-          <label for="editPhone">Phone</label>
-          <input class="form-control" type="text" id="editPhone" name="phone">
+          <label for="editState">State</label>
+          <input class="form-control" type="text" id="editState" name="state">
+        </div>
+
+        <div class="modal-field">
+          <label for="editPhone">Phone <span class="required">*</span></label>
+          <input class="form-control" type="text" id="editPhone" name="phone" required>
         </div>
 
         <div class="modal-field">
@@ -241,14 +316,28 @@
 </div>
 
 <div id="historyCustomerModal" class="modal-backdrop" aria-hidden="true">
-  <div class="modal" role="dialog" aria-modal="true" aria-label="Customer History">
+  <div class="modal history-modal" role="dialog" aria-modal="true" aria-label="Customer History">
     <div class="modal-header">
       <h3 id="historyModalTitle">Customer Purchase History</h3>
       <button type="button" class="modal-close" data-close-modal="historyCustomerModal" aria-label="Close">&times;</button>
     </div>
     <div class="modal-body">
+      <div class="history-summary" id="historySummary">
+        <div class="history-summary-item">
+          <div class="history-summary-label">Total Orders</div>
+          <div class="history-summary-value" id="totalOrders">0</div>
+        </div>
+        <div class="history-summary-item">
+          <div class="history-summary-label">Total Spent</div>
+          <div class="history-summary-value" id="totalSpent">$0.00</div>
+        </div>
+        <div class="history-summary-item">
+          <div class="history-summary-label">Outstanding Amount</div>
+          <div class="history-summary-value" id="outstandingAmount">$0.00</div>
+        </div>
+      </div>
       <div class="table-wrap">
-        <table class="data-table">
+        <table class="data-table history-table">
           <thead>
             <tr>
               <th>Invoice#</th>
@@ -257,20 +346,18 @@
               <th>Grand Total</th>
               <th>Payment Type</th>
               <th>Status</th>
+              <th>Actions</th>
             </tr>
           </thead>
           <tbody id="historyTbody"></tbody>
         </table>
-      </div>
-      <div style="margin-top:1rem; text-align:right;">
-        <div style="color: var(--color-text-muted); font-weight:600; margin-bottom:0.25rem;">Total Spent</div>
-        <div style="font-size:1.4rem; font-weight:800;" id="historyTotalSpent">$0.00</div>
       </div>
     </div>
   </div>
 </div>
 
 <script>
+document.addEventListener('DOMContentLoaded', function() {
   const addCustomerModal = document.getElementById('addCustomerModal');
   const editCustomerModal = document.getElementById('editCustomerModal');
   const historyCustomerModal = document.getElementById('historyCustomerModal');
@@ -278,11 +365,13 @@
   const closeModalButtons = document.querySelectorAll('[data-close-modal]');
 
   function openModal(modalEl) {
+    if (!modalEl) return;
     modalEl.classList.add('is-open');
     modalEl.setAttribute('aria-hidden', 'false');
   }
 
   function closeModal(modalEl) {
+    if (!modalEl) return;
     modalEl.classList.remove('is-open');
     modalEl.setAttribute('aria-hidden', 'true');
   }
@@ -367,16 +456,28 @@
 
   function fillEditModal(customer) {
     if (!customer || !editCustomerForm) return;
-    document.getElementById('editCustomerId').value = customer.id;
+    
+    const editCustomerId = document.getElementById('editCustomerId');
+    const editFullName = document.getElementById('editFullName');
+    const editBillingAddress = document.getElementById('editBillingAddress');
+    const editShippingAddress = document.getElementById('editShippingAddress');
+    const editArea = document.getElementById('editArea');
+    const editState = document.getElementById('editState');
+    const editPhone = document.getElementById('editPhone');
+    const editEmail = document.getElementById('editEmail');
+    const editTerms = document.getElementById('editTerms');
+
+    if (editCustomerId) editCustomerId.value = customer.id;
     editCustomerForm.action = '/customers/edit/' + customer.id;
 
-    document.getElementById('editFullName').value = customer.name || '';
-    document.getElementById('editBillingAddress').value = customer.bill_address || '';
-    document.getElementById('editShippingAddress').value = customer.ship_address || '';
-    document.getElementById('editArea').value = customer.area || '';
-    document.getElementById('editPhone').value = customer.phone || '';
-    document.getElementById('editEmail').value = customer.email || '';
-    document.getElementById('editTerms').value = customer.terms || '';
+    if (editFullName) editFullName.value = customer.name || '';
+    if (editBillingAddress) editBillingAddress.value = customer.bill_address || '';
+    if (editShippingAddress) editShippingAddress.value = customer.ship_address || '';
+    if (editArea) editArea.value = customer.area || '';
+    if (editState) editState.value = customer.state || '';
+    if (editPhone) editPhone.value = customer.phone || '';
+    if (editEmail) editEmail.value = customer.email || '';
+    if (editTerms) editTerms.value = customer.terms || '';
 
     const billingNorm = normalizeAddress(customer.bill_address);
     const shippingNorm = normalizeAddress(customer.ship_address);
@@ -386,9 +487,73 @@
     if (editShippingAddress) {
       editShippingAddress.disabled = same;
     }
-    if (same) {
+    if (same && editShippingAddress && editBillingAddress) {
       editShippingAddress.value = editBillingAddress.value;
     }
+  }
+
+  function showHistory(customerId, customerName) {
+    const historyModalTitle = document.getElementById('historyModalTitle');
+    const historyTbody = document.getElementById('historyTbody');
+    const totalOrders = document.getElementById('totalOrders');
+    const totalSpent = document.getElementById('totalSpent');
+    const outstandingAmount = document.getElementById('outstandingAmount');
+
+    if (!historyModalTitle || !historyTbody) return;
+
+    historyModalTitle.textContent = 'Purchase History — ' + customerName;
+    historyTbody.innerHTML = '';
+
+    // Reset summary values with safety checks
+    if (totalOrders) totalOrders.textContent = '0';
+    if (totalSpent) totalSpent.textContent = '$0.00';
+    if (outstandingAmount) outstandingAmount.textContent = '$0.00';
+
+    openModal(historyCustomerModal);
+
+    fetch('/customers/' + customerId + '/history', {
+      method: 'GET',
+      headers: { 'X-Requested-With': 'fetch' },
+      credentials: 'same-origin'
+    })
+      .then((res) => res.json())
+      .then((rows) => {
+        if (!Array.isArray(rows) || rows.length === 0) {
+          historyTbody.innerHTML = '<tr><td colspan="7" class="empty-state">No sales recorded yet</td></tr>';
+          return;
+        }
+
+        let totalSpentAmount = 0;
+        let totalOrdersCount = rows.length;
+        let outstandingAmountValue = 0;
+        
+        rows.forEach((r) => {
+          const grand = Number(r.grand_total || 0);
+          totalSpentAmount += grand;
+          if (r.status === 'unpaid') {
+            outstandingAmountValue += grand;
+          }
+          const tr = document.createElement('tr');
+          tr.innerHTML =
+            '<td>' + (r.invoice_number || '') + '</td>' +
+            '<td>' + (r.invoice_date || '') + '</td>' +
+            '<td>' + (r.item_count || 0) + '</td>' +
+            '<td>$' + grand.toFixed(2) + '</td>' +
+            '<td>' + (r.payment_type || '') + '</td>' +
+            '<td>' + (r.status || '') + '</td>' +
+            '<td><button class="btn btn-sm btn-primary">View</button></td>';
+          historyTbody.appendChild(tr);
+        });
+        
+        // Update summary with safety checks
+        if (totalOrders) totalOrders.textContent = totalOrdersCount;
+        if (totalSpent) totalSpent.textContent = '$' + totalSpentAmount.toFixed(2);
+        if (outstandingAmount) outstandingAmount.textContent = '$' + outstandingAmountValue.toFixed(2);
+      })
+      .catch((err) => {
+        console.error('Failed to load history:', err);
+        historyTbody.innerHTML = '<tr><td colspan="7" class="empty-state">Failed to load history.</td></tr>';
+      });
   }
 
   document.body.addEventListener('click', (e) => {
@@ -402,6 +567,7 @@
       try {
         customer = JSON.parse(btn.getAttribute('data-customer'));
       } catch (err) {
+        console.error('Failed to parse customer data:', err);
         customer = null;
       }
       fillEditModal(customer);
@@ -413,49 +579,10 @@
       const customerName = btn.getAttribute('data-customer-name') || 'this customer';
       if (!customerId) return;
 
-      const titleEl = document.getElementById('historyModalTitle');
-      if (titleEl) titleEl.textContent = 'Purchase History — ' + customerName;
-      const tbody = document.getElementById('historyTbody');
-      const totalSpentEl = document.getElementById('historyTotalSpent');
-
-      tbody.innerHTML = '';
-      totalSpentEl.textContent = '$0.00';
-
-      openModal(historyCustomerModal);
-
-      fetch('/customers/' + customerId + '/history', {
-        method: 'GET',
-        headers: { 'X-Requested-With': 'fetch' },
-        credentials: 'same-origin'
-      })
-        .then((res) => res.json())
-        .then((rows) => {
-          if (!Array.isArray(rows) || rows.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="6" class="empty-state">No sales recorded yet</td></tr>';
-            return;
-          }
-
-          let totalSpent = 0;
-          rows.forEach((r) => {
-            const grand = Number(r.grand_total || 0);
-            totalSpent += grand;
-            const tr = document.createElement('tr');
-            tr.innerHTML =
-              '<td>' + (r.invoice_number || '') + '</td>' +
-              '<td>' + (r.invoice_date || '') + '</td>' +
-              '<td>' + (r.item_count || 0) + '</td>' +
-              '<td>$' + grand.toFixed(2) + '</td>' +
-              '<td>' + (r.payment_type || '') + '</td>' +
-              '<td>' + (r.status || '') + '</td>';
-            tbody.appendChild(tr);
-          });
-          totalSpentEl.textContent = '$' + totalSpent.toFixed(2);
-        })
-        .catch((err) => {
-          tbody.innerHTML = '<tr><td colspan="6" class="empty-state">Failed to load history.</td></tr>';
-        });
+      showHistory(customerId, customerName);
     }
   });
+});
 </script>
 {% endblock %}
 
