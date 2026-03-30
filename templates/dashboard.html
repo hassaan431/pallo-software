@@ -5,48 +5,104 @@
 <div class="card-grid">
   <article class="stat-card">
     <h3>Total Products</h3>
-    <p class="stat-value">0</p>
+    <p class="stat-value">{{ total_products }}</p>
     <p class="stat-note">Active catalog items</p>
   </article>
   <article class="stat-card">
     <h3>Total Customers</h3>
-    <p class="stat-value">0</p>
+    <p class="stat-value">{{ total_customers }}</p>
     <p class="stat-note">Registered accounts</p>
   </article>
   <article class="stat-card">
     <h3>Today's Sales</h3>
-    <p class="stat-value">0</p>
+    <p class="stat-value">{{ todays_sales }}</p>
     <p class="stat-note">Orders placed today</p>
   </article>
   <article class="stat-card">
     <h3>Monthly Revenue</h3>
-    <p class="stat-value">0</p>
+    <p class="stat-value">${{ "%.2f"|format(monthly_revenue) }}</p>
     <p class="stat-note">Current month to date</p>
   </article>
 </div>
 <section class="panel">
   <div class="panel-header">
-    <h2>Recent sales</h2>
+    <h2>Recent Sales</h2>
   </div>
   <div class="panel-body">
     <div class="table-wrap">
       <table class="data-table">
         <thead>
           <tr>
-            <th>Invoice</th>
+            <th>Invoice#</th>
             <th>Customer</th>
             <th>Date</th>
-            <th>Amount</th>
+            <th>Grand Total</th>
+            <th>Payment Type</th>
             <th>Status</th>
+            <th>Actions</th>
           </tr>
         </thead>
         <tbody>
-          <tr>
-            <td colspan="5" class="empty-state">No recent sales to display.</td>
-          </tr>
+          {% if recent_sales %}
+            {% for sale in recent_sales %}
+            <tr>
+              <td>{{ sale.invoice_number }}</td>
+              <td>{{ sale.customer_name }}</td>
+              <td>{{ sale.invoice_date }}</td>
+              <td>${{ "%.2f"|format(sale.grand_total) }}</td>
+              <td>{{ sale.payment_type }}</td>
+              <td>
+                <span class="status-badge {{ sale.status }}">
+                  {{ sale.status }}
+                </span>
+              </td>
+              <td>
+                <a href="/sales/invoice/{{ sale.id }}/pdf" class="btn btn-pdf" target="_blank">PDF</a>
+              </td>
+            </tr>
+            {% endfor %}
+          {% else %}
+            <tr>
+              <td colspan="7" class="empty-state">No recent sales to display.</td>
+            </tr>
+          {% endif %}
         </tbody>
       </table>
     </div>
   </div>
 </section>
+
+<style>
+  .status-badge {
+    display: inline-block;
+    padding: 0.2rem 0.5rem;
+    border-radius: 12px;
+    font-size: 0.75rem;
+    font-weight: 600;
+  }
+  
+  .status-badge.paid {
+    background: #10b981;
+    color: white;
+  }
+  
+  .status-badge.unpaid {
+    background: #ef4444;
+    color: white;
+  }
+  
+  .btn-pdf {
+    background: #2563eb;
+    color: #fff;
+    border-radius: 8px;
+    padding: 0.25rem 0.5rem;
+    text-decoration: none;
+    font-size: 0.8rem;
+  }
+  
+  .btn-pdf:hover {
+    background: #1d4ed8;
+    color: #fff;
+  }
+</style>
 {% endblock %}

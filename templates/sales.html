@@ -119,6 +119,82 @@
     color: #fff;
   }
 
+  .btn-edit {
+    background: #2563eb;
+    color: #fff;
+    border-radius: 8px;
+  }
+
+  .btn-edit:hover {
+    background: #1d4ed8;
+    color: #fff;
+  }
+
+  .stock-badge {
+    display: inline-block;
+    padding: 0.2rem 0.5rem;
+    border-radius: 12px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    margin-left: 0.5rem;
+  }
+
+  .stock-badge.green {
+    background: #10b981;
+    color: white;
+  }
+
+  .stock-badge.orange {
+    background: #f59e0b;
+    color: white;
+  }
+
+  .stock-badge.red {
+    background: #ef4444;
+    color: white;
+  }
+
+  .status-badge {
+    display: inline-block;
+    padding: 0.2rem 0.5rem;
+    border-radius: 12px;
+    font-size: 0.75rem;
+    font-weight: 600;
+  }
+
+  .status-badge.paid {
+    background: #10b981;
+    color: white;
+  }
+
+  .status-badge.unpaid {
+    background: #ef4444;
+    color: white;
+  }
+
+  .invoice-warning {
+    color: #f59e0b;
+    font-size: 0.8rem;
+    margin-top: 0.25rem;
+    font-weight: 600;
+  }
+
+  .error-banner {
+    background: #fef2f2;
+    border: 1px solid #fecaca;
+    color: #dc2626;
+    padding: 1rem;
+    border-radius: 8px;
+    margin-bottom: 1rem;
+    font-weight: 600;
+  }
+
+  .invoice-hint {
+    color: #6b7280;
+    font-size: 0.75rem;
+    margin-top: 0.25rem;
+  }
+
   details.recent-details > summary {
     cursor: pointer;
     font-weight: 800;
@@ -141,12 +217,14 @@
   {% endif %}
 {% endwith %}
 
+<div id="stockErrorBanner" class="error-banner" style="display: none;"></div>
+
 <section class="panel">
   <div class="panel-header">
-    <h2>New Sale</h2>
+    <h2>{% if edit_mode %}Edit Sale{% else %}New Sale{% endif %}</h2>
   </div>
   <div class="panel-body" style="padding: 1.35rem;">
-    <form id="saleForm" method="post" action="{{ url_for('sales_new') }}" target="_self">
+    <form id="saleForm" method="post" action="{% if edit_mode %}{{ url_for('sales_update', sale_id=edit_sale.id) }}{% else %}{{ url_for('sales_new') }}{% endif %}" target="_self">
       <div class="sale-grid">
         <div>
           <div class="form-group">
@@ -159,52 +237,55 @@
                 placeholder="Search customers..."
                 autocomplete="off"
                 required
+                {% if edit_mode %}value="{{ edit_sale.customer_name }}"{% endif %}
               >
               <div id="customerSuggestions" class="suggestions" role="listbox" aria-label="Customer suggestions"></div>
             </div>
-            <input type="hidden" id="customerId" name="customer_id" value="">
+            <input type="hidden" id="customerId" name="customer_id" value="{% if edit_mode %}{{ edit_sale.customer_id }}{% endif %}">
           </div>
 
           <div class="form-group">
             <label class="field-label" for="invoiceDate">Invoice Date</label>
-            <input class="form-control" type="date" id="invoiceDate" name="invoice_date" value="{{ today }}" required>
+            <input class="form-control" type="date" id="invoiceDate" name="invoice_date" value="{% if edit_mode %}{{ edit_sale.invoice_date }}{% else %}{{ today }}{% endif %}" required>
           </div>
 
           <div class="form-group">
             <label class="field-label" for="dueDate">Due Date</label>
-            <input class="form-control" type="date" id="dueDate" name="due_date">
+            <input class="form-control" type="date" id="dueDate" name="due_date" value="{% if edit_mode %}{{ edit_sale.due_date or '' }}{% endif %}">
           </div>
 
           <div class="form-group">
             <label class="field-label" for="termsInput">Terms</label>
-            <input class="form-control" type="text" id="termsInput" name="terms" required>
+            <input class="form-control" type="text" id="termsInput" name="terms" value="{% if edit_mode %}{{ edit_sale.terms or '' }}{% endif %}">
           </div>
 
           <div class="form-group">
             <label class="field-label" for="notesInput">Notes (optional)</label>
-            <textarea class="form-control" id="notesInput" name="notes" rows="4" placeholder="Add any notes..."></textarea>
+            <textarea class="form-control" id="notesInput" name="notes" rows="4" placeholder="Add any notes...">{% if edit_mode %}{{ edit_sale.notes or '' }}{% endif %}</textarea>
           </div>
         </div>
 
         <div>
           <div class="form-group">
             <label class="field-label" for="invoiceNumber">Invoice #</label>
-            <input class="form-control" type="text" id="invoiceNumber" name="invoice_number" value="{{ next_invoice_number }}" readonly>
+            <input class="form-control" type="text" id="invoiceNumber" name="invoice_number" value="{% if edit_mode %}{{ edit_sale.invoice_number }}{% else %}{{ next_invoice_number }}{% endif %}">
+            <div class="invoice-hint">Auto-generated. You can override if needed.</div>
+            <div id="invoiceWarning" class="invoice-warning" style="display: none;"></div>
           </div>
 
           <div class="form-group">
             <label class="field-label">Payment Type</label>
             <div class="toggle-pills" role="radiogroup" aria-label="Payment type">
               <label class="toggle-pill">
-                <input type="radio" name="payment_type" value="cash" checked>
+                <input type="radio" name="payment_type" value="cash" {% if not edit_mode or edit_sale.payment_type == 'cash' %}checked{% endif %}>
                 <span class="pill-label">💵 Cash</span>
               </label>
               <label class="toggle-pill">
-                <input type="radio" name="payment_type" value="cheque">
+                <input type="radio" name="payment_type" value="cheque" {% if edit_mode and edit_sale.payment_type == 'cheque' %}checked{% endif %}>
                 <span class="pill-label">🏦 Cheque</span>
               </label>
               <label class="toggle-pill">
-                <input type="radio" name="payment_type" value="credit">
+                <input type="radio" name="payment_type" value="credit" {% if edit_mode and edit_sale.payment_type == 'credit' %}checked{% endif %}>
                 <span class="pill-label">💳 Credit</span>
               </label>
             </div>
@@ -255,7 +336,7 @@
               <div style="color: var(--color-text-muted); font-weight:700;">Discount</div>
               <div style="display:flex; align-items:center; gap:0.45rem;">
                 <div style="font-weight:900; color: var(--color-text-muted);">$</div>
-                <input class="form-control" style="width: 170px;" type="number" min="0" step="0.01" id="discountInput" name="discount_amount" value="0.00">
+                <input class="form-control" style="width: 170px;" type="number" min="0" step="0.01" id="discountInput" name="discount_amount" value="{% if edit_mode %}{{ edit_sale.discount_amount or 0.00 }}{% else %}0.00{% endif %}">
               </div>
             </div>
             <div style="display:flex; justify-content:space-between; gap:1rem; align-items:baseline;">
@@ -267,8 +348,13 @@
       </div>
 
       <div style="margin-top: 1.35rem; display:flex; gap:0.75rem; justify-content:flex-end; flex-wrap: wrap;">
-        <button type="submit" class="btn btn-secondary" id="saveSaleBtn">Save Sale</button>
-        <button type="submit" class="btn btn-primary" id="generateInvoiceBtn" name="generate_invoice" value="1">Save &amp; Generate Invoice</button>
+        {% if edit_mode %}
+          <button type="submit" class="btn btn-secondary" id="saveSaleBtn">Update Sale</button>
+          <button type="submit" class="btn btn-primary" id="generateInvoiceBtn" name="generate_invoice" value="1">Update &amp; Regenerate Invoice</button>
+        {% else %}
+          <button type="submit" class="btn btn-secondary" id="saveSaleBtn">Save Sale</button>
+          <button type="submit" class="btn btn-primary" id="generateInvoiceBtn" name="generate_invoice" value="1">Save &amp; Generate Invoice</button>
+        {% endif %}
       </div>
     </form>
   </div>
@@ -342,6 +428,8 @@
   const customersData = {{ customers | tojson }};
   const nextInvoice = {{ next_invoice_number | tojson }};
   const recentSales = {{ recent_sales | tojson }};
+  const editMode = {{ 'true' if edit_mode else 'false' }};
+  const editSaleData = {{ edit_sale | tojson if edit_mode else 'null' }};
 
   function money(n) {
     const v = Number(n || 0);
@@ -424,9 +512,39 @@
     if (!customerSearch.contains(e.target)) hideEl(customerSuggestions);
   });
 
-  // Ensure invoice number stays correct if refreshed in DOM
+  // -----------------------------
+  // Invoice number validation
+  // -----------------------------
   const invoiceNumberEl = document.getElementById('invoiceNumber');
-  if (invoiceNumberEl) invoiceNumberEl.value = nextInvoice;
+  const invoiceWarningEl = document.getElementById('invoiceWarning');
+
+  function checkInvoiceDuplicate(invoiceNumber) {
+    if (!invoiceNumber || invoiceNumber.trim() === '') return;
+    
+    fetch('/sales/check-invoice?n=' + encodeURIComponent(invoiceNumber), { credentials: 'same-origin' })
+      .then(res => res.json())
+      .then(data => {
+        if (data.exists) {
+          invoiceWarningEl.textContent = '⚠️ Invoice ' + invoiceNumber + ' already exists';
+          showEl(invoiceWarningEl);
+        } else {
+          hideEl(invoiceWarningEl);
+        }
+      })
+      .catch(() => {
+        hideEl(invoiceWarningEl);
+      });
+  }
+
+  if (invoiceNumberEl) {
+    let invoiceTimer = null;
+    invoiceNumberEl.addEventListener('input', () => {
+      clearTimeout(invoiceTimer);
+      invoiceTimer = setTimeout(() => {
+        checkInvoiceDuplicate(invoiceNumberEl.value);
+      }, 300);
+    });
+  }
 
   // -----------------------------
   // Line items (dynamic)
@@ -478,7 +596,10 @@
       .then((res) => res.json());
   }
 
-  function buildRowHtml(index) {
+  function buildRowHtml(index, product = null) {
+    const stockBadge = product && product.stock_quantity !== undefined ? 
+      `<span class="stock-badge ${product.stock_quantity >= 5 ? 'green' : product.stock_quantity > 0 ? 'orange' : 'red'}">In stock: ${product.stock_quantity}</span>` : '';
+    
     return `
       <tr class="line-item-row" data-row-index="${index}">
         <td class="line-no">${index + 1}</td>
@@ -489,13 +610,15 @@
               class="form-control product-search-input"
               placeholder="Search product..."
               autocomplete="off"
+              value="${product ? (product.name + (product.brand ? ' - ' + product.brand : '')) : ''}"
               />
             <div class="suggestions product-suggestions" style="display:none;"></div>
+            ${stockBadge}
           </div>
-          <input type="text" class="form-control description-input" placeholder="Description" />
+          <input type="text" class="form-control description-input" placeholder="Description" value="${product ? (product.name + (product.brand ? ' - ' + product.brand : '')) : ''}" />
         </td>
-        <td><input type="number" class="form-control qty-input" min="0.01" step="0.01" value="1"></td>
-        <td><input type="number" class="form-control rate-input" min="0" step="0.01" value="0"></td>
+        <td><input type="number" class="form-control qty-input" min="0.01" step="0.01" value="${product ? product.qty || 1 : 1}"></td>
+        <td><input type="number" class="form-control rate-input" min="0" step="0.01" value="${product ? product.selling_price || 0 : 0}"></td>
         <td class="row-amount"><span class="row-amount-cell" data-amount="0">$0.00</span></td>
         <td>
           <button type="button" class="btn btn-danger" style="padding:0.45rem 0.7rem;">✕</button>
@@ -519,10 +642,22 @@
     const display = (product.name || '') + brandPart;
 
     row.dataset.productId = String(product.id);
+    row.dataset.stockQuantity = String(product.stock_quantity || 0);
     searchInput.value = display;
     descInput.value = display;
     rateInput.value = Number(product.selling_price || 0);
     if (!qtyInput.value) qtyInput.value = 1;
+    
+    // Update stock badge
+    const existingBadge = row.querySelector('.stock-badge');
+    if (existingBadge) {
+      existingBadge.remove();
+    }
+    const stockBadge = document.createElement('span');
+    stockBadge.className = `stock-badge ${product.stock_quantity >= 5 ? 'green' : product.stock_quantity > 0 ? 'orange' : 'red'}`;
+    stockBadge.textContent = 'In stock: ' + (product.stock_quantity || 0);
+    searchInput.parentNode.appendChild(stockBadge);
+    
     hideProductSuggestions(row);
     updateRowAmount(row);
   }
@@ -598,13 +733,14 @@
     });
   }
 
-  function addEmptyRow() {
+  function addEmptyRow(product = null) {
     const index = document.querySelectorAll('tr.line-item-row').length;
     const temp = document.createElement('tbody');
-    temp.innerHTML = buildRowHtml(index);
+    temp.innerHTML = buildRowHtml(index, product);
     const row = temp.firstElementChild;
     lineItemsTbody.appendChild(row);
-    row.dataset.productId = '';
+    row.dataset.productId = product ? String(product.id) : '';
+    row.dataset.stockQuantity = product ? String(product.stock_quantity || 0) : '0';
     initRowBehaviors(row);
     updateRowAmount(row);
   }
@@ -615,9 +751,57 @@
     });
   }
 
-  // Start with one row
-  if (lineItemsTbody && lineItemsTbody.children.length === 0) {
+  // Initialize edit mode data
+  if (editMode && editSaleData && editSaleData.items) {
+    editSaleData.items.forEach(item => {
+      addEmptyRow(item);
+    });
+  } else if (lineItemsTbody && lineItemsTbody.children.length === 0) {
     addEmptyRow();
+  }
+
+  // -----------------------------
+  // Stock validation
+  // -----------------------------
+  function validateStock() {
+    const rows = Array.from(document.querySelectorAll('tr.line-item-row'));
+    const insufficientItems = [];
+    
+    rows.forEach((row) => {
+      const productId = row.dataset.productId;
+      const qtyEl = row.querySelector('.qty-input');
+      const searchInput = row.querySelector('.product-search-input');
+      
+      if (productId && qtyEl) {
+        const requestedQty = Number(qtyEl.value || 0);
+        const availableStock = Number(row.dataset.stockQuantity || 0);
+        
+        if (requestedQty > availableStock) {
+          insufficientItems.push({
+            name: searchInput.value,
+            requested: requestedQty,
+            available: availableStock
+          });
+        }
+      }
+    });
+    
+    return insufficientItems;
+  }
+
+  function showStockError(items) {
+    const errorBanner = document.getElementById('stockErrorBanner');
+    const errorMessages = items.map(item => 
+      `${item.name} (requested ${item.requested}, available ${item.available})`
+    ).join(', ');
+    
+    errorBanner.innerHTML = '⚠️ Insufficient stock: ' + errorMessages;
+    showEl(errorBanner);
+  }
+
+  function hideStockError() {
+    const errorBanner = document.getElementById('stockErrorBanner');
+    hideEl(errorBanner);
   }
 
   // -----------------------------
@@ -675,15 +859,26 @@
       tr.appendChild(tdPayment);
 
       const tdStatus = document.createElement('td');
-      tdStatus.textContent = s.status || '';
+      const statusBadge = document.createElement('span');
+      statusBadge.className = `status-badge ${s.status || 'unpaid'}`;
+      statusBadge.textContent = s.status || 'unpaid';
+      tdStatus.appendChild(statusBadge);
       tr.appendChild(tdStatus);
 
       const tdActions = document.createElement('td');
+      tdActions.style.display = 'flex';
+      tdActions.style.gap = '0.5rem';
+      
       const pdfLink = document.createElement('a');
       pdfLink.className = 'btn btn-pdf';
       pdfLink.target = '_blank';
       pdfLink.href = '/sales/invoice/' + s.id + '/pdf';
       pdfLink.textContent = 'PDF';
+
+      const editLink = document.createElement('a');
+      editLink.className = 'btn btn-edit';
+      editLink.href = '/sales/edit/' + s.id;
+      editLink.textContent = 'Edit';
 
       const delForm = document.createElement('form');
       delForm.method = 'post';
@@ -700,6 +895,7 @@
 
       delForm.appendChild(delBtn);
       tdActions.appendChild(pdfLink);
+      tdActions.appendChild(editLink);
       tdActions.appendChild(delForm);
       tr.appendChild(tdActions);
 
@@ -762,24 +958,32 @@
   }
 
   function ensureSaleFormReady() {
+    hideStockError();
+    
     const customerId = safeTrim(customerIdField.value);
     if (!customerId) {
       alert('Please select a customer.');
       return false;
     }
-    if (!termsInput.value.trim()) {
-      alert('Please enter invoice terms.');
-      return false;
-    }
+    
     if (!lineItemsTbody || lineItemsTbody.children.length === 0) {
       alert('Please add at least one line item.');
       return false;
     }
+    
+    // Check stock validation
+    const insufficientItems = validateStock();
+    if (insufficientItems.length > 0) {
+      showStockError(insufficientItems);
+      return false;
+    }
+    
     const items = buildItemsPayload();
     if (items.length === 0) {
       alert('Please complete at least one line item (product, description, qty, rate).');
       return false;
     }
+    
     document.getElementById('itemsJson').value = JSON.stringify(items);
     return true;
   }
@@ -816,4 +1020,3 @@
   recalcTotals();
 </script>
 {% endblock %}
-

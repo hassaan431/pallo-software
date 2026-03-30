@@ -82,7 +82,63 @@ def logout():
 @app.route("/dashboard")
 @login_required
 def dashboard():
-    return render_template("dashboard.html")
+    conn = get_connection()
+    try:
+        # Get total products
+        total_products = conn.execute("SELECT COUNT(*) as count FROM products").fetchone()["count"]
+        
+        # Get total customers
+        total_customers = conn.execute("SELECT COUNT(*) as count FROM customers").fetchone()["count"]
+        
+        # Get today's sales
+        today = date.today().isoformat()
+        todays_sales = conn.execute(
+            "SELECT COUNT(*) as count FROM sales WHERE invoice_date = ?", 
+            (today,)
+        ).fetchone()["count"]
+        
+        # Get monthly revenue
+        now = date.today()
+        current_month = now.month
+        current_year = now.year
+        monthly_revenue = conn.execute(
+            """
+            SELECT COALESCE(SUM(grand_total), 0) as total 
+            FROM sales 
+            WHERE strftime('%m', invoice_date) = ? AND strftime('%Y', invoice_date) = ?
+            """,
+            (f"{current_month:02d}", str(current_year))
+        ).fetchone()["total"]
+        
+        # Get recent sales (last 5)
+        recent_sales = conn.execute(
+            """
+            SELECT
+                s.id,
+                s.invoice_number,
+                s.invoice_date,
+                c.name AS customer_name,
+                s.grand_total,
+                s.payment_type,
+                s.status
+            FROM sales s
+            LEFT JOIN customers c ON c.id = s.customer_id
+            ORDER BY s.invoice_date DESC, s.id DESC
+            LIMIT 5
+            """
+        ).fetchall()
+        
+    finally:
+        conn.close()
+    
+    return render_template(
+        "dashboard.html",
+        total_products=total_products,
+        total_customers=total_customers,
+        todays_sales=todays_sales,
+        monthly_revenue=float(monthly_revenue),
+        recent_sales=[dict(sale) for sale in recent_sales]
+    )
 
 
 @app.route("/inventory")
@@ -945,7 +1001,7 @@ def sales_new():
     due_date = (request.form.get("due_date") or "").strip()
     terms = (request.form.get("terms") or "").strip()
     notes = request.form.get("notes") or ""
-    # Invoice number is generated at save-time to avoid duplicates.
+    invoice_number = (request.form.get("invoice_number") or "").strip()
     payment_type = (request.form.get("payment_type") or "").strip()
     discount_amount_raw = (request.form.get("discount_amount") or "").strip()
     items_json = request.form.get("items_json") or "[]"
@@ -962,8 +1018,19 @@ def sales_new():
             raise ValueError("Discount cannot be negative.")
         if payment_type not in ("cash", "cheque", "credit"):
             raise ValueError("Invalid payment type.")
-        if not terms:
-            raise ValueError("Terms are required.")
+        
+        # Check if invoice number already exists (for manual invoice numbers)
+        if invoice_number:
+            conn_check = get_connection()
+            try:
+                row = conn_check.execute(
+                    "SELECT id FROM sales WHERE invoice_number = ?",
+                    (invoice_number,),
+                ).fetchone()
+                if row is not None:
+                    raise ValueError(f"Invoice number {invoice_number} already exists.")
+            finally:
+                conn_check.close()
 
         conn_check = get_connection()
         try:
@@ -1025,7 +1092,12 @@ def sales_new():
         if grand_total < 0:
             grand_total = 0.00
 
-        invoice_number = get_next_invoice_number()
+        # Use provided invoice number or generate one
+        if not invoice_number:
+            invoice_number = get_next_invoice_number()
+
+        # Set status based on payment type
+        status = "paid" if payment_type == "cash" else "unpaid"
 
         conn = get_connection()
         try:
@@ -1038,15 +1110,16 @@ def sales_new():
             # Ensure stock is sufficient (aggregate per product for repeated items)
             for product_id, qty_total in qty_total_by_product.items():
                 cur = conn.execute(
-                    "SELECT stock_quantity FROM products WHERE id = ?",
+                    "SELECT stock_quantity, name FROM products WHERE id = ?",
                     (product_id,),
                 )
                 row = cur.fetchone()
                 if row is None:
                     raise ValueError("One or more selected products are invalid.")
                 stock_quantity = float(row["stock_quantity"] or 0)
+                product_name = row["name"] or "Unknown Product"
                 if stock_quantity + 1e-9 < qty_total:
-                    raise ValueError(f"Insufficient stock for product id {product_id}.")
+                    raise ValueError(f"Insufficient stock for {product_name} (requested {qty_total}, available {stock_quantity}).")
 
             cur = conn.execute(
                 """
@@ -1055,7 +1128,7 @@ def sales_new():
                      discount_amount, subtotal, grand_total, notes, status)
                 VALUES
                     (?, ?, ?, ?, ?, ?,
-                     ?, ?, ?, ?, 'unpaid')
+                     ?, ?, ?, ?, ?)
                 """,
                 (
                     invoice_number,
@@ -1068,6 +1141,7 @@ def sales_new():
                     subtotal,
                     grand_total,
                     notes or None,
+                    status,
                 ),
             )
             sale_id = int(cur.lastrowid)
@@ -1101,7 +1175,13 @@ def sales_new():
                     (qty_total, product_id, qty_total),
                 )
                 if upd.rowcount == 0:
-                    raise ValueError(f"Insufficient stock for product id {product_id}.")
+                    cur = conn.execute(
+                        "SELECT name FROM products WHERE id = ?",
+                        (product_id,),
+                    )
+                    row = cur.fetchone()
+                    product_name = row["name"] if row else "Unknown Product"
+                    raise ValueError(f"Insufficient stock for {product_name}.")
 
             conn.commit()
         except Exception as e:
@@ -1118,6 +1198,362 @@ def sales_new():
         return redirect(url_for("sales_invoice_pdf", id=sale_id))
 
     flash("Sale saved successfully.", "success")
+    flash("Sale saved successfully.", "success")
+    return redirect(url_for("sales"))
+
+
+@app.route("/sales/check-invoice", methods=["GET"])
+@login_required
+def sales_check_invoice():
+    invoice_number = request.args.get("n", "").strip()
+    if not invoice_number:
+        return jsonify({"exists": False})
+    
+    conn = get_connection()
+    try:
+        row = conn.execute(
+            "SELECT id FROM sales WHERE invoice_number = ?",
+            (invoice_number,),
+        ).fetchone()
+        return jsonify({"exists": row is not None})
+    finally:
+        conn.close()
+
+
+@app.route("/sales/edit/<int:sale_id>", methods=["GET"])
+@login_required
+def sales_edit(sale_id: int):
+    conn = get_connection()
+    try:
+        # Get sale data
+        sale = conn.execute(
+            """
+            SELECT
+                s.id,
+                s.invoice_number,
+                s.customer_id,
+                s.invoice_date,
+                s.due_date,
+                s.terms,
+                s.payment_type,
+                s.discount_amount,
+                s.notes,
+                s.status
+            FROM sales s
+            WHERE s.id = ?
+            """,
+            (sale_id,),
+        ).fetchone()
+        
+        if sale is None:
+            flash("Sale not found.", "error")
+            return redirect(url_for("sales"))
+        
+        # Get customer data
+        customer = conn.execute(
+            "SELECT id, name FROM customers WHERE id = ?",
+            (sale["customer_id"],),
+        ).fetchone()
+        
+        # Get sale items
+        items = conn.execute(
+            """
+            SELECT
+                si.product_id,
+                si.description,
+                si.qty,
+                si.rate,
+                si.amount,
+                p.stock_quantity
+            FROM sale_items si
+            LEFT JOIN products p ON p.id = si.product_id
+            WHERE si.sale_id = ?
+            """,
+            (sale_id,),
+        ).fetchall()
+        
+        # Convert to dict and add stock quantity
+        edit_sale = dict(sale)
+        edit_sale["customer_name"] = customer["name"] if customer else ""
+        edit_sale["items"] = [dict(item, qty=float(item["qty"])) for item in items]
+        
+        # Get other data for the form
+        customers = conn.execute(
+            "SELECT id, name, terms FROM customers ORDER BY name COLLATE NOCASE"
+        ).fetchall()
+        
+        recent_sales = conn.execute(
+            """
+            SELECT
+                s.id,
+                s.invoice_number,
+                s.invoice_date,
+                c.name AS customer_name,
+                COUNT(si.id) AS item_count,
+                COALESCE(s.subtotal, 0) AS subtotal,
+                COALESCE(s.discount_amount, 0) AS discount_amount,
+                COALESCE(s.grand_total, 0) AS grand_total,
+                s.payment_type,
+                s.status
+            FROM sales s
+            LEFT JOIN customers c ON c.id = s.customer_id
+            LEFT JOIN sale_items si ON si.sale_id = s.id
+            GROUP BY s.id
+            ORDER BY s.invoice_date DESC, s.id DESC
+            LIMIT 10
+            """
+        ).fetchall()
+        
+    finally:
+        conn.close()
+    
+    return render_template(
+        "sales.html",
+        customers=[dict(c) for c in customers],
+        recent_sales=[dict(r) for r in recent_sales],
+        next_invoice_number=get_next_invoice_number(),
+        today=date.today().isoformat(),
+        edit_mode=True,
+        edit_sale=edit_sale,
+    )
+
+
+@app.route("/sales/update/<int:sale_id>", methods=["POST"])
+@login_required
+def sales_update(sale_id: int):
+    customer_id_raw = (request.form.get("customer_id") or "").strip()
+    invoice_date = (request.form.get("invoice_date") or "").strip()
+    due_date = (request.form.get("due_date") or "").strip()
+    terms = (request.form.get("terms") or "").strip()
+    notes = request.form.get("notes") or ""
+    invoice_number = (request.form.get("invoice_number") or "").strip()
+    payment_type = (request.form.get("payment_type") or "").strip()
+    discount_amount_raw = (request.form.get("discount_amount") or "").strip()
+    items_json = request.form.get("items_json") or "[]"
+    generate_invoice = "generate_invoice" in request.form
+
+    error = None
+
+    try:
+        customer_id = int(customer_id_raw)
+        if not invoice_date:
+            raise ValueError("Invoice date is required.")
+        discount_amount = float(discount_amount_raw) if discount_amount_raw else 0.0
+        if discount_amount < 0:
+            raise ValueError("Discount cannot be negative.")
+        if payment_type not in ("cash", "cheque", "credit"):
+            raise ValueError("Invalid payment type.")
+        
+        # Check if invoice number already exists (excluding current sale)
+        if invoice_number:
+            conn_check = get_connection()
+            try:
+                row = conn_check.execute(
+                    "SELECT id FROM sales WHERE invoice_number = ? AND id != ?",
+                    (invoice_number, sale_id),
+                ).fetchone()
+                if row is not None:
+                    raise ValueError(f"Invoice number {invoice_number} already exists.")
+            finally:
+                conn_check.close()
+
+        conn_check = get_connection()
+        try:
+            row = conn_check.execute(
+                "SELECT id FROM customers WHERE id = ?",
+                (customer_id,),
+            ).fetchone()
+            if row is None:
+                raise ValueError("Customer not found.")
+        finally:
+            conn_check.close()
+    except ValueError as e:
+        error = str(e)
+
+    try:
+        items = json.loads(items_json) if items_json else []
+        if not isinstance(items, list) or not items:
+            raise ValueError("At least one line item is required.")
+    except Exception:
+        items = []
+        error = error or "Invalid line items payload."
+
+    parsed_items = []
+    if not error:
+        for idx, it in enumerate(items):
+            try:
+                product_id = int(it.get("product_id"))
+                description = (it.get("description") or "").strip()
+                qty = float(it.get("qty"))
+                rate = float(it.get("rate"))
+            except Exception:
+                error = f"Invalid values in item row {idx + 1}."
+                break
+
+            if qty < 0.01:
+                error = f"Qty must be at least 0.01 in item row {idx + 1}."
+                break
+            if rate < 0:
+                error = f"Rate cannot be negative in item row {idx + 1}."
+                break
+            if not description:
+                error = f"Description is required in item row {idx + 1}."
+                break
+
+            amount = round(qty * rate, 2)
+            parsed_items.append(
+                {
+                    "product_id": product_id,
+                    "description": description,
+                    "qty": qty,
+                    "rate": rate,
+                    "amount": amount,
+                }
+            )
+
+    if not error:
+        subtotal = round(sum(li["amount"] for li in parsed_items), 2)
+        grand_total = round(subtotal - discount_amount, 2)
+        if grand_total < 0:
+            grand_total = 0.00
+
+        # Set status based on payment type
+        status = "paid" if payment_type == "cash" else "unpaid"
+
+        conn = get_connection()
+        try:
+            conn.execute("BEGIN")
+
+            # Get old sale items to restore stock
+            old_items = conn.execute(
+                """
+                SELECT product_id, qty
+                FROM sale_items
+                WHERE sale_id = ?
+                """,
+                (sale_id,),
+            ).fetchall()
+
+            # Restore old stock
+            old_qty_by_product = defaultdict(float)
+            for item in old_items:
+                old_qty_by_product[item["product_id"]] += float(item["qty"])
+
+            for product_id, qty_total in old_qty_by_product.items():
+                conn.execute(
+                    "UPDATE products SET stock_quantity = stock_quantity + ? WHERE id = ?",
+                    (qty_total, product_id),
+                )
+
+            # Calculate new stock requirements
+            new_qty_by_product = defaultdict(float)
+            for li in parsed_items:
+                new_qty_by_product[li["product_id"]] += li["qty"]
+
+            # Check new stock availability
+            for product_id, qty_total in new_qty_by_product.items():
+                cur = conn.execute(
+                    "SELECT stock_quantity, name FROM products WHERE id = ?",
+                    (product_id,),
+                )
+                row = cur.fetchone()
+                if row is None:
+                    raise ValueError("One or more selected products are invalid.")
+                stock_quantity = float(row["stock_quantity"] or 0)
+                product_name = row["name"] or "Unknown Product"
+                if stock_quantity + 1e-9 < qty_total:
+                    raise ValueError(f"Insufficient stock for {product_name} (requested {qty_total}, available {stock_quantity}).")
+
+            # Update sale record
+            conn.execute(
+                """
+                UPDATE sales
+                SET
+                    invoice_number = ?,
+                    customer_id = ?,
+                    invoice_date = ?,
+                    due_date = ?,
+                    terms = ?,
+                    payment_type = ?,
+                    discount_amount = ?,
+                    subtotal = ?,
+                    grand_total = ?,
+                    notes = ?,
+                    status = ?
+                WHERE id = ?
+                """,
+                (
+                    invoice_number,
+                    customer_id,
+                    invoice_date,
+                    due_date or None,
+                    terms or None,
+                    payment_type,
+                    discount_amount,
+                    subtotal,
+                    grand_total,
+                    notes or None,
+                    status,
+                    sale_id,
+                ),
+            )
+
+            # Delete old sale items
+            conn.execute("DELETE FROM sale_items WHERE sale_id = ?", (sale_id,))
+
+            # Insert new sale items
+            for li in parsed_items:
+                conn.execute(
+                    """
+                    INSERT INTO sale_items
+                        (sale_id, product_id, description, qty, rate, amount)
+                    VALUES
+                        (?, ?, ?, ?, ?, ?)
+                    """,
+                    (
+                        sale_id,
+                        li["product_id"],
+                        li["description"],
+                        li["qty"],
+                        li["rate"],
+                        li["amount"],
+                    ),
+                )
+
+            # Deduct new stock
+            for product_id, qty_total in new_qty_by_product.items():
+                upd = conn.execute(
+                    """
+                    UPDATE products
+                    SET stock_quantity = stock_quantity - ?
+                    WHERE id = ? AND stock_quantity >= ?
+                    """,
+                    (qty_total, product_id, qty_total),
+                )
+                if upd.rowcount == 0:
+                    cur = conn.execute(
+                        "SELECT name FROM products WHERE id = ?",
+                        (product_id,),
+                    )
+                    row = cur.fetchone()
+                    product_name = row["name"] if row else "Unknown Product"
+                    raise ValueError(f"Insufficient stock for {product_name}.")
+
+            conn.commit()
+        except Exception as e:
+            conn.rollback()
+            error = str(e)
+        finally:
+            conn.close()
+
+    if error:
+        flash(error, "error")
+        return redirect(url_for("sales_edit", sale_id=sale_id))
+
+    if generate_invoice:
+        return redirect(url_for("sales_invoice_pdf", id=sale_id))
+
+    flash("Sale updated successfully.", "success")
     return redirect(url_for("sales"))
 
 

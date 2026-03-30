@@ -136,7 +136,8 @@ def generate_invoice_pdf(sale_id: int) -> bytes:
                 id,
                 name,
                 bill_address,
-                ship_address
+                ship_address,
+                phone
             FROM customers
             WHERE id = ?
             """,
@@ -173,10 +174,10 @@ def generate_invoice_pdf(sale_id: int) -> bytes:
 
     # Layout metrics
     header_height = 88
-    meta_height = 58
+    meta_height = 74  # Increased from 58 for 8pt padding top/bottom
     bill_height = 112
-    spacer_after_header = 8
-    spacer_after_meta = 8
+    spacer_after_header = 12  # Increased from 8
+    spacer_after_meta = 10  # Increased from 8
     table_header_height = 22
 
     totals_block_height = 90
@@ -204,9 +205,10 @@ def generate_invoice_pdf(sale_id: int) -> bytes:
     x_rate_right = x_qty_right + col_rate
     x_amt_right = x_rate_right + col_amt
 
-    row_padding_y = 6
+    row_padding_y = 8  # Increased from 6 for 4pt padding
     row_leading_item = 12
     row_leading_brand = 10
+    min_row_height = 20  # Minimum row height in points
 
     # Prepare rows with wrapping & computed heights
     dark_text = colors.black
@@ -365,6 +367,7 @@ def generate_invoice_pdf(sale_id: int) -> bytes:
         # Address handling
         bill_name = cust_data.get("name") or ""
         bill_address = (cust_data.get("bill_address") or "").strip()
+        bill_phone = (cust_data.get("phone") or "").strip()
         ship_address = (cust_data.get("ship_address") or "").strip()
 
         # If ship is empty or same, copy billing
@@ -385,6 +388,13 @@ def generate_invoice_pdf(sale_id: int) -> bytes:
         bill_lines = _wrap_text_lines(cnv, bill_address, "Helvetica", 10, inner_w)
         for ln in bill_lines:
             cnv.drawString(left_x, addr_y, ln)
+            addr_y -= 13
+        
+        # Add phone number if available
+        if bill_phone:
+            cnv.setFillColor(colors.black)
+            cnv.setFont("Helvetica", 10)  # 10pt font as requested
+            cnv.drawString(left_x, addr_y, bill_phone)
             addr_y -= 13
 
         # Draw shipping column
@@ -554,19 +564,27 @@ def generate_invoice_pdf(sale_id: int) -> bytes:
             discount_amount = inv_data["discount_amount"]
             grand_total = inv_data["grand_total"]
 
-            cnv.drawRightString(totals_right_x - 6, totals_top - 28, f"Subtotal: ${subtotal:.2f}")
+            # Right-aligned totals
+            cnv.drawRightString(totals_right_x, totals_top - 28, f"Subtotal:       ${subtotal:.2f}")
             if discount_amount > 0:
-                cnv.drawRightString(totals_right_x - 6, totals_top - 44, f"Discount: -${discount_amount:.2f}")
+                cnv.drawRightString(totals_right_x, totals_top - 44, f"Discount:      -${discount_amount:.2f}")
 
-            # Grand total block
+            # Add separator line
+            cnv.setFillColor(colors.black)
+            cnv.setStrokeColor(colors.black)
+            cnv.setLineWidth(1)
+            line_y = totals_top - 54
+            cnv.line(totals_x, line_y, totals_right_x, line_y)
+
+            # Grand total block with navy background and white text
             cnv.setFillColor(_DARK_NAVY)
             cnv.setStrokeColor(_DARK_NAVY)
             grand_y = totals_bottom + 10
             grand_h = 32
             cnv.rect(totals_x, grand_y, totals_right_x - totals_x, grand_h, stroke=0, fill=1)
             cnv.setFillColor(colors.white)
-            cnv.setFont("Helvetica-Bold", 12)
-            cnv.drawRightString(totals_right_x - 14, grand_y + 10, f"GRAND TOTAL:  ${grand_total:.2f}")
+            cnv.setFont("Helvetica-Bold", 12)  # 12pt font as requested
+            cnv.drawRightString(totals_right_x - 6, grand_y + 10, f"GRAND TOTAL:    ${grand_total:.2f}")
 
             # Footer
             cnv.setFillColor(_TEXT_GREY)
