@@ -1,0 +1,52 @@
+{% extends "base.html" %}
+{% block title %}Dashboard — AK Distributors{% endblock %}
+{% block page_heading %}Dashboard{% endblock %}
+{% block content %}
+<div class="card-grid">
+  <article class="stat-card">
+    <h3>Total Products</h3>
+    <p class="stat-value">0</p>
+    <p class="stat-note">Active catalog items</p>
+  </article>
+  <article class="stat-card">
+    <h3>Total Customers</h3>
+    <p class="stat-value">0</p>
+    <p class="stat-note">Registered accounts</p>
+  </article>
+  <article class="stat-card">
+    <h3>Today's Sales</h3>
+    <p class="stat-value">0</p>
+    <p class="stat-note">Orders placed today</p>
+  </article>
+  <article class="stat-card">
+    <h3>Monthly Revenue</h3>
+    <p class="stat-value">0</p>
+    <p class="stat-note">Current month to date</p>
+  </article>
+</div>
+<section class="panel">
+  <div class="panel-header">
+    <h2>Recent sales</h2>
+  </div>
+  <div class="panel-body">
+    <div class="table-wrap">
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th>Invoice</th>
+            <th>Customer</th>
+            <th>Date</th>
+            <th>Amount</th>
+            <th>Status</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td colspan="5" class="empty-state">No recent sales to display.</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</section>
+{% endblock %}

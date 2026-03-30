@@ -1,0 +1,461 @@
+{% extends "base.html" %}
+{% block title %}Customers — AK Distributors{% endblock %}
+{% block page_heading %}Customers{% endblock %}
+{% block content %}
+<style>
+  .btn-edit {
+    background: #2563eb;
+    color: #fff;
+  }
+  .btn-edit:hover {
+    background: #1d4ed8;
+    color: #fff;
+  }
+  .btn-history {
+    background: #16a34a;
+    color: #fff;
+  }
+  .btn-history:hover {
+    background: #15803d;
+    color: #fff;
+  }
+  textarea.form-control {
+    min-height: 84px;
+    resize: vertical;
+  }
+  .section-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    margin-bottom: 1rem;
+  }
+</style>
+
+<div class="section-header">
+  <h2 style="margin:0; font-size:1.25rem; font-weight:700;">Customers</h2>
+  <button type="button" class="btn btn-primary" id="openAddCustomerModal">Add Customer</button>
+</div>
+
+{% if error %}
+<div class="alert-error" role="alert" style="margin-top:-0.25rem;">{{ error }}</div>
+{% endif %}
+
+<div class="card-grid" style="margin-bottom: 1.25rem;">
+  <article class="stat-card">
+    <h3>Total Customers</h3>
+    <p class="stat-value">{{ total_customers }}</p>
+    <p class="stat-note">Active customer records</p>
+  </article>
+  <article class="stat-card">
+    <h3>Total Areas Covered</h3>
+    <p class="stat-value">{{ areas_covered }}</p>
+    <p class="stat-note">Distinct areas/cities</p>
+  </article>
+</div>
+
+<section class="panel">
+  <div class="panel-header">
+    <h2>Customer List</h2>
+  </div>
+  <div class="panel-body">
+    <div class="table-wrap">
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th>#</th>
+            <th>Name</th>
+            <th>Area</th>
+            <th>Phone</th>
+            <th>Email</th>
+            <th>Terms</th>
+            <th style="width: 320px;">Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% if customers|length == 0 %}
+          <tr>
+            <td colspan="7" class="empty-state">No customers found.</td>
+          </tr>
+          {% else %}
+          {% for c in customers %}
+          <tr id="customer-row-{{ c.id }}">
+            <td>{{ loop.index }}</td>
+            <td>{{ c.name }}</td>
+            <td>{{ c.area or '' }}</td>
+            <td>{{ c.phone or '' }}</td>
+            <td>{{ c.email or '' }}</td>
+            <td>{{ c.terms or '' }}</td>
+            <td>
+              <button
+                type="button"
+                class="btn btn-edit"
+                data-action="edit-customer"
+                data-customer='{{ {"id": c.id, "name": c.name, "bill_address": c.bill_address or "", "ship_address": c.ship_address or "", "area": c.area or "", "phone": c.phone or "", "email": c.email or "", "terms": c.terms or ""} | tojson }}'
+              >
+                Edit
+              </button>
+
+              <form method="post" action="{{ url_for('customers_delete', customer_id=c.id) }}" style="display:inline;" onsubmit="return confirm({{ ('Delete ' ~ c.name ~ '? This will not delete their sales history. ') | tojson }});">
+                <button type="submit" class="btn btn-danger" style="margin-left:0.5rem;">Delete</button>
+              </form>
+
+              <button
+                type="button"
+                class="btn btn-history"
+                data-action="history-customer"
+                data-customer-id="{{ c.id }}"
+                data-customer-name='{{ c.name | e }}'
+                style="margin-left:0.5rem;"
+              >
+                History
+              </button>
+            </td>
+          </tr>
+          {% endfor %}
+          {% endif %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</section>
+
+<div id="addCustomerModal" class="modal-backdrop" aria-hidden="true">
+  <div class="modal" role="dialog" aria-modal="true" aria-label="Add Customer">
+    <div class="modal-header">
+      <h3>Add Customer</h3>
+      <button type="button" class="modal-close" data-close-modal="addCustomerModal" aria-label="Close">&times;</button>
+    </div>
+    <div class="modal-body">
+      <form id="addCustomerForm" method="post" action="{{ url_for('customers_add') }}">
+        <div class="modal-field">
+          <label for="addFullName">Full Name</label>
+          <input class="form-control" type="text" id="addFullName" name="full_name" required>
+        </div>
+
+        <div class="modal-field">
+          <label for="addBillingAddress">Billing Address</label>
+          <textarea class="form-control" id="addBillingAddress" name="bill_address" rows="3"></textarea>
+        </div>
+
+        <div class="modal-field">
+          <label>
+            <input type="checkbox" id="addSameAsBilling" name="same_as_billing" value="on">
+            Same as billing address
+          </label>
+        </div>
+
+        <div class="modal-field">
+          <label for="addShippingAddress">Shipping Address</label>
+          <textarea class="form-control" id="addShippingAddress" name="ship_address" rows="3"></textarea>
+        </div>
+
+        <div class="modal-field">
+          <label for="addArea">Area / City</label>
+          <input class="form-control" type="text" id="addArea" name="area">
+        </div>
+
+        <div class="modal-field">
+          <label for="addPhone">Phone</label>
+          <input class="form-control" type="text" id="addPhone" name="phone">
+        </div>
+
+        <div class="modal-field">
+          <label for="addEmail">Email</label>
+          <input class="form-control" type="text" id="addEmail" name="email">
+        </div>
+
+        <div class="modal-field">
+          <label for="addTerms">Terms</label>
+          <input class="form-control" type="text" id="addTerms" name="terms" placeholder="e.g. Due on Receipt, Net 30">
+        </div>
+
+        <div class="inline-flex" style="justify-content: flex-end; gap: 0.65rem; margin-top: 0.25rem;">
+          <button type="button" class="btn btn-secondary" data-close-modal="addCustomerModal">Cancel</button>
+          <button type="submit" class="btn btn-primary">Save Customer</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<div id="editCustomerModal" class="modal-backdrop" aria-hidden="true">
+  <div class="modal" role="dialog" aria-modal="true" aria-label="Edit Customer">
+    <div class="modal-header">
+      <h3>Edit Customer</h3>
+      <button type="button" class="modal-close" data-close-modal="editCustomerModal" aria-label="Close">&times;</button>
+    </div>
+    <div class="modal-body">
+      <form id="editCustomerForm" method="post" action="/customers/edit/0">
+        <input type="hidden" id="editCustomerId" name="customer_id" value="0">
+
+        <div class="modal-field">
+          <label for="editFullName">Full Name</label>
+          <input class="form-control" type="text" id="editFullName" name="full_name" required>
+        </div>
+
+        <div class="modal-field">
+          <label for="editBillingAddress">Billing Address</label>
+          <textarea class="form-control" id="editBillingAddress" name="bill_address" rows="3"></textarea>
+        </div>
+
+        <div class="modal-field">
+          <label>
+            <input type="checkbox" id="editSameAsBilling" name="same_as_billing" value="on">
+            Same as billing address
+          </label>
+        </div>
+
+        <div class="modal-field">
+          <label for="editShippingAddress">Shipping Address</label>
+          <textarea class="form-control" id="editShippingAddress" name="ship_address" rows="3"></textarea>
+        </div>
+
+        <div class="modal-field">
+          <label for="editArea">Area / City</label>
+          <input class="form-control" type="text" id="editArea" name="area">
+        </div>
+
+        <div class="modal-field">
+          <label for="editPhone">Phone</label>
+          <input class="form-control" type="text" id="editPhone" name="phone">
+        </div>
+
+        <div class="modal-field">
+          <label for="editEmail">Email</label>
+          <input class="form-control" type="text" id="editEmail" name="email">
+        </div>
+
+        <div class="modal-field">
+          <label for="editTerms">Terms</label>
+          <input class="form-control" type="text" id="editTerms" name="terms">
+        </div>
+
+        <div class="inline-flex" style="justify-content: flex-end; gap: 0.65rem; margin-top: 0.25rem;">
+          <button type="button" class="btn btn-secondary" data-close-modal="editCustomerModal">Cancel</button>
+          <button type="submit" class="btn btn-primary">Save Changes</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<div id="historyCustomerModal" class="modal-backdrop" aria-hidden="true">
+  <div class="modal" role="dialog" aria-modal="true" aria-label="Customer History">
+    <div class="modal-header">
+      <h3 id="historyModalTitle">Customer Purchase History</h3>
+      <button type="button" class="modal-close" data-close-modal="historyCustomerModal" aria-label="Close">&times;</button>
+    </div>
+    <div class="modal-body">
+      <div class="table-wrap">
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>Invoice#</th>
+              <th>Date</th>
+              <th>Items</th>
+              <th>Grand Total</th>
+              <th>Payment Type</th>
+              <th>Status</th>
+            </tr>
+          </thead>
+          <tbody id="historyTbody"></tbody>
+        </table>
+      </div>
+      <div style="margin-top:1rem; text-align:right;">
+        <div style="color: var(--color-text-muted); font-weight:600; margin-bottom:0.25rem;">Total Spent</div>
+        <div style="font-size:1.4rem; font-weight:800;" id="historyTotalSpent">$0.00</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+  const addCustomerModal = document.getElementById('addCustomerModal');
+  const editCustomerModal = document.getElementById('editCustomerModal');
+  const historyCustomerModal = document.getElementById('historyCustomerModal');
+  const openAddCustomerModalBtn = document.getElementById('openAddCustomerModal');
+  const closeModalButtons = document.querySelectorAll('[data-close-modal]');
+
+  function openModal(modalEl) {
+    modalEl.classList.add('is-open');
+    modalEl.setAttribute('aria-hidden', 'false');
+  }
+
+  function closeModal(modalEl) {
+    modalEl.classList.remove('is-open');
+    modalEl.setAttribute('aria-hidden', 'true');
+  }
+
+  closeModalButtons.forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const targetId = btn.getAttribute('data-close-modal');
+      const modalEl = document.getElementById(targetId);
+      if (modalEl) closeModal(modalEl);
+    });
+  });
+
+  [addCustomerModal, editCustomerModal, historyCustomerModal].forEach((modalEl) => {
+    if (!modalEl) return;
+    modalEl.addEventListener('click', (e) => {
+      if (e.target === modalEl) closeModal(modalEl);
+    });
+  });
+
+  function normalizeAddress(s) {
+    return (s || '').replace(/\\r\\n/g, '\\n').replace(/\\r/g, '\\n').trim();
+  }
+
+  const addSameAsBilling = document.getElementById('addSameAsBilling');
+  const addBillingAddress = document.getElementById('addBillingAddress');
+  const addShippingAddress = document.getElementById('addShippingAddress');
+
+  function syncAddShipping() {
+    if (!addSameAsBilling || !addBillingAddress || !addShippingAddress) return;
+    if (addSameAsBilling.checked) {
+      addShippingAddress.value = addBillingAddress.value;
+      addShippingAddress.disabled = true;
+    } else {
+      addShippingAddress.disabled = false;
+    }
+  }
+
+  if (addSameAsBilling) {
+    addSameAsBilling.addEventListener('change', syncAddShipping);
+  }
+  if (addBillingAddress) {
+    addBillingAddress.addEventListener('input', () => {
+      if (addSameAsBilling && addSameAsBilling.checked) syncAddShipping();
+    });
+  }
+
+  if (openAddCustomerModalBtn) {
+    openAddCustomerModalBtn.addEventListener('click', () => {
+      const form = document.getElementById('addCustomerForm');
+      if (form) form.reset();
+      if (addShippingAddress && addSameAsBilling) {
+        addShippingAddress.disabled = false;
+      }
+      if (addSameAsBilling) addSameAsBilling.checked = false;
+      openModal(addCustomerModal);
+    });
+  }
+
+  const editSameAsBilling = document.getElementById('editSameAsBilling');
+  const editBillingAddress = document.getElementById('editBillingAddress');
+  const editShippingAddress = document.getElementById('editShippingAddress');
+  const editCustomerForm = document.getElementById('editCustomerForm');
+
+  function syncEditShippingToBilling() {
+    if (!editSameAsBilling || !editBillingAddress || !editShippingAddress) return;
+    if (editSameAsBilling.checked) {
+      editShippingAddress.value = editBillingAddress.value;
+      editShippingAddress.disabled = true;
+    } else {
+      editShippingAddress.disabled = false;
+    }
+  }
+
+  if (editSameAsBilling) {
+    editSameAsBilling.addEventListener('change', syncEditShippingToBilling);
+  }
+  if (editBillingAddress) {
+    editBillingAddress.addEventListener('input', () => {
+      if (editSameAsBilling && editSameAsBilling.checked) syncEditShippingToBilling();
+    });
+  }
+
+  function fillEditModal(customer) {
+    if (!customer || !editCustomerForm) return;
+    document.getElementById('editCustomerId').value = customer.id;
+    editCustomerForm.action = '/customers/edit/' + customer.id;
+
+    document.getElementById('editFullName').value = customer.name || '';
+    document.getElementById('editBillingAddress').value = customer.bill_address || '';
+    document.getElementById('editShippingAddress').value = customer.ship_address || '';
+    document.getElementById('editArea').value = customer.area || '';
+    document.getElementById('editPhone').value = customer.phone || '';
+    document.getElementById('editEmail').value = customer.email || '';
+    document.getElementById('editTerms').value = customer.terms || '';
+
+    const billingNorm = normalizeAddress(customer.bill_address);
+    const shippingNorm = normalizeAddress(customer.ship_address);
+    const same = billingNorm === shippingNorm && billingNorm.length > 0;
+
+    if (editSameAsBilling) editSameAsBilling.checked = same;
+    if (editShippingAddress) {
+      editShippingAddress.disabled = same;
+    }
+    if (same) {
+      editShippingAddress.value = editBillingAddress.value;
+    }
+  }
+
+  document.body.addEventListener('click', (e) => {
+    const btn = e.target.closest('[data-action]');
+    if (!btn) return;
+
+    const action = btn.getAttribute('data-action');
+
+    if (action === 'edit-customer') {
+      let customer = null;
+      try {
+        customer = JSON.parse(btn.getAttribute('data-customer'));
+      } catch (err) {
+        customer = null;
+      }
+      fillEditModal(customer);
+      openModal(editCustomerModal);
+    }
+
+    if (action === 'history-customer') {
+      const customerId = btn.getAttribute('data-customer-id');
+      const customerName = btn.getAttribute('data-customer-name') || 'this customer';
+      if (!customerId) return;
+
+      const titleEl = document.getElementById('historyModalTitle');
+      if (titleEl) titleEl.textContent = 'Purchase History — ' + customerName;
+      const tbody = document.getElementById('historyTbody');
+      const totalSpentEl = document.getElementById('historyTotalSpent');
+
+      tbody.innerHTML = '';
+      totalSpentEl.textContent = '$0.00';
+
+      openModal(historyCustomerModal);
+
+      fetch('/customers/' + customerId + '/history', {
+        method: 'GET',
+        headers: { 'X-Requested-With': 'fetch' },
+        credentials: 'same-origin'
+      })
+        .then((res) => res.json())
+        .then((rows) => {
+          if (!Array.isArray(rows) || rows.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="6" class="empty-state">No sales recorded yet</td></tr>';
+            return;
+          }
+
+          let totalSpent = 0;
+          rows.forEach((r) => {
+            const grand = Number(r.grand_total || 0);
+            totalSpent += grand;
+            const tr = document.createElement('tr');
+            tr.innerHTML =
+              '<td>' + (r.invoice_number || '') + '</td>' +
+              '<td>' + (r.invoice_date || '') + '</td>' +
+              '<td>' + (r.item_count || 0) + '</td>' +
+              '<td>$' + grand.toFixed(2) + '</td>' +
+              '<td>' + (r.payment_type || '') + '</td>' +
+              '<td>' + (r.status || '') + '</td>';
+            tbody.appendChild(tr);
+          });
+          totalSpentEl.textContent = '$' + totalSpent.toFixed(2);
+        })
+        .catch((err) => {
+          tbody.innerHTML = '<tr><td colspan="6" class="empty-state">Failed to load history.</td></tr>';
+        });
+    }
+  });
+</script>
+{% endblock %}
+

@@ -1,0 +1,14 @@
+# Database (contains real data - never commit)
+database.db
+
+# Virtual environment (auto-generated, huge)
+.venv/
+__pycache__/
+*.pyc
+*.pyo
+
+# Mac system files
+.DS_Store
+
+# Logos (business assets)
+static/logos/

@@ -1,0 +1,600 @@
+{% extends "base.html" %}
+{% block title %}Inventory — AK Distributors{% endblock %}
+{% block page_heading %}Inventory{% endblock %}
+{% block content %}
+<style>
+  .row-out-of-stock td,
+  .row-out-of-stock th {
+    background: #ffe5e5 !important;
+  }
+  .row-low-stock td,
+  .row-low-stock th {
+    background: #fff8e1 !important;
+  }
+  .btn-edit {
+    background: #2563eb;
+    color: #fff;
+  }
+  .btn-edit:hover {
+    background: #1d4ed8;
+    color: #fff;
+  }
+  .inline-flex {
+    display: flex;
+    align-items: center;
+    gap: 0.65rem;
+    flex-wrap: wrap;
+  }
+  .inline-add {
+    margin-top: 0.65rem;
+    display: flex;
+    align-items: center;
+    gap: 0.65rem;
+    flex-wrap: wrap;
+  }
+  .modal-field {
+    margin-bottom: 1rem;
+  }
+  .modal-field label {
+    display: block;
+    margin-bottom: 0.35rem;
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: var(--color-text-muted);
+  }
+</style>
+
+<div class="inline-flex" style="justify-content: space-between; margin-bottom: 1rem;">
+  <h2 style="margin:0; font-size:1.25rem; font-weight:700;">Inventory</h2>
+  <button type="button" class="btn btn-primary" id="openAddProductModal">Add Product</button>
+</div>
+
+<div class="card-grid" style="margin-bottom: 1.5rem;">
+  <article class="stat-card">
+    <h3>Total Products</h3>
+    <p class="stat-value">{{ total_products }}</p>
+    <p class="stat-note">Items in your catalog</p>
+  </article>
+  <article class="stat-card">
+    <h3>Total Stock Value</h3>
+    <p class="stat-value">${{ '%.2f' % (total_stock_value|float) }}</p>
+    <p class="stat-note">Cost price times stock quantity</p>
+  </article>
+  <article class="stat-card">
+    <h3>Low Stock</h3>
+    <p class="stat-value">{{ low_stock_count }}</p>
+    <p class="stat-note">Stock quantity &lt; 5</p>
+  </article>
+</div>
+
+<section class="panel">
+  <div class="panel-header">
+    <h2>Products</h2>
+  </div>
+  <div class="panel-body">
+    <div class="table-wrap">
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th>#</th>
+            <th>Product Name</th>
+            <th>Brand</th>
+            <th>Category</th>
+            <th>Unit</th>
+            <th>Cost Price</th>
+            <th>Selling Price</th>
+            <th>Stock Qty</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody id="productsTbody">
+          {% if products|length == 0 %}
+          <tr>
+            <td colspan="9" class="empty-state">No products found.</td>
+          </tr>
+          {% else %}
+          {% for p in products %}
+          {% set qty = p.stock_quantity|default(0)|float %}
+          {% set row_class = '' %}
+          {% if qty == 0 %}
+            {% set row_class = 'row-out-of-stock' %}
+          {% elif qty > 0 and qty < 5 %}
+            {% set row_class = 'row-low-stock' %}
+          {% endif %}
+          <tr id="product-row-{{ p.id }}" class="{{ row_class }}">
+            <td>{{ loop.index }}</td>
+            <td>{{ p.name }}</td>
+            <td>{{ p.brand or '' }}</td>
+            <td>{{ p.category_name or '' }}</td>
+            <td>{{ p.unit or 'Each' }}</td>
+            <td>${{ '%.2f' % (p.cost_price|default(0)|float) }}</td>
+            <td>${{ '%.2f' % (p.selling_price|default(0)|float) }}</td>
+            <td>{{ '%.2f' % qty }}</td>
+            <td>
+              <button type="button" class="btn btn-edit" data-action="edit-product"
+                data-id="{{ p.id }}"
+                data-name="{{ p.name|e }}"
+                data-brand="{{ (p.brand or '')|e }}"
+                data-category-id="{{ p.category_id or '' }}"
+                data-unit="{{ p.unit or 'Each' }}"
+                data-cost-price="{{ p.cost_price|default(0)|float }}"
+                data-selling-price="{{ p.selling_price|default(0)|float }}"
+                data-stock-quantity="{{ qty|float }}"
+              >
+                Edit
+              </button>
+              <button type="button" class="btn btn-danger" data-action="delete-product"
+                data-id="{{ p.id }}"
+                data-name="{{ p.name|e }}"
+              >
+                Delete
+              </button>
+            </td>
+          </tr>
+          {% endfor %}
+          {% endif %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</section>
+
+<div id="addProductModal" class="modal-backdrop" aria-hidden="true">
+  <div class="modal" role="dialog" aria-modal="true" aria-label="Add Product">
+    <div class="modal-header">
+      <h3>Add Product</h3>
+      <button type="button" class="modal-close" data-close-modal="addProductModal" aria-label="Close">&times;</button>
+    </div>
+    <div class="modal-body">
+      <form id="addProductForm" method="post" action="{{ url_for('inventory_add') }}">
+        <div class="modal-field">
+          <label for="addProductName">Product Name</label>
+          <input class="form-control" type="text" id="addProductName" name="product_name" required>
+        </div>
+
+        <div class="modal-field">
+          <label for="addBrand">Brand</label>
+          <input class="form-control" type="text" id="addBrand" name="brand">
+        </div>
+
+        <div class="modal-field">
+          <label for="addCategorySelect">Category</label>
+          <select class="form-control" id="addCategorySelect" name="category_id" required>
+            <option value="" disabled selected>Select a category</option>
+            {% for cat in categories %}
+            <option value="{{ cat.id }}">{{ cat.name }}</option>
+            {% endfor %}
+            <option value="__add_new__">+ Add New Category</option>
+          </select>
+          <div id="addNewCategoryInline" class="inline-add" style="display:none;">
+            <input class="form-control" type="text" id="addNewCategoryName" name="new_category_name" placeholder="New category name">
+            <button type="button" class="btn btn-primary" id="addNewCategoryCreateBtn">Create</button>
+          </div>
+        </div>
+
+        <div class="modal-field">
+          <label for="addUnitSelect">Unit</label>
+          <select class="form-control" id="addUnitSelect" name="unit" required>
+            {% set units = ['Each','Box','KG','GM','LB','Dozen','Case','Pack'] %}
+            {% for u in units %}
+            <option value="{{ u }}" {% if u == 'Each' %}selected{% endif %}>{{ u }}</option>
+            {% endfor %}
+          </select>
+        </div>
+
+        <div class="modal-field">
+          <label for="addCostPrice">Cost Price</label>
+          <input class="form-control" type="number" step="0.01" id="addCostPrice" name="cost_price" required>
+        </div>
+
+        <div class="modal-field">
+          <label for="addSellingPrice">Selling Price</label>
+          <input class="form-control" type="number" step="0.01" id="addSellingPrice" name="selling_price" required>
+        </div>
+
+        <div class="modal-field">
+          <label for="addStockQuantity">Stock Quantity</label>
+          <input class="form-control" type="number" step="0.01" id="addStockQuantity" name="stock_quantity" required>
+        </div>
+
+        <div class="inline-flex" style="justify-content: flex-end; gap: 0.65rem; margin-top: 0.25rem;">
+          <button type="button" class="btn btn-secondary" data-close-modal="addProductModal">Cancel</button>
+          <button type="submit" class="btn btn-primary">Save Product</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<div id="editProductModal" class="modal-backdrop" aria-hidden="true">
+  <div class="modal" role="dialog" aria-modal="true" aria-label="Edit Product">
+    <div class="modal-header">
+      <h3>Edit Product</h3>
+      <button type="button" class="modal-close" data-close-modal="editProductModal" aria-label="Close">&times;</button>
+    </div>
+    <div class="modal-body">
+      <form id="editProductForm" method="post" action="">
+        <div class="modal-field">
+          <label for="editProductName">Product Name</label>
+          <input class="form-control" type="text" id="editProductName" name="product_name" required>
+        </div>
+
+        <div class="modal-field">
+          <label for="editBrand">Brand</label>
+          <input class="form-control" type="text" id="editBrand" name="brand">
+        </div>
+
+        <div class="modal-field">
+          <label for="editCategorySelect">Category</label>
+          <select class="form-control" id="editCategorySelect" name="category_id" required>
+            <option value="" disabled>Select a category</option>
+            {% for cat in categories %}
+            <option value="{{ cat.id }}">{{ cat.name }}</option>
+            {% endfor %}
+            <option value="__add_new__">+ Add New Category</option>
+          </select>
+          <div id="editNewCategoryInline" class="inline-add" style="display:none;">
+            <input class="form-control" type="text" id="editNewCategoryName" name="new_category_name" placeholder="New category name">
+            <button type="button" class="btn btn-primary" id="editNewCategoryCreateBtn">Create</button>
+          </div>
+        </div>
+
+        <div class="modal-field">
+          <label for="editUnitSelect">Unit</label>
+          <select class="form-control" id="editUnitSelect" name="unit" required>
+            {% set units = ['Each','Box','KG','GM','LB','Dozen','Case','Pack'] %}
+            {% for u in units %}
+            <option value="{{ u }}" {% if u == 'Each' %}selected{% endif %}>{{ u }}</option>
+            {% endfor %}
+          </select>
+        </div>
+
+        <div class="modal-field">
+          <label for="editCostPrice">Cost Price</label>
+          <input class="form-control" type="number" step="0.01" id="editCostPrice" name="cost_price" required>
+        </div>
+
+        <div class="modal-field">
+          <label for="editSellingPrice">Selling Price</label>
+          <input class="form-control" type="number" step="0.01" id="editSellingPrice" name="selling_price" required>
+        </div>
+
+        <div class="modal-field">
+          <label for="editStockQuantity">Stock Quantity</label>
+          <input class="form-control" type="number" step="0.01" id="editStockQuantity" name="stock_quantity" required>
+        </div>
+
+        <div class="inline-flex" style="justify-content: flex-end; gap: 0.65rem; margin-top: 0.25rem;">
+          <button type="button" class="btn btn-secondary" data-close-modal="editProductModal">Cancel</button>
+          <button type="submit" class="btn btn-primary">Save Changes</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<section class="panel" style="margin-top: 1.6rem;">
+  <div class="panel-header">
+    <h2>Categories</h2>
+    <button type="button" class="btn btn-primary" id="openAddCategoryInlineBtn">Add Category</button>
+  </div>
+  <div class="panel-body" style="padding: 1.35rem;">
+    <div id="inlineCategoryAdd" style="display:none; margin-bottom: 1.25rem;">
+      <div class="inline-add">
+        <input class="form-control" type="text" id="inlineCategoryName" placeholder="Category name">
+        <button type="button" class="btn btn-primary" id="inlineCategoryCreateBtn">Create</button>
+      </div>
+    </div>
+
+    <div class="table-wrap">
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th>Category</th>
+            <th style="width: 160px;">Actions</th>
+          </tr>
+        </thead>
+        <tbody id="categoriesTbody">
+          {% for cat in categories %}
+          <tr id="category-row-{{ cat.id }}">
+            <td>{{ cat.name }}</td>
+            <td>
+              <button type="button" class="btn btn-danger" data-action="delete-category" data-id="{{ cat.id }}">Delete</button>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</section>
+
+<script>
+  const addProductModal = document.getElementById('addProductModal');
+  const editProductModal = document.getElementById('editProductModal');
+  const openAddProductModalBtn = document.getElementById('openAddProductModal');
+  const closeModalButtons = document.querySelectorAll('[data-close-modal]');
+
+  function openModal(modalEl) {
+    modalEl.classList.add('is-open');
+  }
+
+  function closeModal(modalEl) {
+    modalEl.classList.remove('is-open');
+  }
+
+  if (openAddProductModalBtn) {
+    openAddProductModalBtn.addEventListener('click', () => {
+      resetAddModalCategoryInline();
+      document.getElementById('addProductName').value = '';
+      document.getElementById('addBrand').value = '';
+      document.getElementById('addCategorySelect').value = '';
+      document.getElementById('addUnitSelect').value = 'Each';
+      document.getElementById('addCostPrice').value = '';
+      document.getElementById('addSellingPrice').value = '';
+      document.getElementById('addStockQuantity').value = '';
+      openModal(addProductModal);
+    });
+  }
+
+  closeModalButtons.forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const targetId = btn.getAttribute('data-close-modal');
+      const modalEl = document.getElementById(targetId);
+      if (modalEl) closeModal(modalEl);
+    });
+  });
+
+  [addProductModal, editProductModal].forEach((modalEl) => {
+    if (!modalEl) return;
+    modalEl.addEventListener('click', (e) => {
+      if (e.target === modalEl) closeModal(modalEl);
+    });
+  });
+
+  function resetAddModalCategoryInline() {
+    const addSelect = document.getElementById('addCategorySelect');
+    const inlineWrap = document.getElementById('addNewCategoryInline');
+    const input = document.getElementById('addNewCategoryName');
+    if (!addSelect || !inlineWrap || !input) return;
+    inlineWrap.style.display = 'none';
+    input.value = '';
+    if (addSelect.value === '__add_new__') addSelect.value = '';
+  }
+
+  function resetEditModalCategoryInline() {
+    const editSelect = document.getElementById('editCategorySelect');
+    const inlineWrap = document.getElementById('editNewCategoryInline');
+    const input = document.getElementById('editNewCategoryName');
+    if (!editSelect || !inlineWrap || !input) return;
+    inlineWrap.style.display = 'none';
+    input.value = '';
+  }
+
+  const addCategorySelect = document.getElementById('addCategorySelect');
+  const addNewCategoryInline = document.getElementById('addNewCategoryInline');
+  const addNewCategoryName = document.getElementById('addNewCategoryName');
+  const addNewCategoryCreateBtn = document.getElementById('addNewCategoryCreateBtn');
+
+  if (addCategorySelect) {
+    addCategorySelect.addEventListener('change', () => {
+      if (addCategorySelect.value === '__add_new__') {
+        addNewCategoryInline.style.display = 'flex';
+        addNewCategoryName.focus();
+      } else {
+        addNewCategoryInline.style.display = 'none';
+      }
+    });
+  }
+
+  const editCategorySelect = document.getElementById('editCategorySelect');
+  const editNewCategoryInline = document.getElementById('editNewCategoryInline');
+  const editNewCategoryName = document.getElementById('editNewCategoryName');
+  const editNewCategoryCreateBtn = document.getElementById('editNewCategoryCreateBtn');
+
+  if (editCategorySelect) {
+    editCategorySelect.addEventListener('change', () => {
+      if (editCategorySelect.value === '__add_new__') {
+        editNewCategoryInline.style.display = 'flex';
+        editNewCategoryName.focus();
+      } else {
+        editNewCategoryInline.style.display = 'none';
+      }
+    });
+  }
+
+  function optionExists(selectEl, value) {
+    return Array.from(selectEl.options).some((o) => o.value === String(value));
+  }
+
+  function appendCategoryOption(selectEl, cat) {
+    if (!selectEl || !cat || cat.id === null || cat.id === undefined) return;
+    if (optionExists(selectEl, cat.id)) return;
+    const opt = document.createElement('option');
+    opt.value = String(cat.id);
+    opt.textContent = cat.name;
+    selectEl.appendChild(opt);
+  }
+
+  function appendCategoryRowToTable(cat) {
+    const tbody = document.getElementById('categoriesTbody');
+    if (!tbody || !cat) return;
+    const existing = document.getElementById('category-row-' + cat.id);
+    if (existing) return;
+
+    const tr = document.createElement('tr');
+    tr.id = 'category-row-' + cat.id;
+    tr.innerHTML = '<td>' + cat.name + '</td>' +
+      '<td><button type="button" class="btn btn-danger" data-action="delete-category" data-id="' + cat.id + '">Delete</button></td>';
+    tbody.appendChild(tr);
+  }
+
+  async function createCategoryViaAjax(name) {
+    const res = await fetch('{{ url_for("categories_add") }}', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
+        'X-Requested-With': 'fetch'
+      },
+      credentials: 'same-origin',
+      body: new URLSearchParams({ name: name })
+    });
+    const data = await res.json();
+    if (!res.ok || !data.ok && data.id === undefined) {
+      const msg = data.error || 'Failed to create category.';
+      throw new Error(msg);
+    }
+    return { id: data.id, name: data.name };
+  }
+
+  async function createAndSelectCategory(name, selectEl, inlineWrap, inputEl) {
+    const trimmed = (name || '').trim();
+    if (!trimmed) return;
+    const cat = await createCategoryViaAjax(trimmed);
+    appendCategoryOption(addCategorySelect, cat);
+    appendCategoryOption(editCategorySelect, cat);
+    appendCategoryRowToTable(cat);
+    selectEl.value = String(cat.id);
+    inlineWrap.style.display = 'none';
+    inputEl.value = '';
+  }
+
+  if (addNewCategoryCreateBtn) {
+    addNewCategoryCreateBtn.addEventListener('click', async () => {
+      const name = addNewCategoryName.value;
+      try {
+        await createAndSelectCategory(name, addCategorySelect, addNewCategoryInline, addNewCategoryName);
+      } catch (e) {
+        alert(e.message);
+      }
+    });
+  }
+
+  if (editNewCategoryCreateBtn) {
+    editNewCategoryCreateBtn.addEventListener('click', async () => {
+      const name = editNewCategoryName.value;
+      try {
+        await createAndSelectCategory(name, editCategorySelect, editNewCategoryInline, editNewCategoryName);
+      } catch (e) {
+        alert(e.message);
+      }
+    });
+  }
+
+  const openAddCategoryInlineBtn = document.getElementById('openAddCategoryInlineBtn');
+  const inlineCategoryAdd = document.getElementById('inlineCategoryAdd');
+  const inlineCategoryName = document.getElementById('inlineCategoryName');
+  const inlineCategoryCreateBtn = document.getElementById('inlineCategoryCreateBtn');
+
+  if (openAddCategoryInlineBtn) {
+    openAddCategoryInlineBtn.addEventListener('click', () => {
+      inlineCategoryAdd.style.display = 'block';
+      inlineCategoryName.focus();
+    });
+  }
+
+  if (inlineCategoryCreateBtn) {
+    inlineCategoryCreateBtn.addEventListener('click', async () => {
+      const name = inlineCategoryName.value;
+      try {
+        const cat = await createCategoryViaAjax((name || '').trim());
+        appendCategoryOption(addCategorySelect, cat);
+        appendCategoryOption(editCategorySelect, cat);
+        appendCategoryRowToTable(cat);
+        inlineCategoryName.value = '';
+        inlineCategoryAdd.style.display = 'none';
+      } catch (e) {
+        alert(e.message);
+      }
+    });
+  }
+
+  document.getElementById('categoriesTbody').addEventListener('click', async (e) => {
+    const btn = e.target.closest('[data-action="delete-category"]');
+    if (!btn) return;
+    const categoryId = btn.getAttribute('data-id');
+    const tr = document.getElementById('category-row-' + categoryId);
+    const name = tr ? tr.querySelector('td')?.textContent?.trim() : 'this category';
+    if (!confirm('Are you sure you want to delete ' + (name || 'this category') + '?')) return;
+
+    try {
+      const res = await fetch('/categories/delete/' + categoryId, {
+        method: 'POST',
+        headers: {
+          'X-Requested-With': 'fetch'
+        },
+        credentials: 'same-origin'
+      });
+      const data = await res.json();
+      if (!res.ok || !data.ok) {
+        alert(data.error || 'Delete failed.');
+        return;
+      }
+
+      if (tr) tr.remove();
+      if (addCategorySelect) {
+        const opt = Array.from(addCategorySelect.options).find((o) => o.value === String(categoryId));
+        if (opt) opt.remove();
+        if (String(addCategorySelect.value) === String(categoryId)) addCategorySelect.selectedIndex = 0;
+      }
+      if (editCategorySelect) {
+        const opt = Array.from(editCategorySelect.options).find((o) => o.value === String(categoryId));
+        if (opt) opt.remove();
+        if (String(editCategorySelect.value) === String(categoryId)) editCategorySelect.selectedIndex = 0;
+      }
+    } catch (err) {
+      alert(err.message || 'Delete failed.');
+    }
+  });
+
+  const productsTbody = document.getElementById('productsTbody');
+
+  if (productsTbody) {
+    productsTbody.addEventListener('click', async (e) => {
+      const editBtn = e.target.closest('[data-action="edit-product"]');
+      if (editBtn) {
+        const productId = editBtn.getAttribute('data-id');
+        document.getElementById('editProductForm').action = '/inventory/edit/' + productId;
+        document.getElementById('editProductName').value = editBtn.getAttribute('data-name') || '';
+        document.getElementById('editBrand').value = editBtn.getAttribute('data-brand') || '';
+        document.getElementById('editCategorySelect').value = editBtn.getAttribute('data-category-id') || '';
+        document.getElementById('editUnitSelect').value = editBtn.getAttribute('data-unit') || 'Each';
+        document.getElementById('editCostPrice').value = editBtn.getAttribute('data-cost-price') || 0;
+        document.getElementById('editSellingPrice').value = editBtn.getAttribute('data-selling-price') || 0;
+        document.getElementById('editStockQuantity').value = editBtn.getAttribute('data-stock-quantity') || 0;
+        resetEditModalCategoryInline();
+        if (document.getElementById('editCategorySelect').value === '__add_new__') {
+          document.getElementById('editNewCategoryInline').style.display = 'flex';
+        }
+        openModal(editProductModal);
+        return;
+      }
+
+      const deleteBtn = e.target.closest('[data-action="delete-product"]');
+      if (!deleteBtn) return;
+
+      const productId = deleteBtn.getAttribute('data-id');
+      const name = deleteBtn.getAttribute('data-name') || 'this product';
+      if (!confirm('Are you sure you want to delete ' + name + '?')) return;
+
+      try {
+        const res = await fetch('/inventory/delete/' + productId, {
+          method: 'POST',
+          headers: { 'X-Requested-With': 'fetch' },
+          credentials: 'same-origin'
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok || data.ok === false) {
+          alert(data.error || 'Delete failed.');
+          return;
+        }
+        const row = document.getElementById('product-row-' + productId);
+        if (row) row.remove();
+      } catch (err) {
+        alert(err.message || 'Delete failed.');
+      }
+    });
+  }
+</script>
+{% endblock %}
+

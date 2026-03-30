@@ -1,0 +1,819 @@
+{% extends "base.html" %}
+{% block title %}Sales — AK Distributors{% endblock %}
+{% block page_heading %}Sales{% endblock %}
+{% block content %}
+<style>
+  .sale-grid {
+    display: grid;
+    grid-template-columns: 1fr 0.95fr;
+    gap: 1.25rem;
+    align-items: start;
+  }
+
+  .toggle-pills {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 0.5rem;
+    margin-top: 0.35rem;
+  }
+
+  .toggle-pill {
+    position: relative;
+    padding: 0.6rem 0.75rem;
+    border-radius: 10px;
+    border: 1px solid var(--color-border);
+    background: #fff;
+    cursor: pointer;
+    text-align: center;
+    font-weight: 700;
+    color: var(--color-text);
+    user-select: none;
+    transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+  }
+
+  .toggle-pill input {
+    position: absolute;
+    opacity: 0;
+    pointer-events: none;
+  }
+
+  .toggle-pill input:checked + .pill-label {
+    background: var(--color-accent);
+    border-color: var(--color-accent);
+    color: #fff;
+  }
+
+  .pill-label {
+    display: block;
+  }
+
+  .field-label {
+    display: block;
+    margin-bottom: 0.35rem;
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: var(--color-text-muted);
+  }
+
+  .table-actions-inline {
+    display: flex;
+    gap: 0.5rem;
+    align-items: center;
+    flex-wrap: wrap;
+  }
+
+  .pill-radio-wrap {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+  }
+
+  .suggestions {
+    position: absolute;
+    z-index: 999;
+    background: #fff;
+    border: 1px solid var(--color-border);
+    border-radius: 10px;
+    box-shadow: 0 10px 25px rgba(26, 35, 50, 0.12);
+    width: 100%;
+    max-height: 240px;
+    overflow: auto;
+    display: none;
+  }
+
+  .suggestion-item {
+    padding: 0.65rem 0.8rem;
+    cursor: pointer;
+    font-weight: 600;
+    font-size: 0.9rem;
+  }
+
+  .suggestion-item:hover {
+    background: rgba(232, 128, 10, 0.08);
+  }
+
+  .search-wrap {
+    position: relative;
+  }
+
+  .row-amount {
+    font-weight: 800;
+    color: var(--color-text);
+  }
+
+  .grand-total {
+    font-size: 1.35rem;
+    font-weight: 900;
+    color: var(--color-text);
+    letter-spacing: -0.02em;
+  }
+
+  .btn-pdf {
+    background: #2563eb;
+    color: #fff;
+    border-radius: 8px;
+  }
+
+  .btn-pdf:hover {
+    background: #1d4ed8;
+    color: #fff;
+  }
+
+  details.recent-details > summary {
+    cursor: pointer;
+    font-weight: 800;
+  }
+
+  details.recent-details summary::-webkit-details-marker {
+    display: none;
+  }
+</style>
+
+{% with messages = get_flashed_messages(with_categories=true) %}
+  {% if messages %}
+    <div style="margin-bottom:1rem;">
+      {% for category, message in messages %}
+        <div class="{{ 'alert-error' if category == 'error' else 'section-intro' }}" style="padding:0.8rem 1rem; border-radius:10px; margin-bottom:0.6rem;">
+          {{ message }}
+        </div>
+      {% endfor %}
+    </div>
+  {% endif %}
+{% endwith %}
+
+<section class="panel">
+  <div class="panel-header">
+    <h2>New Sale</h2>
+  </div>
+  <div class="panel-body" style="padding: 1.35rem;">
+    <form id="saleForm" method="post" action="{{ url_for('sales_new') }}" target="_self">
+      <div class="sale-grid">
+        <div>
+          <div class="form-group">
+            <label class="field-label" for="customerSearch">Customer</label>
+            <div class="search-wrap">
+              <input
+                class="form-control"
+                type="text"
+                id="customerSearch"
+                placeholder="Search customers..."
+                autocomplete="off"
+                required
+              >
+              <div id="customerSuggestions" class="suggestions" role="listbox" aria-label="Customer suggestions"></div>
+            </div>
+            <input type="hidden" id="customerId" name="customer_id" value="">
+          </div>
+
+          <div class="form-group">
+            <label class="field-label" for="invoiceDate">Invoice Date</label>
+            <input class="form-control" type="date" id="invoiceDate" name="invoice_date" value="{{ today }}" required>
+          </div>
+
+          <div class="form-group">
+            <label class="field-label" for="dueDate">Due Date</label>
+            <input class="form-control" type="date" id="dueDate" name="due_date">
+          </div>
+
+          <div class="form-group">
+            <label class="field-label" for="termsInput">Terms</label>
+            <input class="form-control" type="text" id="termsInput" name="terms" required>
+          </div>
+
+          <div class="form-group">
+            <label class="field-label" for="notesInput">Notes (optional)</label>
+            <textarea class="form-control" id="notesInput" name="notes" rows="4" placeholder="Add any notes..."></textarea>
+          </div>
+        </div>
+
+        <div>
+          <div class="form-group">
+            <label class="field-label" for="invoiceNumber">Invoice #</label>
+            <input class="form-control" type="text" id="invoiceNumber" name="invoice_number" value="{{ next_invoice_number }}" readonly>
+          </div>
+
+          <div class="form-group">
+            <label class="field-label">Payment Type</label>
+            <div class="toggle-pills" role="radiogroup" aria-label="Payment type">
+              <label class="toggle-pill">
+                <input type="radio" name="payment_type" value="cash" checked>
+                <span class="pill-label">💵 Cash</span>
+              </label>
+              <label class="toggle-pill">
+                <input type="radio" name="payment_type" value="cheque">
+                <span class="pill-label">🏦 Cheque</span>
+              </label>
+              <label class="toggle-pill">
+                <input type="radio" name="payment_type" value="credit">
+                <span class="pill-label">💳 Credit</span>
+              </label>
+            </div>
+          </div>
+
+          <input type="hidden" id="itemsJson" name="items_json" value="[]">
+        </div>
+      </div>
+
+      <div style="margin-top: 1.35rem;">
+        <div class="panel" style="box-shadow:none; border:1px solid var(--color-border); background: #fff;">
+          <div class="panel-header" style="border-bottom:1px solid var(--color-border); background: #fafbfc;">
+            <h2 style="font-size:1.05rem;">Line Items</h2>
+          </div>
+          <div class="panel-body">
+            <div class="table-wrap">
+              <table class="data-table">
+                <thead>
+                  <tr>
+                    <th style="width: 60px;">#</th>
+                    <th>Item &amp; Description</th>
+                    <th style="width: 120px;">Qty</th>
+                    <th style="width: 140px;">Rate</th>
+                    <th style="width: 150px;">Amount</th>
+                    <th style="width: 70px;"></th>
+                  </tr>
+                </thead>
+                <tbody id="lineItemsTbody"></tbody>
+              </table>
+            </div>
+
+            <div style="margin-top: 0.95rem; display:flex; justify-content:flex-start;">
+              <button type="button" class="btn btn-primary" id="addItemBtn">Add Item</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div style="margin-top: 1.05rem; display:flex; justify-content:flex-end;">
+        <div style="width: 420px;">
+          <div style="font-weight:800; color: var(--color-text-muted); margin-bottom:0.5rem; text-align:left;">Totals</div>
+          <div style="display:grid; gap:0.65rem; padding: 0.95rem 1rem; border-radius: 10px; background: #fff; border: 1px solid var(--color-border); box-shadow: var(--shadow-card);">
+            <div style="display:flex; justify-content:space-between; gap:1rem;">
+              <div style="color: var(--color-text-muted); font-weight:700;">Subtotal</div>
+              <div id="subtotalAmount" class="row-amount">$0.00</div>
+            </div>
+            <div style="display:flex; justify-content:space-between; gap:1rem; align-items:center;">
+              <div style="color: var(--color-text-muted); font-weight:700;">Discount</div>
+              <div style="display:flex; align-items:center; gap:0.45rem;">
+                <div style="font-weight:900; color: var(--color-text-muted);">$</div>
+                <input class="form-control" style="width: 170px;" type="number" min="0" step="0.01" id="discountInput" name="discount_amount" value="0.00">
+              </div>
+            </div>
+            <div style="display:flex; justify-content:space-between; gap:1rem; align-items:baseline;">
+              <div style="color: var(--color-text-muted); font-weight:800;">Grand Total</div>
+              <div id="grandTotalAmount" class="grand-total">$0.00</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div style="margin-top: 1.35rem; display:flex; gap:0.75rem; justify-content:flex-end; flex-wrap: wrap;">
+        <button type="submit" class="btn btn-secondary" id="saveSaleBtn">Save Sale</button>
+        <button type="submit" class="btn btn-primary" id="generateInvoiceBtn" name="generate_invoice" value="1">Save &amp; Generate Invoice</button>
+      </div>
+    </form>
+  </div>
+</section>
+
+<section class="panel" style="margin-top:1.6rem;">
+  <div class="panel-header">
+    <h2>Recent Sales</h2>
+  </div>
+  <div class="panel-body">
+    <details class="recent-details" open>
+      <summary>Filter &amp; View History</summary>
+      <div style="margin-top:1rem; margin-bottom:1rem;">
+        <div style="display:grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap:0.9rem;">
+          <div>
+            <label class="field-label" for="filterDateFrom">Date From</label>
+            <input class="form-control" type="date" id="filterDateFrom">
+          </div>
+          <div>
+            <label class="field-label" for="filterDateTo">Date To</label>
+            <input class="form-control" type="date" id="filterDateTo">
+          </div>
+          <div>
+            <label class="field-label" for="filterCustomer">Customer</label>
+            <select class="form-control" id="filterCustomer">
+              <option value="all" selected>All Customers</option>
+              {% for c in customers %}
+              <option value="{{ c.id }}">{{ c.name }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div>
+            <label class="field-label" for="filterPaymentType">Payment Type</label>
+            <select class="form-control" id="filterPaymentType">
+              <option value="all" selected>All</option>
+              <option value="cash">Cash</option>
+              <option value="cheque">Cheque</option>
+              <option value="credit">Credit</option>
+            </select>
+          </div>
+        </div>
+        <div style="margin-top:0.9rem; display:flex; justify-content:flex-end;">
+          <button type="button" class="btn btn-primary" id="filterBtn">Filter</button>
+        </div>
+      </div>
+
+      <div class="table-wrap">
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>Invoice#</th>
+              <th>Date</th>
+              <th>Customer</th>
+              <th>Items</th>
+              <th>Subtotal</th>
+              <th>Discount</th>
+              <th>Grand Total</th>
+              <th>Payment</th>
+              <th>Status</th>
+              <th style="width: 200px;">Actions</th>
+            </tr>
+          </thead>
+          <tbody id="recentSalesTbody"></tbody>
+        </table>
+      </div>
+    </details>
+  </div>
+</section>
+
+<script>
+  const customersData = {{ customers | tojson }};
+  const nextInvoice = {{ next_invoice_number | tojson }};
+  const recentSales = {{ recent_sales | tojson }};
+
+  function money(n) {
+    const v = Number(n || 0);
+    return '$' + v.toFixed(2);
+  }
+
+  function safeTrim(s) {
+    return (s || '').toString().trim();
+  }
+
+  function hideEl(el) {
+    if (!el) return;
+    el.style.display = 'none';
+  }
+
+  function showEl(el) {
+    if (!el) return;
+    el.style.display = 'block';
+  }
+
+  // -----------------------------
+  // Customer searchable input
+  // -----------------------------
+  const customerSearch = document.getElementById('customerSearch');
+  const customerSuggestions = document.getElementById('customerSuggestions');
+  const customerIdField = document.getElementById('customerId');
+  const termsInput = document.getElementById('termsInput');
+
+  function customerDisplay(c) {
+    return c && c.name ? c.name : '';
+  }
+
+  function renderCustomerSuggestions(list) {
+    if (!customerSuggestions) return;
+    if (!list || list.length === 0) {
+      customerSuggestions.innerHTML = '';
+      hideEl(customerSuggestions);
+      return;
+    }
+    customerSuggestions.innerHTML = '';
+    list.forEach((c) => {
+      const item = document.createElement('div');
+      item.className = 'suggestion-item';
+      item.textContent = c.name;
+      item.addEventListener('click', () => {
+        customerSearch.value = customerDisplay(c);
+        customerIdField.value = c.id;
+        termsInput.value = c.terms || '';
+        hideEl(customerSuggestions);
+      });
+      customerSuggestions.appendChild(item);
+    });
+    showEl(customerSuggestions);
+  }
+
+  if (customerSearch) {
+    let customerTimer = null;
+    customerSearch.addEventListener('input', () => {
+      clearTimeout(customerTimer);
+      customerTimer = setTimeout(() => {
+        const q = safeTrim(customerSearch.value).toLowerCase();
+        if (!q) {
+          customerIdField.value = '';
+          termsInput.value = '';
+          hideEl(customerSuggestions);
+          return;
+        }
+        const filtered = customersData
+          .filter((c) => (c.name || '').toLowerCase().includes(q))
+          .slice(0, 8);
+        renderCustomerSuggestions(filtered);
+      }, 150);
+    });
+  }
+
+  document.addEventListener('click', (e) => {
+    if (!customerSuggestions || !customerSearch) return;
+    if (e.target === customerSearch) return;
+    if (customerSuggestions.contains(e.target)) return;
+    if (!customerSearch.contains(e.target)) hideEl(customerSuggestions);
+  });
+
+  // Ensure invoice number stays correct if refreshed in DOM
+  const invoiceNumberEl = document.getElementById('invoiceNumber');
+  if (invoiceNumberEl) invoiceNumberEl.value = nextInvoice;
+
+  // -----------------------------
+  // Line items (dynamic)
+  // -----------------------------
+  const lineItemsTbody = document.getElementById('lineItemsTbody');
+  const addItemBtn = document.getElementById('addItemBtn');
+  const itemsJsonField = document.getElementById('itemsJson');
+
+  const discountInput = document.getElementById('discountInput');
+  const subtotalEl = document.getElementById('subtotalAmount');
+  const grandTotalEl = document.getElementById('grandTotalAmount');
+
+  function getRowAmount(row) {
+    const amountEl = row.querySelector('.row-amount-cell');
+    if (!amountEl) return 0;
+    return Number(amountEl.dataset.amount || '0');
+  }
+
+  function recalcTotals() {
+    const rows = Array.from(document.querySelectorAll('tr.line-item-row'));
+    let subtotal = 0;
+    rows.forEach((r) => { subtotal += getRowAmount(r); });
+
+    subtotal = Math.round(subtotal * 100) / 100;
+
+    const discount = Number(discountInput.value || 0);
+    const grand = Math.round((subtotal - (Number.isFinite(discount) ? discount : 0)) * 100) / 100;
+    subtotalEl.textContent = money(subtotal);
+    grandTotalEl.textContent = money(grand < 0 ? 0 : grand);
+  }
+
+  function updateRowAmount(row) {
+    const qtyEl = row.querySelector('.qty-input');
+    const rateEl = row.querySelector('.rate-input');
+    const amountEl = row.querySelector('.row-amount-cell');
+
+    const qty = Number(qtyEl.value || 0);
+    const rate = Number(rateEl.value || 0);
+    const amount = Math.round((qty * rate) * 100) / 100;
+
+    amountEl.dataset.amount = String(amount);
+    amountEl.textContent = money(amount);
+    recalcTotals();
+  }
+
+  function fetchProductResults(q) {
+    const url = '/products/search?q=' + encodeURIComponent(q);
+    return fetch(url, { credentials: 'same-origin' })
+      .then((res) => res.json());
+  }
+
+  function buildRowHtml(index) {
+    return `
+      <tr class="line-item-row" data-row-index="${index}">
+        <td class="line-no">${index + 1}</td>
+        <td>
+          <div class="search-wrap" style="margin-bottom:0.6rem;">
+            <input
+              type="text"
+              class="form-control product-search-input"
+              placeholder="Search product..."
+              autocomplete="off"
+              />
+            <div class="suggestions product-suggestions" style="display:none;"></div>
+          </div>
+          <input type="text" class="form-control description-input" placeholder="Description" />
+        </td>
+        <td><input type="number" class="form-control qty-input" min="0.01" step="0.01" value="1"></td>
+        <td><input type="number" class="form-control rate-input" min="0" step="0.01" value="0"></td>
+        <td class="row-amount"><span class="row-amount-cell" data-amount="0">$0.00</span></td>
+        <td>
+          <button type="button" class="btn btn-danger" style="padding:0.45rem 0.7rem;">✕</button>
+        </td>
+      </tr>
+    `;
+  }
+
+  function hideProductSuggestions(row) {
+    const sugg = row.querySelector('.product-suggestions');
+    if (sugg) hideEl(sugg);
+  }
+
+  function selectProduct(row, product) {
+    const searchInput = row.querySelector('.product-search-input');
+    const descInput = row.querySelector('.description-input');
+    const rateInput = row.querySelector('.rate-input');
+    const qtyInput = row.querySelector('.qty-input');
+
+    const brandPart = product.brand ? (' - ' + product.brand) : '';
+    const display = (product.name || '') + brandPart;
+
+    row.dataset.productId = String(product.id);
+    searchInput.value = display;
+    descInput.value = display;
+    rateInput.value = Number(product.selling_price || 0);
+    if (!qtyInput.value) qtyInput.value = 1;
+    hideProductSuggestions(row);
+    updateRowAmount(row);
+  }
+
+  function initRowBehaviors(row) {
+    const qtyEl = row.querySelector('.qty-input');
+    const rateEl = row.querySelector('.rate-input');
+    const delBtn = row.querySelector('.btn.btn-danger');
+    const searchInput = row.querySelector('.product-search-input');
+    const productSuggestions = row.querySelector('.product-suggestions');
+
+    if (delBtn) {
+      delBtn.addEventListener('click', () => {
+        row.remove();
+        renumberRows();
+        recalcTotals();
+      });
+    }
+
+    if (qtyEl) qtyEl.addEventListener('input', () => updateRowAmount(row));
+    if (rateEl) rateEl.addEventListener('input', () => updateRowAmount(row));
+
+    if (searchInput) {
+      let timer = null;
+      searchInput.addEventListener('input', () => {
+        clearTimeout(timer);
+        timer = setTimeout(() => {
+          const q = safeTrim(searchInput.value);
+          if (!q || q.length < 1) {
+            hideEl(productSuggestions);
+            return;
+          }
+          fetchProductResults(q)
+            .then((results) => {
+              if (!productSuggestions) return;
+              if (!results || results.length === 0) {
+                productSuggestions.innerHTML = '';
+                hideEl(productSuggestions);
+                return;
+              }
+              productSuggestions.innerHTML = '';
+              results.forEach((p) => {
+                const item = document.createElement('div');
+                item.className = 'suggestion-item';
+                const brandPart = p.brand ? (' - ' + p.brand) : '';
+                item.textContent = (p.name || '') + brandPart;
+                item.addEventListener('click', () => {
+                  selectProduct(row, p);
+                });
+                productSuggestions.appendChild(item);
+              });
+              showEl(productSuggestions);
+            })
+            .catch(() => {
+              hideEl(productSuggestions);
+            });
+        }, 150);
+      });
+    }
+
+    document.addEventListener('click', (e) => {
+      if (!row.contains(e.target)) {
+        hideProductSuggestions(row);
+      }
+    });
+  }
+
+  function renumberRows() {
+    const rows = Array.from(document.querySelectorAll('tr.line-item-row'));
+    rows.forEach((r, idx) => {
+      const noEl = r.querySelector('.line-no');
+      if (noEl) noEl.textContent = String(idx + 1);
+    });
+  }
+
+  function addEmptyRow() {
+    const index = document.querySelectorAll('tr.line-item-row').length;
+    const temp = document.createElement('tbody');
+    temp.innerHTML = buildRowHtml(index);
+    const row = temp.firstElementChild;
+    lineItemsTbody.appendChild(row);
+    row.dataset.productId = '';
+    initRowBehaviors(row);
+    updateRowAmount(row);
+  }
+
+  if (addItemBtn && lineItemsTbody) {
+    addItemBtn.addEventListener('click', () => {
+      addEmptyRow();
+    });
+  }
+
+  // Start with one row
+  if (lineItemsTbody && lineItemsTbody.children.length === 0) {
+    addEmptyRow();
+  }
+
+  // -----------------------------
+  // History (AJAX filtering)
+  // -----------------------------
+  const recentSalesTbody = document.getElementById('recentSalesTbody');
+  const filterDateFrom = document.getElementById('filterDateFrom');
+  const filterDateTo = document.getElementById('filterDateTo');
+  const filterCustomer = document.getElementById('filterCustomer');
+  const filterPaymentType = document.getElementById('filterPaymentType');
+  const filterBtn = document.getElementById('filterBtn');
+
+  function renderRecentSales(rows) {
+    if (!recentSalesTbody) return;
+    recentSalesTbody.innerHTML = '';
+    if (!rows || rows.length === 0) {
+      const tr = document.createElement('tr');
+      tr.innerHTML = '<td colspan="10" class="empty-state">No sales found for the selected filters.</td>';
+      recentSalesTbody.appendChild(tr);
+      return;
+    }
+    rows.forEach((s) => {
+      const tr = document.createElement('tr');
+
+      const tdInvoice = document.createElement('td');
+      tdInvoice.textContent = s.invoice_number || '';
+      tr.appendChild(tdInvoice);
+
+      const tdDate = document.createElement('td');
+      tdDate.textContent = s.invoice_date || '';
+      tr.appendChild(tdDate);
+
+      const tdCustomer = document.createElement('td');
+      tdCustomer.textContent = s.customer_name || '';
+      tr.appendChild(tdCustomer);
+
+      const tdItems = document.createElement('td');
+      tdItems.textContent = s.item_count || 0;
+      tr.appendChild(tdItems);
+
+      const tdSubtotal = document.createElement('td');
+      tdSubtotal.textContent = money(s.subtotal);
+      tr.appendChild(tdSubtotal);
+
+      const tdDiscount = document.createElement('td');
+      tdDiscount.textContent = money(s.discount_amount);
+      tr.appendChild(tdDiscount);
+
+      const tdGrand = document.createElement('td');
+      tdGrand.textContent = money(s.grand_total);
+      tr.appendChild(tdGrand);
+
+      const tdPayment = document.createElement('td');
+      tdPayment.textContent = s.payment_type || '';
+      tr.appendChild(tdPayment);
+
+      const tdStatus = document.createElement('td');
+      tdStatus.textContent = s.status || '';
+      tr.appendChild(tdStatus);
+
+      const tdActions = document.createElement('td');
+      const pdfLink = document.createElement('a');
+      pdfLink.className = 'btn btn-pdf';
+      pdfLink.target = '_blank';
+      pdfLink.href = '/sales/invoice/' + s.id + '/pdf';
+      pdfLink.textContent = 'PDF';
+
+      const delForm = document.createElement('form');
+      delForm.method = 'post';
+      delForm.action = '/sales/delete/' + s.id;
+      delForm.style.display = 'inline';
+      delForm.onsubmit = () => {
+        return confirm('Are you sure you want to delete sale ' + (s.invoice_number || '') + '?');
+      };
+
+      const delBtn = document.createElement('button');
+      delBtn.type = 'submit';
+      delBtn.className = 'btn btn-danger';
+      delBtn.textContent = 'Delete';
+
+      delForm.appendChild(delBtn);
+      tdActions.appendChild(pdfLink);
+      tdActions.appendChild(delForm);
+      tr.appendChild(tdActions);
+
+      recentSalesTbody.appendChild(tr);
+    });
+  }
+
+  async function loadSalesData() {
+    const params = new URLSearchParams();
+    if (filterDateFrom && filterDateFrom.value) params.append('date_from', filterDateFrom.value);
+    if (filterDateTo && filterDateTo.value) params.append('date_to', filterDateTo.value);
+    if (filterCustomer && filterCustomer.value) params.append('customer_id', filterCustomer.value);
+    if (filterPaymentType && filterPaymentType.value) params.append('payment_type', filterPaymentType.value);
+
+    const res = await fetch('/sales/data?' + params.toString(), { credentials: 'same-origin' });
+    const rows = await res.json();
+    renderRecentSales(rows);
+  }
+
+  if (filterBtn) {
+    filterBtn.addEventListener('click', () => {
+      loadSalesData();
+    });
+  }
+
+  // Render initial recent sales
+  renderRecentSales(recentSales);
+
+  // -----------------------------
+  // Submit validation + build items_json
+  // -----------------------------
+  const saleForm = document.getElementById('saleForm');
+
+  function buildItemsPayload() {
+    const rows = Array.from(document.querySelectorAll('tr.line-item-row'));
+    const items = [];
+
+    rows.forEach((row) => {
+      const productId = row.dataset.productId || '';
+      const descInput = row.querySelector('.description-input');
+      const qtyEl = row.querySelector('.qty-input');
+      const rateEl = row.querySelector('.rate-input');
+      const desc = safeTrim(descInput && descInput.value);
+      const qty = Number(qtyEl && qtyEl.value);
+      const rate = Number(rateEl && rateEl.value);
+
+      if (!productId) return;
+
+      if (!desc) return;
+      items.push({
+        product_id: productId,
+        description: desc,
+        qty: qty,
+        rate: rate,
+        amount: Math.round((qty * rate) * 100) / 100,
+      });
+    });
+
+    return items;
+  }
+
+  function ensureSaleFormReady() {
+    const customerId = safeTrim(customerIdField.value);
+    if (!customerId) {
+      alert('Please select a customer.');
+      return false;
+    }
+    if (!termsInput.value.trim()) {
+      alert('Please enter invoice terms.');
+      return false;
+    }
+    if (!lineItemsTbody || lineItemsTbody.children.length === 0) {
+      alert('Please add at least one line item.');
+      return false;
+    }
+    const items = buildItemsPayload();
+    if (items.length === 0) {
+      alert('Please complete at least one line item (product, description, qty, rate).');
+      return false;
+    }
+    document.getElementById('itemsJson').value = JSON.stringify(items);
+    return true;
+  }
+
+  if (saleForm) {
+    saleForm.addEventListener('submit', (e) => {
+      const ok = ensureSaleFormReady();
+      if (!ok) e.preventDefault();
+    });
+  }
+
+  const saveSaleBtn = document.getElementById('saveSaleBtn');
+  const generateInvoiceBtn = document.getElementById('generateInvoiceBtn');
+
+  if (saveSaleBtn) {
+    saveSaleBtn.addEventListener('click', () => {
+      saleForm.target = '_self';
+    });
+  }
+  if (generateInvoiceBtn) {
+    generateInvoiceBtn.addEventListener('click', () => {
+      saleForm.target = '_blank';
+    });
+  }
+
+  // Discount -> totals recalculation
+  if (discountInput) {
+    discountInput.addEventListener('input', () => {
+      recalcTotals();
+    });
+  }
+
+  // Initialize totals
+  recalcTotals();
+</script>
+{% endblock %}
+

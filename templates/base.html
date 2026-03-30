@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{% block title %}AK Distributors{% endblock %}</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+  <div class="app-shell">
+    <aside class="sidebar">
+      <div class="sidebar-brand">
+        <h1>AK Distributors</h1>
+        <span>Operations</span>
+      </div>
+      <nav class="sidebar-nav" aria-label="Main navigation">
+        <a href="{{ url_for('dashboard') }}" class="{{ 'is-active' if request.endpoint == 'dashboard' else '' }}">
+          <span class="nav-emoji" aria-hidden="true">📊</span>
+          <span class="nav-label">Dashboard</span>
+        </a>
+        <a href="{{ url_for('inventory') }}" class="{{ 'is-active' if request.endpoint == 'inventory' else '' }}">
+          <span class="nav-emoji" aria-hidden="true">📦</span>
+          <span class="nav-label">Inventory</span>
+        </a>
+        <a href="{{ url_for('customers') }}" class="{{ 'is-active' if request.endpoint == 'customers' else '' }}">
+          <span class="nav-emoji" aria-hidden="true">👥</span>
+          <span class="nav-label">Customers</span>
+        </a>
+        <a href="{{ url_for('sales') }}" class="{{ 'is-active' if request.endpoint == 'sales' else '' }}">
+          <span class="nav-emoji" aria-hidden="true">🧾</span>
+          <span class="nav-label">Sales</span>
+        </a>
+        <a href="{{ url_for('reports') }}" class="{{ 'is-active' if request.endpoint == 'reports' else '' }}">
+          <span class="nav-emoji" aria-hidden="true">📈</span>
+          <span class="nav-label">Reports</span>
+        </a>
+        <a href="{{ url_for('logout') }}">
+          <span class="nav-emoji" aria-hidden="true">🚪</span>
+          <span class="nav-label">Logout</span>
+        </a>
+      </nav>
+    </aside>
+    <div class="main-wrap">
+      <header class="topbar">
+        <h1 class="topbar-title">{% block page_heading %}Dashboard{% endblock %}</h1>
+        <div class="topbar-user">
+          <span>Signed in as</span>
+          <strong>{% if current_user.is_authenticated %}{{ current_user.username }}{% else %}Guest{% endif %}</strong>
+        </div>
+      </header>
+      <main class="content-area">
+        {% block content %}{% endblock %}
+      </main>
+    </div>
+  </div>
+</body>
+</html>
