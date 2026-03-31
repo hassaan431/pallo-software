@@ -356,7 +356,7 @@ def generate_invoice_pdf(sale_id: int) -> bytes:
         row_step = meta_height / 4.0
         cnv.setFont("Helvetica", 10)
         for idx, (lab, val) in enumerate(meta_rows):
-            y_text = meta_box_top - row_step * (idx + 0.5) + 1
+            y_text = meta_box_top - 14 - row_step * idx
             cnv.setFillColor(_TEXT_GREY)
             cnv.setFont("Helvetica", 10)
             cnv.drawString(label_x, y_text, lab)
@@ -445,9 +445,9 @@ def generate_invoice_pdf(sale_id: int) -> bytes:
         # Labels
         cnv.drawString(x0 + 6, header_y_text, "#")
         cnv.drawString(x_no_right + 6, header_y_text, "ITEM & DESCRIPTION")
-        cnv.drawString(x_item_right + 10, header_y_text, "QTY")
-        cnv.drawString(x_qty_right + 6, header_y_text, "RATE")
-        cnv.drawString(x_rate_right + 10, header_y_text, "AMOUNT")
+        cnv.drawCentredString(x_item_right + col_qty / 2, header_y_text, "QTY")
+        cnv.drawRightString(x_qty_right + col_rate - 6, header_y_text, "RATE")
+        cnv.drawRightString(x_rate_right + col_amt - 6, header_y_text, "AMOUNT")
 
         cnv.setFillColor(colors.black)
         cnv.setLineWidth(1)
@@ -470,6 +470,7 @@ def generate_invoice_pdf(sale_id: int) -> bytes:
         "name": customer["name"],
         "bill_address": customer["bill_address"] or "",
         "ship_address": customer["ship_address"] or "",
+        "phone": customer["phone"] or "",
     }
 
     buf = io.BytesIO()
