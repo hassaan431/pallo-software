@@ -7,41 +7,77 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="icon" type="image/x-icon" href="{{ url_for('static', filename='favicon.ico') }}">
+  <link rel="shortcut icon" type="image/x-icon" href="{{ url_for('static', filename='favicon.ico') }}">
   <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+  <style>
+    .sidebar-logout a:hover {
+      color: #c0392b !important;
+      border-left-color: #c0392b !important;
+      background: rgba(192, 57, 43, 0.08) !important;
+    }
+  </style>
 </head>
 <body>
   <div class="app-shell">
-    <aside class="sidebar">
-      <div class="sidebar-brand">
-        <h1>AK Distributors</h1>
-        <span>Operations</span>
+    <aside class="sidebar" style="display:flex; flex-direction:column; height:100vh;">
+      <div
+        class="sidebar-brand"
+        style="padding:1.1rem 1.25rem 0; border-bottom:none; display:flex; flex-direction:column; align-items:center;"
+      >
+        <div
+          style="
+            background:#ffffff;
+            padding:8px 10px;
+            border-radius:10px;
+            display:flex;
+            align-items:center;
+            justify-content:center;
+          "
+        >
+          <img
+            src="{{ url_for('static', filename='logos/AK Distributors Logo.jpeg') }}"
+            alt="AK Distributors Logo"
+            style="max-height:50px; width:auto; display:block;"
+          >
+        </div>
+        <div style="margin-top:8px; font-size:0.78rem; font-weight:600; color:#ffffff; text-align:center;">
+          AK Distributors
+        </div>
+        <div style="height:16px;"></div>
       </div>
-      <nav class="sidebar-nav" aria-label="Main navigation">
-        <a href="{{ url_for('dashboard') }}" class="{{ 'is-active' if request.endpoint == 'dashboard' else '' }}">
-          <span class="nav-emoji" aria-hidden="true">📊</span>
-          <span class="nav-label">Dashboard</span>
-        </a>
-        <a href="{{ url_for('inventory') }}" class="{{ 'is-active' if request.endpoint == 'inventory' else '' }}">
-          <span class="nav-emoji" aria-hidden="true">📦</span>
-          <span class="nav-label">Inventory</span>
-        </a>
-        <a href="{{ url_for('customers') }}" class="{{ 'is-active' if request.endpoint == 'customers' else '' }}">
-          <span class="nav-emoji" aria-hidden="true">👥</span>
-          <span class="nav-label">Customers</span>
-        </a>
-        <a href="{{ url_for('sales') }}" class="{{ 'is-active' if request.endpoint == 'sales' else '' }}">
-          <span class="nav-emoji" aria-hidden="true">🧾</span>
-          <span class="nav-label">Sales</span>
-        </a>
-        <a href="{{ url_for('reports') }}" class="{{ 'is-active' if request.endpoint == 'reports' else '' }}">
-          <span class="nav-emoji" aria-hidden="true">📈</span>
-          <span class="nav-label">Reports</span>
-        </a>
+
+      <div style="flex:1; min-height:0;">
+        <nav class="sidebar-nav" aria-label="Main navigation" style="padding:0 0 1rem 0;">
+          <a href="{{ url_for('dashboard') }}" class="{{ 'is-active' if request.endpoint == 'dashboard' else '' }}">
+            <span class="nav-emoji" aria-hidden="true">📊</span>
+            <span class="nav-label">Dashboard</span>
+          </a>
+          <a href="{{ url_for('inventory') }}" class="{{ 'is-active' if request.endpoint == 'inventory' else '' }}">
+            <span class="nav-emoji" aria-hidden="true">📦</span>
+            <span class="nav-label">Inventory</span>
+          </a>
+          <a href="{{ url_for('customers') }}" class="{{ 'is-active' if request.endpoint == 'customers' else '' }}">
+            <span class="nav-emoji" aria-hidden="true">👥</span>
+            <span class="nav-label">Customers</span>
+          </a>
+          <a href="{{ url_for('sales') }}" class="{{ 'is-active' if request.endpoint == 'sales' else '' }}">
+            <span class="nav-emoji" aria-hidden="true">🧾</span>
+            <span class="nav-label">Sales</span>
+          </a>
+          <a href="{{ url_for('reports') }}" class="{{ 'is-active' if request.endpoint == 'reports' else '' }}">
+            <span class="nav-emoji" aria-hidden="true">📈</span>
+            <span class="nav-label">Reports</span>
+          </a>
+        </nav>
+      </div>
+
+      <div class="sidebar-logout" style="margin-top:auto; padding:20px; border-top:1px solid rgba(255,255,255,0.1);">
         <a href="{{ url_for('logout') }}">
           <span class="nav-emoji" aria-hidden="true">🚪</span>
           <span class="nav-label">Logout</span>
         </a>
-      </nav>
+      </div>
     </aside>
     <div class="main-wrap">
       <header class="topbar">

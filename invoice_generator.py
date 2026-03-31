@@ -1,4 +1,5 @@
 import io
+import os
 from datetime import datetime
 from pathlib import Path
 
@@ -19,6 +20,14 @@ _TEXT_GREY = colors.HexColor("#6b7280")
 
 _LOGO_MAX_SIZE = 70  # points (approx to requested 70x70px)
 _LEFT_MARGIN_FALLBACK = 36
+
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+ak_logo_path = os.path.join(
+    BASE_DIR, "static", "logos", "AK Distributors Logo.jpeg"
+)
+zain_logo_path = os.path.join(
+    BASE_DIR, "static", "logos", "Zain Foods Logo.jpeg"
+)
 
 
 def _format_date(val):
@@ -85,22 +94,33 @@ def _draw_logo_placeholder(cnv, x, y, w, h, label):
     cnv.restoreState()
 
 
-def _draw_logo(cnv, logo_path, x, y, max_size):
-    if not logo_path.exists():
-        return False
+def _draw_logo(cnv, logo_path: str, x: float, y: float, max_size: float):
+    """
+    Draws a logo image at (x, y) scaled to max_size x max_size.
+    Returns drawn width (points) when successful, else None.
+    """
+    if not os.path.exists(logo_path):
+        return None
     try:
-        img = ImageReader(str(logo_path))
-        iw, ih = img.getSize()
-        if iw <= 0 or ih <= 0:
-            _draw_logo_placeholder(cnv, x, y, max_size, max_size, "AK")
-            return False
-        scale = min(max_size / float(iw), max_size / float(ih))
-        draw_w = float(iw) * scale
-        draw_h = float(ih) * scale
-        cnv.drawImage(img, x, y, width=draw_w, height=draw_h, mask="auto", preserveAspectRatio=True)
-        return True
+        img = ImageReader(logo_path)
+        img_w, img_h = img.getSize()
+        if img_w <= 0 or img_h <= 0:
+            return None
+        scale = min(max_size / float(img_w), max_size / float(img_h))
+        draw_w = img_w * scale
+        draw_h = img_h * scale
+        cnv.drawImage(
+            img,
+            x,
+            y,
+            width=draw_w,
+            height=draw_h,
+            preserveAspectRatio=True,
+            mask="auto",
+        )
+        return draw_w
     except Exception:
-        return False
+        return None
 
 
 def generate_invoice_pdf(sale_id: int) -> bytes:
@@ -277,25 +297,24 @@ def generate_invoice_pdf(sale_id: int) -> bytes:
         invoice_x_right = x0 + usable_width
 
         # Header: logos + company info + INVOICE word
-        logo1_x = x0
-        logo2_x = x0 + _LOGO_MAX_SIZE + 12
-        logos_y = y_top - _LOGO_MAX_SIZE + 6
+        max_size = _LOGO_MAX_SIZE
+        ak_x = 36  # points from left (as requested)
+        logos_y = y_top - max_size + 6
 
-        logos_dir = Path(__file__).resolve().parent / "static" / "logos"
-        ak_logo = logos_dir / "ak_logo.png"
-        zain_logo = logos_dir / "zain_logo.png"
+        # Draw AK logo, fallback to placeholder (if missing).
+        ak_draw_w = _draw_logo(cnv, ak_logo_path, ak_x, logos_y, max_size)
+        if ak_draw_w is None:
+            _draw_logo_placeholder(cnv, ak_x, logos_y, max_size, max_size, "AK")
+            ak_draw_w = float(max_size)
 
-        # Try AK logo, else placeholder
-        ak_drawn = _draw_logo(cnv, ak_logo, logo1_x, logos_y, _LOGO_MAX_SIZE)
-        if not ak_drawn:
-            _draw_logo_placeholder(cnv, logo1_x, logos_y, _LOGO_MAX_SIZE, _LOGO_MAX_SIZE, "AK")
+        # Draw Zain logo 10pt to the right of AK logo.
+        zain_x = ak_x + ak_draw_w + 10
+        zain_draw_w = _draw_logo(cnv, zain_logo_path, zain_x, logos_y, max_size)
+        if zain_draw_w is None:
+            _draw_logo_placeholder(cnv, zain_x, logos_y, max_size, max_size, "ZAIN")
+            zain_draw_w = float(max_size)
 
-        # Try ZAIN logo, else placeholder
-        z_drawn = _draw_logo(cnv, zain_logo, logo2_x, logos_y, _LOGO_MAX_SIZE)
-        if not z_drawn:
-            _draw_logo_placeholder(cnv, logo2_x, logos_y, _LOGO_MAX_SIZE, _LOGO_MAX_SIZE, "ZAIN")
-
-        company_x = logo2_x + _LOGO_MAX_SIZE + 18
+        company_x = zain_x + max_size + 18
         company_y = y_top - 18
 
         cnv.setFont("Helvetica-Bold", 13)
