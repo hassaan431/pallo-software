@@ -12,6 +12,48 @@ from database import get_connection, get_next_invoice_number, get_user_by_id, ge
 
 init_db()
 
+def fix_existing_sales_data():
+    db = get_connection()
+    try:
+        # Fix ALL cash sales regardless 
+        # of current amount_paid value
+        db.execute("""
+            UPDATE sales 
+            SET amount_paid = grand_total,
+                remaining_amount = 0,
+                status = 'paid'
+            WHERE payment_type = 'cash'
+        """)
+        # Fix ALL cheque sales
+        db.execute("""
+            UPDATE sales 
+            SET amount_paid = grand_total,
+                remaining_amount = 0,
+                status = 'paid'
+            WHERE payment_type = 'cheque'
+        """)
+        # Fix credit sales where BOTH 
+        # amount_paid AND remaining_amount are 0
+        # meaning they were never properly set
+        db.execute("""
+            UPDATE sales 
+            SET amount_paid = 0,
+                remaining_amount = grand_total,
+                status = 'unpaid'
+            WHERE payment_type = 'credit'
+            AND amount_paid = 0
+            AND remaining_amount = 0
+        """)
+        db.commit()
+        print("Sales data fix applied successfully")
+    except Exception as e:
+        print(f"Data fix error: {e}")
+        db.rollback()
+    finally:
+        db.close()
+
+fix_existing_sales_data()
+
 from flask import Flask, Response, flash, jsonify, redirect, render_template, request, url_for
 from flask_login import LoginManager, UserMixin, current_user, login_required, login_user, logout_user
 from werkzeug.security import check_password_hash
@@ -865,7 +907,9 @@ def sales():
                 COALESCE(s.discount_amount, 0) AS discount_amount,
                 COALESCE(s.grand_total, 0) AS grand_total,
                 s.payment_type,
-                s.status
+                s.status,
+                COALESCE(s.amount_paid, 0) AS amount_paid,
+                COALESCE(s.remaining_amount, 0) AS remaining_amount
             FROM sales s
             LEFT JOIN customers c ON c.id = s.customer_id
             LEFT JOIN sale_items si ON si.sale_id = s.id
@@ -1612,7 +1656,72 @@ def sales_update(sale_id: int):
     return redirect(url_for("sales"))
 
 
-@app.route("/sales/invoice/<int:id>/pdf", methods=["GET"])
+@app.route("/sales/<int:sale_id>/details", methods=["GET"])
+@login_required
+def sale_details(sale_id: int):
+    conn = get_connection()
+    try:
+        # Get sale details
+        sale = conn.execute(
+            """
+            SELECT 
+                s.invoice_number,
+                s.invoice_date,
+                s.due_date,
+                s.terms,
+                s.payment_type,
+                s.status,
+                s.subtotal,
+                s.discount_amount,
+                s.grand_total,
+                s.amount_paid,
+                s.remaining_amount,
+                c.name as customer_name
+            FROM sales s
+            LEFT JOIN customers c ON c.id = s.customer_id
+            WHERE s.id = ?
+            """,
+            (sale_id,),
+        ).fetchone()
+        
+        if not sale:
+            return jsonify({"error": "Sale not found"}), 404
+        
+        # Get sale items
+        items = conn.execute(
+            """
+            SELECT 
+                description,
+                qty,
+                rate,
+                amount
+            FROM sale_items
+            WHERE sale_id = ?
+            ORDER BY id
+            """,
+            (sale_id,),
+        ).fetchall()
+        
+        return jsonify({
+            "invoice_number": sale["invoice_number"],
+            "invoice_date": sale["invoice_date"],
+            "due_date": sale["due_date"],
+            "terms": sale["terms"],
+            "payment_type": sale["payment_type"],
+            "status": sale["status"],
+            "subtotal": sale["subtotal"],
+            "discount_amount": sale["discount_amount"],
+            "grand_total": sale["grand_total"],
+            "amount_paid": sale["amount_paid"],
+            "remaining_amount": sale["remaining_amount"],
+            "customer_name": sale["customer_name"],
+            "items": [dict(item) for item in items]
+        })
+    finally:
+        conn.close()
+
+
+@app.route("/sales/<int:id>/invoice/pdf", methods=["GET"])
 @login_required
 def sales_invoice_pdf(id: int):
     conn = get_connection()

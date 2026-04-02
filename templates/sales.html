@@ -472,6 +472,43 @@
   </div>
 </section>
 
+<!-- View Sale Modal -->
+<div id="viewSaleModal" style="
+    display:none;
+    position:fixed;
+    top:0; left:0;
+    width:100%; height:100%;
+    background:rgba(0,0,0,0.5);
+    z-index:9999;
+    justify-content:center;
+    align-items:center;">
+  
+  <div style="
+      background:white;
+      width:80vw;
+      max-width:900px;
+      max-height:85vh;
+      border-radius:12px;
+      overflow-y:auto;
+      padding:32px;
+      position:relative;">
+    
+    <!-- Close button -->
+    <button onclick="closeViewSale()" style="
+        position:absolute;
+        top:16px; right:16px;
+        background:none;
+        border:none;
+        font-size:24px;
+        cursor:pointer;
+        color:#6b7280;">✕</button>
+    
+    <!-- Modal content filled by JS -->
+    <div id="viewSaleContent"></div>
+  
+  </div>
+</div>
+
 <script>
   const customersData = {{ customers | tojson }};
   const nextInvoice = {{ next_invoice_number | tojson }};
@@ -873,6 +910,8 @@
     }
     rows.forEach((s) => {
       const tr = document.createElement('tr');
+      tr.style.cursor = 'pointer';
+      tr.onclick = () => viewSale(s.id);
 
       const tdInvoice = document.createElement('td');
       tdInvoice.textContent = s.invoice_number || '';
@@ -951,26 +990,49 @@
       const pdfLink = document.createElement('a');
       pdfLink.className = 'btn btn-pdf';
       pdfLink.target = '_blank';
-      pdfLink.href = '/sales/invoice/' + s.id + '/pdf';
-      pdfLink.textContent = 'PDF';
+      pdfLink.href = '/sales/' + s.id + '/invoice/pdf';
+      pdfLink.textContent = 'Invoice';
+      pdfLink.style.padding = '6px 14px';
+      pdfLink.style.fontSize = '14px';
+      pdfLink.onclick = (e) => e.stopPropagation();
 
       const editLink = document.createElement('a');
-      editLink.className = 'btn btn-edit';
       editLink.href = '/sales/edit/' + s.id;
-      editLink.textContent = 'Edit';
+      editLink.onclick = (e) => e.stopPropagation();
+      const editBtn = document.createElement('button');
+      editBtn.type = 'button';
+      editBtn.textContent = 'Edit';
+      editBtn.style.padding = '4px 10px';
+      editBtn.style.fontSize = '12px';
+      editBtn.style.borderRadius = '4px';
+      editBtn.style.background = '#3b82f6';
+      editBtn.style.color = 'white';
+      editBtn.style.border = 'none';
+      editBtn.style.cursor = 'pointer';
+      editBtn.style.margin = '0 2px';
+      editBtn.onclick = (e) => e.stopPropagation();
+      editLink.appendChild(editBtn);
 
       const delForm = document.createElement('form');
       delForm.method = 'post';
       delForm.action = '/sales/delete/' + s.id;
       delForm.style.display = 'inline';
+      delForm.onclick = (e) => e.stopPropagation();
       delForm.onsubmit = () => {
         return confirm('Are you sure you want to delete sale ' + (s.invoice_number || '') + '?');
       };
 
       const delBtn = document.createElement('button');
       delBtn.type = 'submit';
-      delBtn.className = 'btn btn-danger';
       delBtn.textContent = 'Delete';
+      delBtn.style.padding = '4px 10px';
+      delBtn.style.fontSize = '12px';
+      delBtn.style.borderRadius = '4px';
+      delBtn.style.background = '#dc2626';
+      delBtn.style.color = 'white';
+      delBtn.style.border = 'none';
+      delBtn.style.cursor = 'pointer';
+      delBtn.style.margin = '0 2px';
 
       delForm.appendChild(delBtn);
       tdActions.appendChild(pdfLink);
@@ -1001,7 +1063,7 @@
   }
 
   // Render initial recent sales
-  renderRecentSales(recentSales);
+  loadSalesData();
 
   // -----------------------------
   // Submit validation + build items_json
@@ -1218,5 +1280,254 @@
     originalRecalcTotals();
     updateRemainingAmount();
   };
+
+  function viewSale(saleId) {
+  fetch('/sales/' + saleId + '/details')
+    .then(r => r.json())
+    .then(data => {
+      
+      let itemsHtml = data.items.map((item, i) => `
+        <tr>
+          <td>${i+1}</td>
+          <td>${item.description || ''}</td>
+          <td style="text-align:center">
+            ${item.qty}</td>
+          <td style="text-align:right">
+            $${parseFloat(item.rate).toFixed(2)}</td>
+          <td style="text-align:right">
+            $${parseFloat(item.amount).toFixed(2)}</td>
+        </tr>
+      `).join('');
+
+      let statusColor = 
+        data.status === 'paid' ? '#16a34a' :
+        data.status === 'partial' ? '#e8800a' : 
+        '#dc2626';
+
+      let remainingHtml = 
+        parseFloat(data.remaining_amount) > 0 ?
+        `<div style="margin-top:8px;">
+          <span style="color:#6b7280">Remaining:</span>
+          <strong style="color:#dc2626; 
+            margin-left:8px;">
+            $${parseFloat(
+              data.remaining_amount).toFixed(2)}
+          </strong>
+        </div>` : '';
+
+      let discountHtml = 
+        parseFloat(data.discount_amount) > 0 ?
+        `<tr>
+          <td colspan="4" 
+            style="text-align:right;
+            padding:4px 8px;">Discount:</td>
+          <td style="text-align:right;
+            padding:4px 8px; color:#dc2626;">
+            -$${parseFloat(
+              data.discount_amount).toFixed(2)}
+          </td>
+        </tr>` : '';
+
+      document.getElementById(
+        'viewSaleContent').innerHTML = `
+        <h2 style="margin:0 0 8px; 
+          color:#1a2332;">
+          Invoice #${data.invoice_number}
+        </h2>
+        <p style="color:#6b7280; margin:0 0 24px;">
+          ${data.customer_name}</p>
+        
+        <div style="display:grid; 
+          grid-template-columns:1fr 1fr; 
+          gap:24px; margin-bottom:24px;">
+          
+          <div style="background:#f4f6f9; 
+            padding:16px; border-radius:8px;">
+            <div style="margin-bottom:8px;">
+              <span style="color:#6b7280; 
+                font-size:12px;">INVOICE #</span>
+              <div style="font-weight:bold;">
+                ${data.invoice_number}</div>
+            </div>
+            <div style="margin-bottom:8px;">
+              <span style="color:#6b7280; 
+                font-size:12px;">DATE</span>
+              <div>${data.invoice_date}</div>
+            </div>
+            <div style="margin-bottom:8px;">
+              <span style="color:#6b7280; 
+                font-size:12px;">TERMS</span>
+              <div>${data.terms || '-'}</div>
+            </div>
+            <div>
+              <span style="color:#6b7280; 
+                font-size:12px;">DUE DATE</span>
+              <div>${data.due_date || '-'}</div>
+            </div>
+          </div>
+
+          <div style="background:#f4f6f9; 
+            padding:16px; border-radius:8px;">
+            <div style="margin-bottom:8px;">
+              <span style="color:#6b7280; 
+                font-size:12px;">STATUS</span>
+              <div>
+                <span style="
+                  background:${statusColor};
+                  color:white;
+                  padding:2px 10px;
+                  border-radius:20px;
+                  font-size:13px;">
+                  ${data.status}
+                </span>
+              </div>
+            </div>
+            <div style="margin-bottom:8px;">
+              <span style="color:#6b7280; 
+                font-size:12px;">PAYMENT TYPE</span>
+              <div style="text-transform:capitalize;">
+                ${data.payment_type}</div>
+            </div>
+            <div style="margin-bottom:8px;">
+              <span style="color:#6b7280; 
+                font-size:12px;">GRAND TOTAL</span>
+              <div style="font-weight:bold; 
+                font-size:18px;">
+                $${parseFloat(
+                  data.grand_total).toFixed(2)}
+              </div>
+            </div>
+            <div>
+              <span style="color:#6b7280; 
+                font-size:12px;">PAID</span>
+              <div style="color:#16a34a; 
+                font-weight:bold;">
+                $${parseFloat(
+                  data.amount_paid).toFixed(2)}
+              </div>
+            </div>
+            ${remainingHtml}
+          </div>
+        </div>
+
+        <table style="width:100%; 
+          border-collapse:collapse; 
+          margin-bottom:16px;">
+          <thead>
+            <tr style="background:#1a2332; 
+              color:white;">
+              <th style="padding:10px 8px; 
+                text-align:left; width:40px;">#</th>
+              <th style="padding:10px 8px; 
+                text-align:left;">
+                Item Description</th>
+              <th style="padding:10px 8px; 
+                text-align:center; width:60px;">
+                Qty</th>
+              <th style="padding:10px 8px; 
+                text-align:right; width:80px;">
+                Rate</th>
+              <th style="padding:10px 8px; 
+                text-align:right; width:90px;">
+                Amount</th>
+            </tr>
+          </thead>
+          <tbody>${itemsHtml}</tbody>
+          <tfoot>
+            <tr style="border-top:2px solid #e5e7eb;">
+              <td colspan="4" 
+                style="text-align:right; 
+                padding:8px; color:#6b7280;">
+                Subtotal:</td>
+              <td style="text-align:right; 
+                padding:8px;">
+                $${parseFloat(
+                  data.subtotal).toFixed(2)}</td>
+            </tr>
+            ${discountHtml}
+            <tr style="background:#1a2332; 
+              color:white;">
+              <td colspan="4" 
+                style="text-align:right; 
+                padding:10px 8px; 
+                font-weight:bold;">
+                GRAND TOTAL:</td>
+              <td style="text-align:right; 
+                padding:10px 8px; 
+                font-weight:bold;">
+                $${parseFloat(
+                  data.grand_total).toFixed(2)}</td>
+            </tr>
+          </tfoot>
+        </table>
+      `;
+
+      const modal = document.getElementById(
+        'viewSaleModal');
+      modal.style.display = 'flex';
+    })
+    .catch(err => {
+      console.error('Error loading sale:', err);
+      alert('Could not load sale details.');
+    });
+}
+
+function closeViewSale() {
+  document.getElementById(
+    'viewSaleModal').style.display = 'none';
+}
+
+// Close modal when clicking outside
+document.getElementById(
+  'viewSaleModal')?.addEventListener(
+  'click', function(e) {
+    if (e.target === this) closeViewSale();
+});
+
+  // -----------------------------
+  // Auto-refresh Sales Table
+  // -----------------------------
+  function refreshSalesTable() {
+    loadSalesData().then(() => {
+      console.log('Sales table refreshed');
+    }).catch(error => {
+      console.error('Error refreshing sales table:', error);
+    });
+  }
+
+  // Override form submission to refresh table after successful save
+  document.addEventListener('DOMContentLoaded', function() {
+    const form = document.querySelector('form[action="/sales/new"]');
+    if (form) {
+      form.addEventListener('submit', function(e) {
+        // Let the form submit normally, but refresh after successful redirect
+        setTimeout(() => {
+          if (window.location.pathname === '/sales') {
+            refreshSalesTable();
+          }
+        }, 1000);
+      });
+    }
+    
+    // Handle edit form similarly
+    const editForm = document.querySelector('form[action*="/sales/update/"]');
+    if (editForm) {
+      editForm.addEventListener('submit', function(e) {
+        setTimeout(() => {
+          if (window.location.pathname === '/sales') {
+            refreshSalesTable();
+          }
+        }, 1000);
+      });
+    }
+  });
+
+  // Close modal when clicking outside
+  document.addEventListener('click', function(e) {
+    const modal = document.getElementById('viewSaleModal');
+    if (e.target === modal) {
+      closeViewSaleModal();
+    }
+  });
 </script>
 {% endblock %}
