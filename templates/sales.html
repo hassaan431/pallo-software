@@ -291,6 +291,55 @@
             </div>
           </div>
 
+          <div id="credit-fields" style="display:none; margin-top: 16px;">
+            <!-- Total Bill (read-only) -->
+            <div class="form-group">
+              <label>Total Bill ($)</label>
+              <input type="text" id="total-bill-display" 
+                     readonly 
+                     style="background:#f4f6f9; 
+                            font-weight:bold;
+                            color:#1a2332;"
+                     placeholder="0.00">
+            </div>
+
+            <!-- Paid Upfront -->
+            <div class="form-group" 
+                 style="margin-top:12px;">
+              <label>Paid Upfront ($) 
+                <span style="color:#e8800a;">
+                  (leave 0 if nothing paid)
+                </span>
+              </label>
+              <input type="number" 
+                     id="paid-upfront" 
+                     name="amount_paid"
+                     min="0" 
+                     step="0.01"
+                     value="0"
+                     placeholder="Enter amount paid now"
+                     style="border: 2px solid #e8800a;">
+            </div>
+
+            <!-- Remaining (read-only) -->
+            <div class="form-group" 
+                 style="margin-top:12px;">
+              <label>Remaining on Credit ($)</label>
+              <input type="text" 
+                     id="remaining-display" 
+                     readonly
+                     style="background:#fff0f0; 
+                            color:#dc2626;
+                            font-weight:bold;"
+                     placeholder="0.00">
+            </div>
+          </div>
+
+          <input type="hidden" 
+                 id="remaining-amount-input"
+                 name="remaining_amount" 
+                 value="0">
+
           <input type="hidden" id="itemsJson" name="items_json" value="[]">
         </div>
       </div>
@@ -408,11 +457,10 @@
               <th>Invoice#</th>
               <th>Date</th>
               <th>Customer</th>
-              <th>Items</th>
-              <th>Subtotal</th>
-              <th>Discount</th>
               <th>Grand Total</th>
-              <th>Payment</th>
+              <th>Paid</th>
+              <th>Remaining</th>
+              <th>Type</th>
               <th>Status</th>
               <th style="width: 200px;">Actions</th>
             </tr>
@@ -819,7 +867,7 @@
     recentSalesTbody.innerHTML = '';
     if (!rows || rows.length === 0) {
       const tr = document.createElement('tr');
-      tr.innerHTML = '<td colspan="10" class="empty-state">No sales found for the selected filters.</td>';
+      tr.innerHTML = '<td colspan="9" class="empty-state">No sales found for the selected filters.</td>';
       recentSalesTbody.appendChild(tr);
       return;
     }
@@ -838,29 +886,60 @@
       tdCustomer.textContent = s.customer_name || '';
       tr.appendChild(tdCustomer);
 
-      const tdItems = document.createElement('td');
-      tdItems.textContent = s.item_count || 0;
-      tr.appendChild(tdItems);
-
-      const tdSubtotal = document.createElement('td');
-      tdSubtotal.textContent = money(s.subtotal);
-      tr.appendChild(tdSubtotal);
-
-      const tdDiscount = document.createElement('td');
-      tdDiscount.textContent = money(s.discount_amount);
-      tr.appendChild(tdDiscount);
-
+      // Grand Total
       const tdGrand = document.createElement('td');
       tdGrand.textContent = money(s.grand_total);
       tr.appendChild(tdGrand);
 
-      const tdPayment = document.createElement('td');
-      tdPayment.textContent = s.payment_type || '';
-      tr.appendChild(tdPayment);
+      // Paid (green color)
+      const tdPaid = document.createElement('td');
+      tdPaid.style.color = '#10b981';
+      tdPaid.style.fontWeight = '600';
+      tdPaid.textContent = money(s.amount_paid || 0);
+      tr.appendChild(tdPaid);
 
+      // Remaining (red if > 0, grey if 0)
+      const tdRemaining = document.createElement('td');
+      const remaining = parseFloat(s.remaining_amount || 0);
+      tdRemaining.style.fontWeight = '600';
+      if (remaining > 0) {
+        tdRemaining.style.color = '#dc2626';
+      } else {
+        tdRemaining.style.color = '#6b7280';
+      }
+      tdRemaining.textContent = money(remaining);
+      tr.appendChild(tdRemaining);
+
+      // Payment Type Badge
+      const tdType = document.createElement('td');
+      const typeBadge = document.createElement('span');
+      typeBadge.className = 'status-badge';
+      if (s.payment_type === 'cash') {
+        typeBadge.style.background = '#6b7280';
+        typeBadge.textContent = 'Cash';
+      } else if (s.payment_type === 'cheque') {
+        typeBadge.style.background = '#2563eb';
+        typeBadge.textContent = 'Cheque';
+      } else if (s.payment_type === 'credit') {
+        typeBadge.style.background = '#f59e0b';
+        typeBadge.textContent = 'Credit';
+      } else {
+        typeBadge.textContent = s.payment_type || '';
+      }
+      tdType.appendChild(typeBadge);
+      tr.appendChild(tdType);
+
+      // Status Badge
       const tdStatus = document.createElement('td');
       const statusBadge = document.createElement('span');
       statusBadge.className = `status-badge ${s.status || 'unpaid'}`;
+      if (s.status === 'paid') {
+        statusBadge.style.background = '#10b981';
+      } else if (s.status === 'unpaid') {
+        statusBadge.style.background = '#ef4444';
+      } else if (s.status === 'partial') {
+        statusBadge.style.background = '#f59e0b';
+      }
       statusBadge.textContent = s.status || 'unpaid';
       tdStatus.appendChild(statusBadge);
       tr.appendChild(tdStatus);
@@ -1018,5 +1097,126 @@
 
   // Initialize totals
   recalcTotals();
+
+  // -----------------------------
+  // Credit payment fields logic
+  // -----------------------------
+  // Show/hide credit fields based on payment type selection
+  function handlePaymentTypeChange() {
+    const selectedType = document.querySelector(
+      'input[name="payment_type"]:checked'
+    );
+    const creditFields = document.getElementById(
+      'credit-fields'
+    );
+    
+    if (selectedType && 
+        selectedType.value === 'credit') {
+      creditFields.style.display = 'block';
+      updateRemainingAmount();
+    } else {
+      creditFields.style.display = 'none';
+      // Reset credit fields when switching away
+      const paidUpfront = document.getElementById(
+        'paid-upfront'
+      );
+      if (paidUpfront) paidUpfront.value = '0';
+    }
+  }
+
+  // Add event listeners to all payment type radio buttons
+  document.querySelectorAll(
+    'input[name="payment_type"]'
+  ).forEach(radio => {
+    radio.addEventListener(
+      'change', handlePaymentTypeChange
+    );
+  });
+
+  // Calculate remaining = grand_total - upfront
+  function updateRemainingAmount() {
+    const grandTotal = parseFloat(
+      document.getElementById(
+        'grandTotalAmount'
+      )?.textContent?.replace('$','') || 0
+    );
+    const paidUpfront = parseFloat(
+      document.getElementById(
+        'paid-upfront'
+      )?.value || 0
+    );
+    
+    // Update total bill display
+    const totalBillDisplay = document.getElementById(
+      'total-bill-display'
+    );
+    if (totalBillDisplay) {
+      totalBillDisplay.value = 
+        '$' + grandTotal.toFixed(2);
+    }
+    
+    // Calculate and show remaining
+    const remaining = Math.max(
+      0, grandTotal - paidUpfront
+    );
+    const remainingDisplay = document.getElementById(
+      'remaining-display'
+    );
+    if (remainingDisplay) {
+      remainingDisplay.value = 
+        '$' + remaining.toFixed(2);
+    }
+    
+    // Warn if upfront exceeds total
+    if (paidUpfront > grandTotal) {
+      document.getElementById(
+        'paid-upfront'
+      ).style.borderColor = '#dc2626';
+      document.getElementById(
+        'paid-upfront'
+      ).value = grandTotal.toFixed(2);
+      updateRemainingAmount();
+    } else {
+      document.getElementById(
+        'paid-upfront'
+      ).style.borderColor = '#e8800a';
+    }
+  }
+
+  // Listen for changes on paid upfront field
+  document.addEventListener(
+    'DOMContentLoaded', function() {
+    const paidUpfront = document.getElementById(
+      'paid-upfront'
+    );
+    if (paidUpfront) {
+      paidUpfront.addEventListener(
+        'input', updateRemainingAmount
+      );
+    }
+  });
+
+  // Before form submits, set hidden field
+  document.querySelector('form')
+    ?.addEventListener('submit', function() {
+      const remaining = parseFloat(
+        document.getElementById(
+          'remaining-display'
+        )?.value?.replace('$','') || 0
+      );
+      const hiddenInput = document.getElementById(
+        'remaining-amount-input'
+      );
+      if (hiddenInput) {
+        hiddenInput.value = remaining.toFixed(2);
+      }
+    });
+
+  // Also update remaining amount when totals change
+  const originalRecalcTotals = recalcTotals;
+  recalcTotals = function() {
+    originalRecalcTotals();
+    updateRemainingAmount();
+  };
 </script>
 {% endblock %}

@@ -530,9 +530,9 @@ document.addEventListener('DOMContentLoaded', function() {
         rows.forEach((r) => {
           const grand = Number(r.grand_total || 0);
           totalSpentAmount += grand;
-          if (r.status === 'unpaid') {
-            outstandingAmountValue += grand;
-          }
+          // Use remaining_amount instead of checking status
+          const remaining = Number(r.remaining_amount || 0);
+          outstandingAmountValue += remaining;
           const tr = document.createElement('tr');
           tr.innerHTML =
             '<td>' + (r.invoice_number || '') + '</td>' +
@@ -545,10 +545,18 @@ document.addEventListener('DOMContentLoaded', function() {
           historyTbody.appendChild(tr);
         });
         
-        // Update summary with safety checks
+        // Update summary with safety checks and proper styling
         if (totalOrders) totalOrders.textContent = totalOrdersCount;
         if (totalSpent) totalSpent.textContent = '$' + totalSpentAmount.toFixed(2);
-        if (outstandingAmount) outstandingAmount.textContent = '$' + outstandingAmountValue.toFixed(2);
+        if (outstandingAmount) {
+          outstandingAmount.textContent = '$' + outstandingAmountValue.toFixed(2);
+          // Add red color if outstanding > 0, grey if zero
+          if (outstandingAmountValue > 0) {
+            outstandingAmount.style.color = '#dc2626';
+          } else {
+            outstandingAmount.style.color = '#6b7280';
+          }
+        }
       })
       .catch((err) => {
         console.error('Failed to load history:', err);

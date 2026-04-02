@@ -816,18 +816,20 @@ def customers_history(customer_id: int):
     try:
         cur = conn.execute(
             """
-            SELECT
-                s.invoice_number,
-                s.invoice_date,
-                COALESCE(COUNT(si.id), 0) AS item_count,
-                COALESCE(s.grand_total, 0) AS grand_total,
-                s.payment_type,
-                s.status
+            SELECT 
+              s.invoice_number,
+              s.invoice_date,
+              s.grand_total,
+              s.payment_type,
+              s.status,
+              s.amount_paid,
+              s.remaining_amount,
+              COUNT(si.id) as item_count
             FROM sales s
             LEFT JOIN sale_items si ON si.sale_id = s.id
             WHERE s.customer_id = ?
             GROUP BY s.id
-            ORDER BY s.invoice_date DESC, s.id DESC
+            ORDER BY s.invoice_date DESC
             """,
             (customer_id,),
         )
@@ -973,19 +975,20 @@ def sales_data():
                 s.id,
                 s.invoice_number,
                 s.invoice_date,
-                c.name AS customer_name,
-                COUNT(si.id) AS item_count,
-                COALESCE(s.subtotal, 0) AS subtotal,
-                COALESCE(s.discount_amount, 0) AS discount_amount,
-                COALESCE(s.grand_total, 0) AS grand_total,
+                s.customer_id,
                 s.payment_type,
-                s.status
+                s.subtotal,
+                s.discount_amount,
+                s.grand_total,
+                s.status,
+                s.notes,
+                s.amount_paid,
+                s.remaining_amount,
+                c.name as customer_name
             FROM sales s
             LEFT JOIN customers c ON c.id = s.customer_id
-            LEFT JOIN sale_items si ON si.sale_id = s.id
             {where_sql}
-            GROUP BY s.id
-            ORDER BY s.invoice_date DESC, s.id DESC
+            ORDER BY s.id DESC
             """
         , params)
         return jsonify([dict(r) for r in cur.fetchall()])
@@ -1002,7 +1005,9 @@ def sales_new():
     terms = (request.form.get("terms") or "").strip()
     notes = request.form.get("notes") or ""
     invoice_number = (request.form.get("invoice_number") or "").strip()
-    payment_type = (request.form.get("payment_type") or "").strip()
+    payment_type = request.form.get('payment_type', 'cash')
+    amount_paid = float(request.form.get('amount_paid', 0) or 0)
+    remaining_amount = float(request.form.get('remaining_amount', 0) or 0)
     discount_amount_raw = (request.form.get("discount_amount") or "").strip()
     items_json = request.form.get("items_json") or "[]"
     generate_invoice = "generate_invoice" in request.form
@@ -1096,8 +1101,30 @@ def sales_new():
         if not invoice_number:
             invoice_number = get_next_invoice_number()
 
-        # Set status based on payment type
-        status = "paid" if payment_type == "cash" else "unpaid"
+        # Calculate amount_paid and remaining_amount based on payment_type
+        if payment_type == 'cash':
+            amount_paid = grand_total
+            remaining_amount = 0
+            status = 'paid'
+        elif payment_type == 'cheque':
+            amount_paid = grand_total
+            remaining_amount = 0
+            status = 'paid'
+        elif payment_type == 'credit':
+            # amount_paid comes from form (paid upfront field)
+            # Validate it doesn't exceed grand_total
+            if amount_paid > grand_total:
+                amount_paid = grand_total
+            remaining_amount = grand_total - amount_paid
+            if remaining_amount <= 0:
+                remaining_amount = 0
+                status = 'paid'
+            elif amount_paid > 0:
+                status = 'partial'
+            else:
+                status = 'unpaid'
+        else:
+            status = 'unpaid'
 
         conn = get_connection()
         try:
@@ -1125,10 +1152,10 @@ def sales_new():
                 """
                 INSERT INTO sales
                     (invoice_number, customer_id, invoice_date, due_date, terms, payment_type,
-                     discount_amount, subtotal, grand_total, notes, status)
+                     discount_amount, subtotal, grand_total, notes, status, amount_paid, remaining_amount)
                 VALUES
                     (?, ?, ?, ?, ?, ?,
-                     ?, ?, ?, ?, ?)
+                     ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     invoice_number,
@@ -1142,6 +1169,8 @@ def sales_new():
                     grand_total,
                     notes or None,
                     status,
+                    amount_paid,
+                    remaining_amount,
                 ),
             )
             sale_id = int(cur.lastrowid)
@@ -1417,8 +1446,30 @@ def sales_update(sale_id: int):
         if grand_total < 0:
             grand_total = 0.00
 
-        # Set status based on payment type
-        status = "paid" if payment_type == "cash" else "unpaid"
+        # Calculate amount_paid and remaining_amount based on payment_type
+        if payment_type == 'cash':
+            amount_paid = grand_total
+            remaining_amount = 0
+            status = 'paid'
+        elif payment_type == 'cheque':
+            amount_paid = grand_total
+            remaining_amount = 0
+            status = 'paid'
+        elif payment_type == 'credit':
+            # amount_paid comes from form (paid upfront field)
+            # Validate it doesn't exceed grand_total
+            if amount_paid > grand_total:
+                amount_paid = grand_total
+            remaining_amount = grand_total - amount_paid
+            if remaining_amount <= 0:
+                remaining_amount = 0
+                status = 'paid'
+            elif amount_paid > 0:
+                status = 'partial'
+            else:
+                status = 'unpaid'
+        else:
+            status = 'unpaid'
 
         conn = get_connection()
         try:
@@ -1479,7 +1530,9 @@ def sales_update(sale_id: int):
                     subtotal = ?,
                     grand_total = ?,
                     notes = ?,
-                    status = ?
+                    status = ?,
+                    amount_paid = ?,
+                    remaining_amount = ?
                 WHERE id = ?
                 """,
                 (
@@ -1494,6 +1547,8 @@ def sales_update(sale_id: int):
                     grand_total,
                     notes or None,
                     status,
+                    amount_paid,
+                    remaining_amount,
                     sale_id,
                 ),
             )
@@ -1691,28 +1746,21 @@ def reports_by_customer():
     try:
         summary = conn.execute(
             f"""
-            SELECT
-                c.id AS customer_id,
-                c.name AS customer_name,
-                c.area AS area,
-                COUNT(DISTINCT s.id) AS invoice_count,
-                COALESCE(SUM(s.grand_total), 0) AS total_revenue,
-                COALESCE(
-                    SUM(
-                        CASE
-                            WHEN s.payment_type = 'credit' AND s.status = 'unpaid'
-                            THEN COALESCE(s.grand_total, 0)
-                            ELSE 0
-                        END
-                    ),
-                    0
-                ) AS outstanding,
-                MAX(s.invoice_date) AS last_sale_date
-            FROM sales s
-            JOIN customers c ON c.id = s.customer_id
+            SELECT 
+              c.id as customer_id,
+              c.name as customer_name,
+              c.area,
+              COUNT(s.id) as invoice_count,
+              COALESCE(SUM(s.grand_total), 0) 
+                as total_revenue,
+              COALESCE(SUM(s.remaining_amount), 0) 
+                as outstanding,
+              MAX(s.invoice_date) as last_sale_date
+            FROM customers c
+            LEFT JOIN sales s ON s.customer_id = c.id
             WHERE {where_sql}
-            GROUP BY c.id
-            ORDER BY c.name COLLATE NOCASE
+            GROUP BY c.id, c.name, c.area
+            ORDER BY total_revenue DESC
             """
             ,
             params,

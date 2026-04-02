@@ -342,6 +342,12 @@
       const tdTotal = document.createElement('td');
       tdTotal.textContent = money(totalRevenue);
       const tdOut = document.createElement('td');
+      tdOut.style.fontWeight = '600';
+      if (outstanding > 0) {
+        tdOut.style.color = '#dc2626';
+      } else {
+        tdOut.style.color = '#6b7280';
+      }
       tdOut.textContent = money(outstanding);
       const tdLast = document.createElement('td');
       tdLast.textContent = lastDate;

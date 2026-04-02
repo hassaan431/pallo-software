@@ -105,6 +105,48 @@ def init_db():
             );
             """
         )
+        
+        # Safely add amount_paid column to sales table
+        try:
+            conn.execute(
+                "ALTER TABLE sales ADD COLUMN "
+                "amount_paid REAL DEFAULT 0"
+            )
+            conn.commit()
+        except Exception:
+            pass  # Column already exists
+
+        # Safely add remaining_amount column to sales
+        try:
+            conn.execute(
+                "ALTER TABLE sales ADD COLUMN "
+                "remaining_amount REAL DEFAULT 0"
+            )
+            conn.commit()
+        except Exception:
+            pass  # Column already exists
+
+        # Update existing cash/cheque sales
+        try:
+            conn.execute("""
+                UPDATE sales 
+                SET amount_paid = grand_total,
+                    remaining_amount = 0
+                WHERE payment_type IN ('cash', 'cheque')
+                AND (amount_paid = 0 OR amount_paid IS NULL)
+            """)
+            conn.execute("""
+                UPDATE sales 
+                SET amount_paid = 0,
+                    remaining_amount = grand_total
+                WHERE payment_type = 'credit'
+                AND (remaining_amount = 0 
+                     OR remaining_amount IS NULL)
+            """)
+            conn.commit()
+        except Exception:
+            pass
+        
         conn.commit()
         _migrate_database(conn)
         _seed_default_data(conn)
