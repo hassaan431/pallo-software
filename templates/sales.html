@@ -38,6 +38,10 @@
   }
 
   .toggle-pill input:checked + .pill-label {
+    color: #fff;
+  }
+
+  .toggle-pill:has(input:checked) {
     background: var(--color-accent);
     border-color: var(--color-accent);
     color: #fff;
@@ -294,19 +298,16 @@
           <div id="credit-fields" style="display:none; margin-top: 16px;">
             <!-- Total Bill (read-only) -->
             <div class="form-group">
-              <label>Total Bill ($)</label>
+              <label style="font-size: 0.8rem; font-weight: 600; color: var(--color-text-muted); display: block; margin-bottom: 0.35rem;">Total Bill ($)</label>
               <input type="text" id="total-bill-display" 
                      readonly 
-                     style="background:#f4f6f9; 
-                            font-weight:bold;
-                            color:#1a2332;"
+                     style="width: 100%; padding: 0.55rem 0.75rem; border: 1px solid var(--color-border); border-radius: 8px; font-size: 0.95rem; background: #f4f6f9; font-weight: bold;"
                      placeholder="0.00">
             </div>
 
             <!-- Paid Upfront -->
-            <div class="form-group" 
-                 style="margin-top:12px;">
-              <label>Paid Upfront ($) 
+            <div class="form-group" style="margin-top:12px;">
+              <label style="font-size: 0.8rem; font-weight: 600; color: var(--color-text-muted); display: block; margin-bottom: 0.35rem;">Paid Upfront ($) 
                 <span style="color:#e8800a;">
                   (leave 0 if nothing paid)
                 </span>
@@ -318,19 +319,16 @@
                      step="0.01"
                      value="0"
                      placeholder="Enter amount paid now"
-                     style="border: 2px solid #e8800a;">
+                     style="width: 100%; padding: 0.55rem 0.75rem; border: 2px solid #e8800a; border-radius: 8px; font-size: 0.95rem; background: #fff;">
             </div>
 
             <!-- Remaining (read-only) -->
-            <div class="form-group" 
-                 style="margin-top:12px;">
-              <label>Remaining on Credit ($)</label>
+            <div class="form-group" style="margin-top:12px;">
+              <label style="font-size: 0.8rem; font-weight: 600; color: var(--color-text-muted); display: block; margin-bottom: 0.35rem;">Remaining on Credit ($)</label>
               <input type="text" 
                      id="remaining-display" 
                      readonly
-                     style="background:#fff0f0; 
-                            color:#dc2626;
-                            font-weight:bold;"
+                     style="width: 100%; padding: 0.55rem 0.75rem; border: 1px solid var(--color-border); border-radius: 8px; font-size: 0.95rem; background: #fff0f0; color: #dc2626; font-weight: bold;"
                      placeholder="0.00">
             </div>
           </div>
@@ -414,21 +412,20 @@
     <h2>Recent Sales</h2>
   </div>
   <div class="panel-body">
-    <details class="recent-details" open>
+    <details class="recent-details" open style="padding: 16px 20px; background: #f9fafb; border-radius: 8px; border: 1px solid #e5e7eb; margin-bottom: 16px;">
       <summary>Filter &amp; View History</summary>
-      <div style="margin-top:1rem; margin-bottom:1rem;">
-        <div style="display:grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap:0.9rem;">
+      <div style="display: flex; gap: 16px; align-items: flex-end; padding: 16px 0 0 0; flex-wrap: wrap;">
           <div>
-            <label class="field-label" for="filterDateFrom">Date From</label>
-            <input class="form-control" type="date" id="filterDateFrom">
+            <label class="field-label" for="filterDateFrom" style="margin-bottom: 6px; display: block;">Date From</label>
+            <input class="form-control" type="date" id="filterDateFrom" style="padding: 8px 12px; border-radius: 6px;">
           </div>
           <div>
-            <label class="field-label" for="filterDateTo">Date To</label>
-            <input class="form-control" type="date" id="filterDateTo">
+            <label class="field-label" for="filterDateTo" style="margin-bottom: 6px; display: block;">Date To</label>
+            <input class="form-control" type="date" id="filterDateTo" style="padding: 8px 12px; border-radius: 6px;">
           </div>
           <div>
-            <label class="field-label" for="filterCustomer">Customer</label>
-            <select class="form-control" id="filterCustomer">
+            <label class="field-label" for="filterCustomer" style="margin-bottom: 6px; display: block;">Customer</label>
+            <select class="form-control" id="filterCustomer" style="padding: 8px 12px; border-radius: 6px;">
               <option value="all" selected>All Customers</option>
               {% for c in customers %}
               <option value="{{ c.id }}">{{ c.name }}</option>
@@ -436,8 +433,8 @@
             </select>
           </div>
           <div>
-            <label class="field-label" for="filterPaymentType">Payment Type</label>
-            <select class="form-control" id="filterPaymentType">
+            <label class="field-label" for="filterPaymentType" style="margin-bottom: 6px; display: block;">Payment Type</label>
+            <select class="form-control" id="filterPaymentType" style="padding: 8px 12px; border-radius: 6px;">
               <option value="all" selected>All</option>
               <option value="cash">Cash</option>
               <option value="cheque">Cheque</option>
@@ -1255,6 +1252,20 @@
       paidUpfront.addEventListener(
         'input', updateRemainingAmount
       );
+    }
+    
+    // Ensure Cash is selected by default for new sales
+    const cashRadio = document.querySelector('input[name="payment_type"][value="cash"]');
+    if (cashRadio && !document.querySelector('input[name="payment_type"]:checked')) {
+      cashRadio.checked = true;
+    }
+    // Only show credit fields if credit is actually checked
+    const checkedType = document.querySelector('input[name="payment_type"]:checked');
+    if (checkedType && checkedType.value === 'credit') {
+      handlePaymentTypeChange();
+    } else {
+      const creditFields = document.getElementById('credit-fields');
+      if (creditFields) creditFields.style.display = 'none';
     }
   });
 
