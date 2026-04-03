@@ -167,6 +167,7 @@
             <th>Unit</th>
             <th>Cost Price</th>
             <th>Selling Price</th>
+            <th>MARGIN</th>
             <th>Stock Qty</th>
             <th>Actions</th>
           </tr>
@@ -174,7 +175,7 @@
         <tbody id="productsTbody">
           {% if products|length == 0 %}
           <tr>
-            <td colspan="9" class="empty-state">No products found.</td>
+            <td colspan="10" class="empty-state">No products found.</td>
           </tr>
           {% else %}
           {% for p in products %}
@@ -194,6 +195,20 @@
             <td>{{ p.unit or 'Each' }}</td>
             <td>${{ '%.2f' % (p.cost_price|default(0)|float) }}</td>
             <td>${{ '%.2f' % (p.selling_price|default(0)|float) }}</td>
+            <td>
+              {% if p.selling_price and p.selling_price > 0 %}
+                {% set margin = ((p.selling_price - p.cost_price) / p.selling_price * 100) %}
+                {% if margin >= 30 %}
+                  <span style="color: #16a34a; font-weight: 600;">{{ "%.1f"|format(margin) }}%</span>
+                {% elif margin >= 15 %}
+                  <span style="color: #e8800a; font-weight: 600;">{{ "%.1f"|format(margin) }}%</span>
+                {% else %}
+                  <span style="color: #dc2626; font-weight: 600;">{{ "%.1f"|format(margin) }}%</span>
+                {% endif %}
+              {% else %}
+                <span style="color: #6b7280;">-</span>
+              {% endif %}
+            </td>
             <td>{{ qty_int }}</td>
             <td>
               <button
@@ -334,6 +349,13 @@
         </div>
 
         <div class="modal-field">
+          <label for="profitMarginDisplay">Profit Margin</label>
+          <input class="form-control" type="text" id="profitMarginDisplay" readonly 
+                 style="background: #f4f6f9; font-weight: bold; color: #6b7280;" 
+                 placeholder="Enter prices to calculate">
+        </div>
+
+        <div class="modal-field">
           <label for="addStockQuantity">Stock Quantity</label>
           <input class="form-control" type="number" step="1" min="0" id="addStockQuantity" name="stock_quantity" required>
         </div>
@@ -424,6 +446,13 @@
         <div class="modal-field">
           <label for="editSellingPrice">Selling Price</label>
           <input class="form-control" type="number" step="0.01" id="editSellingPrice" name="selling_price" required>
+        </div>
+
+        <div class="modal-field">
+          <label for="editProfitMarginDisplay">Profit Margin</label>
+          <input class="form-control" type="text" id="editProfitMarginDisplay" readonly 
+                 style="background: #f4f6f9; font-weight: bold; color: #6b7280;" 
+                 placeholder="Enter prices to calculate">
         </div>
 
         <div class="modal-field">
@@ -518,6 +547,53 @@
       if (e.target === modalEl) closeModal(modalEl);
     });
   });
+
+  // Profit Margin Calculation Functions
+  function calcAddMargin() {
+    const cost = parseFloat(document.getElementById('addCostPrice')?.value || 0);
+    const sell = parseFloat(document.getElementById('addSellingPrice')?.value || 0);
+    const display = document.getElementById('profitMarginDisplay');
+    if (!display) return;
+    if (sell <= 0) {
+      display.value = '';
+      display.style.color = '#6b7280';
+      return;
+    }
+    const margin = ((sell - cost) / sell) * 100;
+    display.value = margin.toFixed(1) + '%';
+    display.style.color = 
+      margin >= 30 ? '#16a34a' : 
+      margin >= 15 ? '#e8800a' : '#dc2626';
+  }
+
+  function calcEditMargin() {
+    const cost = parseFloat(document.getElementById('editCostPrice')?.value || 0);
+    const sell = parseFloat(document.getElementById('editSellingPrice')?.value || 0);
+    const display = document.getElementById('editProfitMarginDisplay');
+    if (!display) return;
+    if (sell <= 0) {
+      display.value = '';
+      display.style.color = '#6b7280';
+      return;
+    }
+    const margin = ((sell - cost) / sell) * 100;
+    display.value = margin.toFixed(1) + '%';
+    display.style.color = 
+      margin >= 30 ? '#16a34a' : 
+      margin >= 15 ? '#e8800a' : '#dc2626';
+  }
+
+  // Add event listeners for Add modal
+  document.getElementById('addCostPrice')
+    ?.addEventListener('input', calcAddMargin);
+  document.getElementById('addSellingPrice')
+    ?.addEventListener('input', calcAddMargin);
+
+  // Add event listeners for Edit modal
+  document.getElementById('editCostPrice')
+    ?.addEventListener('input', calcEditMargin);
+  document.getElementById('editSellingPrice')
+    ?.addEventListener('input', calcEditMargin);
 
   const addBrandSelect = document.getElementById('addBrandSelect');
   const editBrandSelect = document.getElementById('editBrandSelect');
@@ -1142,6 +1218,9 @@
         document.getElementById('editCostPrice').value = editBtn.getAttribute('data-cost-price') || 0;
         document.getElementById('editSellingPrice').value = editBtn.getAttribute('data-selling-price') || 0;
         document.getElementById('editStockQuantity').value = editBtn.getAttribute('data-stock-quantity') || 0;
+        
+        // Calculate and display profit margin
+        calcEditMargin();
 
         resetEditModalCategoryInline();
         const chosenCat = editCategorySelect.value;

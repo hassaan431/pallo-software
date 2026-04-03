@@ -889,6 +889,32 @@
       });
       suggestionsEl.appendChild(item);
     });
+    // Move dropdown to body to escape overflow clipping
+    const rect = suggestionsEl.previousElementSibling 
+      ? suggestionsEl.previousElementSibling.getBoundingClientRect()
+      : suggestionsEl.parentNode.getBoundingClientRect();
+    
+    // Find the search input in the row
+    const searchInput = suggestionsEl.closest('tr') 
+      ? suggestionsEl.closest('tr').querySelector('.product-search-input')
+      : null;
+    
+    if (searchInput) {
+      const inputRect = searchInput.getBoundingClientRect();
+      suggestionsEl.style.position = 'fixed';
+      suggestionsEl.style.top = (inputRect.bottom + 2) + 'px';
+      suggestionsEl.style.left = inputRect.left + 'px';
+      suggestionsEl.style.width = inputRect.width + 'px';
+      suggestionsEl.style.zIndex = '999999';
+      suggestionsEl.style.maxHeight = '300px';
+      suggestionsEl.style.overflowY = 'auto';
+      suggestionsEl.style.background = 'white';
+      suggestionsEl.style.border = '1px solid #e5e7eb';
+      suggestionsEl.style.borderRadius = '8px';
+      suggestionsEl.style.boxShadow = '0 8px 24px rgba(0,0,0,0.15)';
+      document.body.appendChild(suggestionsEl);
+    }
+    
     showEl(suggestionsEl);
   }
 
