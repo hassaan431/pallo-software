@@ -941,27 +941,41 @@ def sales_next_invoice():
 @login_required
 def products_search():
     q = (request.args.get("q") or "").strip()
-    if not q:
-        return jsonify([])
     like = f"%{q}%"
     conn = get_connection()
     try:
-        cur = conn.execute(
-            """
-            SELECT
-                id,
-                name,
-                brand,
-                selling_price,
-                unit,
-                stock_quantity
-            FROM products
-            WHERE name LIKE ? OR brand LIKE ?
-            ORDER BY name COLLATE NOCASE
-            LIMIT 15
-            """,
-            (like, like),
-        )
+        if not q:
+            cur = conn.execute(
+                """
+                SELECT
+                    id,
+                    name,
+                    brand,
+                    selling_price,
+                    unit,
+                    stock_quantity
+                FROM products
+                ORDER BY name COLLATE NOCASE
+                LIMIT 20
+                """
+            )
+        else:
+            cur = conn.execute(
+                """
+                SELECT
+                    id,
+                    name,
+                    brand,
+                    selling_price,
+                    unit,
+                    stock_quantity
+                FROM products
+                WHERE name LIKE ? OR brand LIKE ?
+                ORDER BY name COLLATE NOCASE
+                LIMIT 15
+                """,
+                (like, like),
+            )
         results = []
         for r in cur.fetchall():
             results.append(

@@ -764,12 +764,30 @@
 
     if (searchInput) {
       let timer = null;
+      searchInput.addEventListener('focus', () => {
+        const q = safeTrim(searchInput.value);
+        fetchProductResults(q)
+          .then((results) => {
+            if (!productSuggestions) return;
+            renderProductSuggestions(results, productSuggestions, row);
+            showEl(productSuggestions);
+          })
+          .catch(() => hideEl(productSuggestions));
+      });
+
       searchInput.addEventListener('input', () => {
         clearTimeout(timer);
         timer = setTimeout(() => {
           const q = safeTrim(searchInput.value);
           if (!q || q.length < 1) {
-            hideEl(productSuggestions);
+            // Show all products when empty
+            fetchProductResults('')
+              .then((results) => {
+                if (!productSuggestions) return;
+                renderProductSuggestions(results, productSuggestions, row);
+                showEl(productSuggestions);
+              })
+              .catch(() => hideEl(productSuggestions));
             return;
           }
           fetchProductResults(q)
@@ -805,6 +823,73 @@
         hideProductSuggestions(row);
       }
     });
+  }
+
+  function renderProductSuggestions(results, suggestionsEl, row) {
+    if (!suggestionsEl) return;
+    suggestionsEl.innerHTML = '';
+    if (!results || results.length === 0) {
+      hideEl(suggestionsEl);
+      return;
+    }
+    results.forEach((p) => {
+      const item = document.createElement('div');
+      item.className = 'suggestion-item';
+      item.style.padding = '10px 14px';
+      item.style.cursor = 'pointer';
+      item.style.borderBottom = '1px solid #f3f4f6';
+      item.style.fontSize = '14px';
+      const name = document.createElement('div');
+      name.style.fontWeight = '600';
+      name.style.color = '#1a2332';
+      name.textContent = p.name || '';
+      item.appendChild(name);
+      if (p.brand) {
+        const brand = document.createElement('div');
+        brand.style.fontSize = '12px';
+        brand.style.color = '#6b7280';
+        brand.style.marginTop = '2px';
+        brand.textContent = p.brand;
+        item.appendChild(brand);
+      }
+      item.addEventListener('mouseenter', () => {
+        item.style.background = '#f4f6f9';
+      });
+      item.addEventListener('mouseleave', () => {
+        item.style.background = 'white';
+      });
+      item.addEventListener('mousedown', (e) => {
+        e.preventDefault();
+        // Fill row with product data
+        const searchInput = row.querySelector('.product-search-input');
+        const descInput = row.querySelector('.description-input');
+        const rateEl = row.querySelector('.rate-input');
+        if (searchInput) searchInput.value = p.name + (p.brand ? ' - ' + p.brand : '');
+        if (descInput) descInput.value = p.name + (p.brand ? ' - ' + p.brand : '');
+        if (rateEl) rateEl.value = p.selling_price || 0;
+        row.dataset.productId = String(p.id);
+        row.dataset.stockQuantity = String(p.stock_quantity || 0);
+        updateRowAmount(row);
+        hideEl(suggestionsEl);
+        // Show stock badge
+        let badge = row.querySelector('.stock-badge');
+        if (!badge) {
+          badge = document.createElement('span');
+          badge.className = 'stock-badge';
+          badge.style.fontSize = '11px';
+          badge.style.marginLeft = '6px';
+          badge.style.padding = '2px 6px';
+          badge.style.borderRadius = '10px';
+          badge.style.color = 'white';
+          if (searchInput) searchInput.parentNode.appendChild(badge);
+        }
+        const stock = parseFloat(p.stock_quantity || 0);
+        badge.textContent = 'Stock: ' + stock;
+        badge.style.background = stock === 0 ? '#dc2626' : stock < 5 ? '#e8800a' : '#16a34a';
+      });
+      suggestionsEl.appendChild(item);
+    });
+    showEl(suggestionsEl);
   }
 
   function renumberRows() {
