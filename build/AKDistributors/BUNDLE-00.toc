@@ -1,0 +1,4 @@
+([('AKDistributors',
+   '/Users/hassaanjazz/Desktop/Cursor/Inventory and Invoice '
+   'Software/dist/AKDistributors',
+   'EXECUTABLE')],)

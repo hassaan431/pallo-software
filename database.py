@@ -1,10 +1,15 @@
 import re
 import sqlite3
 from pathlib import Path
+import sys
 
 from werkzeug.security import generate_password_hash
 
-DB_PATH = Path(__file__).resolve().parent / "database.db"
+# Use executable directory when frozen (PyInstaller), else use script directory
+if getattr(sys, 'frozen', False):
+    DB_PATH = Path(sys.executable).resolve().parent / "database.db"
+else:
+    DB_PATH = Path(__file__).resolve().parent / "database.db"
 
 _DEFAULT_CATEGORY_NAMES = (
     "Food",
