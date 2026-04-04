@@ -141,7 +141,10 @@ def generate_invoice_pdf(sale_id: int) -> bytes:
                 s.subtotal,
                 s.discount_amount,
                 s.grand_total,
-                s.customer_id
+                s.customer_id,
+                s.payment_type,
+                s.amount_paid,
+                s.remaining_amount
             FROM sales s
             WHERE s.id = ?
             """,
@@ -194,7 +197,7 @@ def generate_invoice_pdf(sale_id: int) -> bytes:
 
     # Layout metrics
     header_height = 88
-    meta_height = 74  # Increased from 58 for 8pt padding top/bottom
+    meta_height = 80  # Height for 4 rows with padding
     bill_height = 112
     spacer_after_header = 12  # Increased from 8
     spacer_after_meta = 10  # Increased from 8
@@ -347,8 +350,8 @@ def generate_invoice_pdf(sale_id: int) -> bytes:
         meta_rows = [
             ("Invoice #", inv_data["invoice_number"]),
             ("Invoice Date", _format_date(inv_data["invoice_date"])),
+            ("Payment Type", inv_data["payment_type"].capitalize() if inv_data["payment_type"] else ""),
             ("Terms", inv_data["terms"] or ""),
-            ("Due Date", _format_date(inv_data["due_date"] or inv_data["invoice_date"])),
         ]
 
         label_x = x0 + 18
@@ -464,6 +467,9 @@ def generate_invoice_pdf(sale_id: int) -> bytes:
         "subtotal": float(sale["subtotal"] or 0),
         "discount_amount": float(sale["discount_amount"] or 0),
         "grand_total": float(sale["grand_total"] or 0),
+        "payment_type": sale["payment_type"] or "cash",
+        "amount_paid": float(sale["amount_paid"] or 0),
+        "remaining_amount": float(sale["remaining_amount"] or 0),
     }
 
     cust_data = {
@@ -605,6 +611,24 @@ def generate_invoice_pdf(sale_id: int) -> bytes:
             cnv.setFillColor(colors.white)
             cnv.setFont("Helvetica-Bold", 12)  # 12pt font as requested
             cnv.drawRightString(totals_right_x - 6, grand_y + 10, f"GRAND TOTAL:    ${grand_total:.2f}")
+
+            # Amount Paid and Remaining
+            amount_paid = inv_data["amount_paid"]
+            remaining_amount = inv_data["remaining_amount"]
+            
+            paid_y = grand_y - 20
+            if amount_paid > 0:
+                cnv.setFont("Helvetica", 10)
+                cnv.setFillColor(colors.HexColor("#16a34a"))
+                cnv.drawRightString(totals_right_x, paid_y, 
+                    f"Amount Paid:    ${amount_paid:.2f}")
+                paid_y -= 16
+
+            if remaining_amount > 0:
+                cnv.setFont("Helvetica-Bold", 10)
+                cnv.setFillColor(colors.HexColor("#dc2626"))
+                cnv.drawRightString(totals_right_x, paid_y,
+                    f"Remaining Due:  ${remaining_amount:.2f}")
 
             # Footer
             cnv.setFillColor(_TEXT_GREY)
