@@ -1794,16 +1794,21 @@ def sale_by_invoice(invoice_number: str):
         items = conn.execute(
             """
             SELECT
-                si.quantity,
+                si.description,
+                si.qty,
                 si.rate,
                 si.amount,
                 p.name as product_name,
                 p.unit
             FROM sale_items si
             LEFT JOIN products p ON p.id = si.product_id
-            WHERE si.sale_id = s.id
+            WHERE si.sale_id = (
+                SELECT id FROM sales 
+                WHERE invoice_number = ?
+            )
             ORDER BY si.id
             """,
+            (invoice_number,),
         ).fetchall()
         
         return jsonify({
