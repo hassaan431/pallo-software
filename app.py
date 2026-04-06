@@ -993,6 +993,30 @@ def products_search():
         conn.close()
 
 
+@app.route("/products/<int:product_id>/variants", methods=["GET"])
+@login_required
+def product_variants(product_id: int):
+    conn = get_connection()
+    try:
+        variants = conn.execute(
+            """
+            SELECT
+                id,
+                size,
+                flavor,
+                price_adjustment
+            FROM product_variants
+            WHERE product_id = ?
+            ORDER BY size, flavor
+            """,
+            (product_id,),
+        ).fetchall()
+        
+        return jsonify([dict(v) for v in variants])
+    finally:
+        conn.close()
+
+
 @app.route("/sales/data", methods=["GET"])
 @login_required
 def sales_data():
@@ -1730,6 +1754,68 @@ def sale_details(sale_id: int):
             "remaining_amount": sale["remaining_amount"],
             "customer_name": sale["customer_name"],
             "items": [dict(item) for item in items]
+        })
+    finally:
+        conn.close()
+
+
+@app.route("/sales/by-invoice/<invoice_number>", methods=["GET"])
+@login_required
+def sale_by_invoice(invoice_number: str):
+    conn = get_connection()
+    try:
+        # Get sale details by invoice number
+        sale = conn.execute(
+            """
+            SELECT 
+                s.invoice_number,
+                s.invoice_date,
+                s.due_date,
+                s.terms,
+                s.payment_type,
+                s.status,
+                s.subtotal,
+                s.discount_amount,
+                s.grand_total,
+                s.amount_paid,
+                s.remaining_amount,
+                c.name as customer_name
+            FROM sales s
+            LEFT JOIN customers c ON c.id = s.customer_id
+            WHERE s.invoice_number = ?
+            """,
+            (invoice_number,),
+        ).fetchone()
+        
+        if not sale:
+            return jsonify({"error": "Sale not found"}), 404
+        
+        # Get sale items
+        items = conn.execute(
+            """
+            SELECT
+                si.quantity,
+                si.rate,
+                si.amount,
+                p.name as product_name,
+                p.unit
+            FROM sale_items si
+            LEFT JOIN products p ON p.id = si.product_id
+            WHERE si.sale_id = s.id
+            ORDER BY si.id
+            """,
+        ).fetchall()
+        
+        return jsonify({
+            "invoice_number": sale["invoice_number"],
+            "invoice_date": sale["invoice_date"],
+            "customer_name": sale["customer_name"],
+            "items": [dict(item) for item in items],
+            "subtotal": float(sale["subtotal"]),
+            "discount_amount": float(sale["discount_amount"]),
+            "grand_total": float(sale["grand_total"]),
+            "amount_paid": float(sale["amount_paid"]),
+            "remaining_amount": float(sale["remaining_amount"])
         })
     finally:
         conn.close()

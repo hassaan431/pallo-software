@@ -25,9 +25,9 @@
     border: 1px solid rgba(26, 35, 50, 0.15);
     background: rgba(26, 35, 50, 0.04);
     color: var(--color-text);
-    font-weight: 900;
-    font-size: 0.8rem;
-    padding: 0.35rem 0.6rem;
+    font-weight: 600;
+    font-size: 0.7rem;
+    padding: 2px 5px.6rem;
     border-radius: 999px;
     cursor: pointer;
     margin-right: 0.5rem;
@@ -126,6 +126,24 @@
     letter-spacing: 0.04em;
     color: var(--color-text-muted);
   }
+  /* Compact product table */
+  .data-table th,
+  .data-table td {
+    font-size: 0.88rem;
+    padding: 8px 10px;
+    white-space: nowrap;
+  }
+
+  .btn-sm-compact {
+    padding: 4px 10px !important;
+    font-size: 0.75rem !important;
+    border-radius: 4px !important;
+    margin: 1px !important;
+  }
+
+  .actions-cell {
+    white-space: nowrap;
+  }
 </style>
 
 <div class="inline-flex" style="justify-content: space-between; margin-bottom: 1rem;">
@@ -164,8 +182,8 @@
             <th>Product Name</th>
             <th>Brand</th>
             <th>Category</th>
-            <th>Unit</th>
-            <th>Cost Price</th>
+            
+            
             <th>Selling Price</th>
             <th>MARGIN</th>
             <th>Stock Qty</th>
@@ -192,8 +210,7 @@
             <td>{{ p.name }}</td>
             <td>{{ p.brand or '' }}</td>
             <td>{{ p.category_name or '' }}</td>
-            <td>{{ p.unit or 'Each' }}</td>
-            <td>${{ '%.2f' % (p.cost_price|default(0)|float) }}</td>
+
             <td>${{ '%.2f' % (p.selling_price|default(0)|float) }}</td>
             <td>
               {% if p.selling_price and p.selling_price > 0 %}
@@ -226,22 +243,25 @@
                 data-brand="{{ (p.brand or '')|e }}"
                 data-category-id="{{ p.category_id or '' }}"
                 data-unit="{{ p.unit or 'Each' }}"
+                data-unit-quantity="{{ p.unit_quantity|default(0)|float }}"
                 data-cost-price="{{ p.cost_price|default(0)|float }}"
                 data-selling-price="{{ p.selling_price|default(0)|float }}"
                 data-stock-quantity="{{ qty_int }}"
+                style="padding: 3px 8px; font-size: 11px; border-radius: 4px; margin: 0 1px;"
               >
                 Edit
               </button>
               <button type="button" class="btn btn-danger" data-action="delete-product"
                 data-id="{{ p.id }}"
                 data-name="{{ p.name|e }}"
+                style="padding: 3px 8px; font-size: 11px; border-radius: 4px; margin: 0 1px;"
               >
                 Delete
               </button>
             </td>
           </tr>
           <tr id="variants-row-{{ p.id }}" class="variants-subrow" style="display:none;">
-            <td colspan="9">
+            <td colspan="10">
               {% if variant_count == 0 %}
                 <div style="padding: 0.8rem 0.2rem; color: var(--color-text-muted); font-weight:600;">No variants.</div>
               {% else %}
@@ -336,6 +356,12 @@
             <option value="{{ u }}" {% if u == 'Each' %}selected{% endif %}>{{ u }}</option>
             {% endfor %}
           </select>
+        </div>
+
+        <div class="modal-field" id="addUnitQuantityField" style="display: none;">
+          <label for="addUnitQuantity">Quantity per Unit</label>
+          <input class="form-control" type="number" id="addUnitQuantity" name="unit_quantity" min="0" step="0.01" placeholder="e.g. &quot;5&quot; (for 5 KG, 12 Boxes)">
+          <div id="addUnitDisplay" style="margin-top: 5px; font-size: 14px; color: #6b7280;"></div>
         </div>
 
         <div class="modal-field">
@@ -436,6 +462,12 @@
             <option value="{{ u }}" {% if u == 'Each' %}selected{% endif %}>{{ u }}</option>
             {% endfor %}
           </select>
+        </div>
+
+        <div class="modal-field" id="editUnitQuantityField" style="display: none;">
+          <label for="editUnitQuantity">Quantity per Unit</label>
+          <input class="form-control" type="number" id="editUnitQuantity" name="unit_quantity" min="0" step="0.01" placeholder="e.g. &quot;5&quot; (for 5 KG, 12 Boxes)">
+          <div id="editUnitDisplay" style="margin-top: 5px; font-size: 14px; color: #6b7280;"></div>
         </div>
 
         <div class="modal-field">
@@ -619,6 +651,42 @@
     opt.textContent = brandName;
     selectEl.insertBefore(opt, selectEl.querySelector('option[value="__add_new__"]') || null);
   }
+
+  // Unit quantity display functions
+  function updateUnitQuantityDisplay(unitSelectId, quantityFieldId, displayId) {
+    const unitSelect = document.getElementById(unitSelectId);
+    const quantityField = document.getElementById(quantityFieldId);
+    const display = document.getElementById(displayId);
+    
+    if (!unitSelect || !quantityField || !display) return;
+    
+    const selectedUnit = unitSelect.value;
+    const quantity = quantityField.value || 0;
+    
+    if (selectedUnit && selectedUnit !== 'Each') {
+      quantityField.parentElement.style.display = 'block';
+      display.textContent = quantity > 0 ? `${quantity} ${selectedUnit}${quantity == 1 ? '' : 's'}` : '';
+    } else {
+      quantityField.parentElement.style.display = 'none';
+      display.textContent = '';
+    }
+  }
+
+  // Add event listeners for Add modal
+  document.getElementById('addUnitSelect')?.addEventListener('change', () => {
+    updateUnitQuantityDisplay('addUnitSelect', 'addUnitQuantity', 'addUnitDisplay');
+  });
+  document.getElementById('addUnitQuantity')?.addEventListener('input', () => {
+    updateUnitQuantityDisplay('addUnitSelect', 'addUnitQuantity', 'addUnitDisplay');
+  });
+
+  // Add event listeners for Edit modal
+  document.getElementById('editUnitSelect')?.addEventListener('change', () => {
+    updateUnitQuantityDisplay('editUnitSelect', 'editUnitQuantity', 'editUnitDisplay');
+  });
+  document.getElementById('editUnitQuantity')?.addEventListener('input', () => {
+    updateUnitQuantityDisplay('editUnitSelect', 'editUnitQuantity', 'editUnitDisplay');
+  });
 
   async function createBrandViaAjax(name) {
     const res = await fetch('/brands/add', {
@@ -1215,9 +1283,13 @@
         } catch (err) {}
         editCategorySelect.value = editBtn.getAttribute('data-category-id') || '';
         document.getElementById('editUnitSelect').value = editBtn.getAttribute('data-unit') || 'Each';
+        document.getElementById('editUnitQuantity').value = editBtn.getAttribute('data-unit-quantity') || 0;
         document.getElementById('editCostPrice').value = editBtn.getAttribute('data-cost-price') || 0;
         document.getElementById('editSellingPrice').value = editBtn.getAttribute('data-selling-price') || 0;
         document.getElementById('editStockQuantity').value = editBtn.getAttribute('data-stock-quantity') || 0;
+        
+        // Update unit quantity display
+        updateUnitQuantityDisplay('editUnitSelect', 'editUnitQuantity', 'editUnitDisplay');
         
         // Calculate and display profit margin
         calcEditMargin();

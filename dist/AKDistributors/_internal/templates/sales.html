@@ -1,0 +1,1655 @@
+{% extends "base.html" %}
+{% block title %}Sales — AK Distributors{% endblock %}
+{% block page_heading %}Sales{% endblock %}
+{% block content %}
+<style>
+  .sale-grid {
+    display: grid;
+    grid-template-columns: 1fr 0.95fr;
+    gap: 1.25rem;
+    align-items: start;
+  }
+
+  .toggle-pills {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 0.5rem;
+    margin-top: 0.35rem;
+  }
+
+  .toggle-pill {
+    position: relative;
+    padding: 0.6rem 0.75rem;
+    border-radius: 10px;
+    border: 1px solid var(--color-border);
+    background: #fff;
+    cursor: pointer;
+    text-align: center;
+    font-weight: 700;
+    color: var(--color-text);
+    user-select: none;
+    transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+  }
+
+  .toggle-pill input {
+    position: absolute;
+    opacity: 0;
+    pointer-events: none;
+  }
+
+  .toggle-pill input:checked + .pill-label {
+    color: #fff;
+  }
+
+  .toggle-pill:has(input:checked) {
+    background: var(--color-accent);
+    border-color: var(--color-accent);
+    color: #fff;
+  }
+
+  .pill-label {
+    display: block;
+  }
+
+  .field-label {
+    display: block;
+    margin-bottom: 0.35rem;
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: var(--color-text-muted);
+  }
+
+  .table-actions-inline {
+    display: flex;
+    gap: 0.5rem;
+    align-items: center;
+    flex-wrap: wrap;
+  }
+
+  .pill-radio-wrap {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+  }
+
+  .suggestions {
+    position: absolute;
+    z-index: 999;
+    background: #fff;
+    border: 1px solid var(--color-border);
+    border-radius: 10px;
+    box-shadow: 0 10px 25px rgba(26, 35, 50, 0.12);
+    width: 100%;
+    max-height: 240px;
+    overflow: auto;
+    display: none;
+  }
+
+  .suggestion-item {
+    padding: 0.65rem 0.8rem;
+    cursor: pointer;
+    font-weight: 600;
+    font-size: 0.9rem;
+  }
+
+  .suggestion-item:hover {
+    background: rgba(232, 128, 10, 0.08);
+  }
+
+  .search-wrap {
+    position: relative;
+  }
+
+  .row-amount {
+    font-weight: 800;
+    color: var(--color-text);
+  }
+
+  .grand-total {
+    font-size: 1.35rem;
+    font-weight: 900;
+    color: var(--color-text);
+    letter-spacing: -0.02em;
+  }
+
+  .btn-pdf {
+    background: #2563eb;
+    color: #fff;
+    border-radius: 8px;
+  }
+
+  .btn-pdf:hover {
+    background: #1d4ed8;
+    color: #fff;
+  }
+
+  .btn-edit {
+    background: #2563eb;
+    color: #fff;
+    border-radius: 8px;
+  }
+
+  .btn-edit:hover {
+    background: #1d4ed8;
+    color: #fff;
+  }
+
+  .stock-badge {
+    display: inline-block;
+    padding: 0.2rem 0.5rem;
+    border-radius: 12px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    margin-left: 0.5rem;
+  }
+
+  .stock-badge.green {
+    background: #10b981;
+    color: white;
+  }
+
+  .stock-badge.orange {
+    background: #f59e0b;
+    color: white;
+  }
+
+  .stock-badge.red {
+    background: #ef4444;
+    color: white;
+  }
+
+  .status-badge {
+    display: inline-block;
+    padding: 0.2rem 0.5rem;
+    border-radius: 12px;
+    font-size: 0.75rem;
+    font-weight: 600;
+  }
+
+  .status-badge.paid {
+    background: #10b981;
+    color: white;
+  }
+
+  .status-badge.unpaid {
+    background: #ef4444;
+    color: white;
+  }
+
+  .invoice-warning {
+    color: #f59e0b;
+    font-size: 0.8rem;
+    margin-top: 0.25rem;
+    font-weight: 600;
+  }
+
+  .error-banner {
+    background: #fef2f2;
+    border: 1px solid #fecaca;
+    color: #dc2626;
+    padding: 1rem;
+    border-radius: 8px;
+    margin-bottom: 1rem;
+    font-weight: 600;
+  }
+
+  .invoice-hint {
+    color: #6b7280;
+    font-size: 0.75rem;
+    margin-top: 0.25rem;
+  }
+
+  details.recent-details > summary {
+    cursor: pointer;
+    font-weight: 800;
+  }
+
+  details.recent-details summary::-webkit-details-marker {
+    display: none;
+  }
+</style>
+
+{% with messages = get_flashed_messages(with_categories=true) %}
+  {% if messages %}
+    <div style="margin-bottom:1rem;">
+      {% for category, message in messages %}
+        <div class="{{ 'alert-error' if category == 'error' else 'section-intro' }}" style="padding:0.8rem 1rem; border-radius:10px; margin-bottom:0.6rem;">
+          {{ message }}
+        </div>
+      {% endfor %}
+    </div>
+  {% endif %}
+{% endwith %}
+
+<div id="stockErrorBanner" class="error-banner" style="display: none;"></div>
+
+<section class="panel">
+  <div class="panel-header">
+    <h2>{% if edit_mode %}Edit Sale{% else %}New Sale{% endif %}</h2>
+  </div>
+  <div class="panel-body" style="padding: 1.35rem;">
+    <form id="saleForm" method="post" action="{% if edit_mode %}{{ url_for('sales_update', sale_id=edit_sale.id) }}{% else %}{{ url_for('sales_new') }}{% endif %}" target="_self">
+      <div class="sale-grid">
+        <div>
+          <div class="form-group">
+            <label class="field-label" for="customerSearch">Customer</label>
+            <div class="search-wrap">
+              <input
+                class="form-control"
+                type="text"
+                id="customerSearch"
+                placeholder="Search customers..."
+                autocomplete="off"
+                required
+                {% if edit_mode %}value="{{ edit_sale.customer_name }}"{% endif %}
+              >
+              <div id="customerSuggestions" class="suggestions" role="listbox" aria-label="Customer suggestions"></div>
+            </div>
+            <input type="hidden" id="customerId" name="customer_id" value="{% if edit_mode %}{{ edit_sale.customer_id }}{% endif %}">
+          </div>
+
+          <div class="form-group">
+            <label class="field-label" for="invoiceDate">Invoice Date</label>
+            <input class="form-control" type="date" id="invoiceDate" name="invoice_date" value="{% if edit_mode %}{{ edit_sale.invoice_date }}{% else %}{{ today }}{% endif %}" required>
+          </div>
+
+          <div class="form-group">
+            <label class="field-label" for="dueDate">Due Date</label>
+            <input class="form-control" type="date" id="dueDate" name="due_date" value="{% if edit_mode %}{{ edit_sale.due_date or '' }}{% endif %}">
+          </div>
+
+          <div class="form-group">
+            <label class="field-label" for="termsInput">Terms</label>
+            <input class="form-control" type="text" id="termsInput" name="terms" value="{% if edit_mode %}{{ edit_sale.terms or '' }}{% endif %}">
+          </div>
+
+          <div class="form-group">
+            <label class="field-label" for="notesInput">Notes (optional)</label>
+            <textarea class="form-control" id="notesInput" name="notes" rows="4" placeholder="Add any notes...">{% if edit_mode %}{{ edit_sale.notes or '' }}{% endif %}</textarea>
+          </div>
+        </div>
+
+        <div>
+          <div class="form-group">
+            <label class="field-label" for="invoiceNumber">Invoice #</label>
+            <input class="form-control" type="text" id="invoiceNumber" name="invoice_number" value="{% if edit_mode %}{{ edit_sale.invoice_number }}{% else %}{{ next_invoice_number }}{% endif %}">
+            <div class="invoice-hint">Auto-generated. You can override if needed.</div>
+            <div id="invoiceWarning" class="invoice-warning" style="display: none;"></div>
+          </div>
+
+          <div class="form-group">
+            <label class="field-label">Payment Type</label>
+            <div class="toggle-pills" role="radiogroup" aria-label="Payment type">
+              <label class="toggle-pill">
+                <input type="radio" name="payment_type" value="cash" {% if not edit_mode or edit_sale.payment_type == 'cash' %}checked{% endif %}>
+                <span class="pill-label">💵 Cash</span>
+              </label>
+              <label class="toggle-pill">
+                <input type="radio" name="payment_type" value="cheque" {% if edit_mode and edit_sale.payment_type == 'cheque' %}checked{% endif %}>
+                <span class="pill-label">🏦 Cheque</span>
+              </label>
+              <label class="toggle-pill">
+                <input type="radio" name="payment_type" value="credit" {% if edit_mode and edit_sale.payment_type == 'credit' %}checked{% endif %}>
+                <span class="pill-label">💳 Credit</span>
+              </label>
+            </div>
+          </div>
+
+          <div id="credit-fields" style="display:none; margin-top: 16px;">
+            <!-- Total Bill (read-only) -->
+            <div class="form-group">
+              <label style="font-size: 0.8rem; font-weight: 600; color: var(--color-text-muted); display: block; margin-bottom: 0.35rem;">Total Bill ($)</label>
+              <input type="text" id="total-bill-display" 
+                     readonly 
+                     style="width: 100%; padding: 0.55rem 0.75rem; border: 1px solid var(--color-border); border-radius: 8px; font-size: 0.95rem; background: #f4f6f9; font-weight: bold;"
+                     placeholder="0.00">
+            </div>
+
+            <!-- Paid Upfront -->
+            <div class="form-group" style="margin-top:12px;">
+              <label style="font-size: 0.8rem; font-weight: 600; color: var(--color-text-muted); display: block; margin-bottom: 0.35rem;">Paid Upfront ($) 
+                <span style="color:#e8800a;">
+                  (leave 0 if nothing paid)
+                </span>
+              </label>
+              <input type="number" 
+                     id="paid-upfront" 
+                     name="amount_paid"
+                     min="0" 
+                     step="0.01"
+                     value="0"
+                     placeholder="Enter amount paid now"
+                     style="width: 100%; padding: 0.55rem 0.75rem; border: 2px solid #e8800a; border-radius: 8px; font-size: 0.95rem; background: #fff;">
+            </div>
+
+            <!-- Remaining (read-only) -->
+            <div class="form-group" style="margin-top:12px;">
+              <label style="font-size: 0.8rem; font-weight: 600; color: var(--color-text-muted); display: block; margin-bottom: 0.35rem;">Remaining on Credit ($)</label>
+              <input type="text" 
+                     id="remaining-display" 
+                     readonly
+                     style="width: 100%; padding: 0.55rem 0.75rem; border: 1px solid var(--color-border); border-radius: 8px; font-size: 0.95rem; background: #fff0f0; color: #dc2626; font-weight: bold;"
+                     placeholder="0.00">
+            </div>
+          </div>
+
+          <input type="hidden" 
+                 id="remaining-amount-input"
+                 name="remaining_amount" 
+                 value="0">
+
+          <input type="hidden" id="itemsJson" name="items_json" value="[]">
+        </div>
+      </div>
+
+      <div style="margin-top: 1.35rem;">
+        <div class="panel" style="box-shadow:none; border:1px solid var(--color-border); background: #fff;">
+          <div class="panel-header" style="border-bottom:1px solid var(--color-border); background: #fafbfc;">
+            <h2 style="font-size:1.05rem;">Line Items</h2>
+          </div>
+          <div class="panel-body">
+            <div class="table-wrap">
+              <table class="data-table">
+                <thead>
+                  <tr>
+                    <th style="width: 60px;">#</th>
+                    <th>Item &amp; Description</th>
+                    <th style="width: 120px;">Qty</th>
+                    <th style="width: 140px;">Rate</th>
+                    <th style="width: 150px;">Amount</th>
+                    <th style="width: 70px;"></th>
+                  </tr>
+                </thead>
+                <tbody id="lineItemsTbody"></tbody>
+              </table>
+            </div>
+
+            <div style="margin-top: 0.95rem; display:flex; justify-content:flex-start;">
+              <button type="button" class="btn btn-primary" id="addItemBtn">Add Item</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div style="margin-top: 1.05rem; display:flex; justify-content:flex-end;">
+        <div style="width: 420px;">
+          <div style="font-weight:800; color: var(--color-text-muted); margin-bottom:0.5rem; text-align:left;">Totals</div>
+          <div style="display:grid; gap:0.65rem; padding: 0.95rem 1rem; border-radius: 10px; background: #fff; border: 1px solid var(--color-border); box-shadow: var(--shadow-card);">
+            <div style="display:flex; justify-content:space-between; gap:1rem;">
+              <div style="color: var(--color-text-muted); font-weight:700;">Subtotal</div>
+              <div id="subtotalAmount" class="row-amount">$0.00</div>
+            </div>
+            <div style="display:flex; justify-content:space-between; gap:1rem; align-items:center;">
+              <div style="color: var(--color-text-muted); font-weight:700;">Discount</div>
+              <div style="display:flex; align-items:center; gap:0.45rem;">
+                <div style="font-weight:900; color: var(--color-text-muted);">$</div>
+                <input class="form-control" style="width: 170px;" type="number" min="0" step="0.01" id="discountInput" name="discount_amount" value="{% if edit_mode %}{{ edit_sale.discount_amount or 0.00 }}{% else %}0.00{% endif %}">
+              </div>
+            </div>
+            <div style="display:flex; justify-content:space-between; gap:1rem; align-items:baseline;">
+              <div style="color: var(--color-text-muted); font-weight:800;">Grand Total</div>
+              <div id="grandTotalAmount" class="grand-total">$0.00</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div style="margin-top: 1.35rem; display:flex; gap:0.75rem; justify-content:flex-end; flex-wrap: wrap;">
+        {% if edit_mode %}
+          <button type="submit" class="btn btn-secondary" id="saveSaleBtn">Update Sale</button>
+          <button type="submit" class="btn btn-primary" id="generateInvoiceBtn" name="generate_invoice" value="1">Update &amp; Regenerate Invoice</button>
+        {% else %}
+          <button type="submit" class="btn btn-secondary" id="saveSaleBtn">Save Sale</button>
+          <button type="submit" class="btn btn-primary" id="generateInvoiceBtn" name="generate_invoice" value="1">Save &amp; Generate Invoice</button>
+        {% endif %}
+      </div>
+    </form>
+  </div>
+</section>
+
+<section class="panel" style="margin-top:1.6rem;">
+  <div class="panel-header">
+    <h2>Recent Sales</h2>
+  </div>
+  <div class="panel-body">
+    <details class="recent-details" open style="padding: 16px 20px; background: #f9fafb; border-radius: 8px; border: 1px solid #e5e7eb; margin-bottom: 16px;">
+      <summary>Filter &amp; View History</summary>
+      <div style="display: flex; gap: 16px; align-items: flex-end; padding: 16px 0 0 0; flex-wrap: wrap;">
+          <div>
+            <label class="field-label" for="filterDateFrom" style="margin-bottom: 6px; display: block;">Date From</label>
+            <input class="form-control" type="date" id="filterDateFrom" style="padding: 8px 12px; border-radius: 6px;">
+          </div>
+          <div>
+            <label class="field-label" for="filterDateTo" style="margin-bottom: 6px; display: block;">Date To</label>
+            <input class="form-control" type="date" id="filterDateTo" style="padding: 8px 12px; border-radius: 6px;">
+          </div>
+          <div>
+            <label class="field-label" for="filterCustomer" style="margin-bottom: 6px; display: block;">Customer</label>
+            <select class="form-control" id="filterCustomer" style="padding: 8px 12px; border-radius: 6px;">
+              <option value="all" selected>All Customers</option>
+              {% for c in customers %}
+              <option value="{{ c.id }}">{{ c.name }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div>
+            <label class="field-label" for="filterPaymentType" style="margin-bottom: 6px; display: block;">Payment Type</label>
+            <select class="form-control" id="filterPaymentType" style="padding: 8px 12px; border-radius: 6px;">
+              <option value="all" selected>All</option>
+              <option value="cash">Cash</option>
+              <option value="cheque">Cheque</option>
+              <option value="credit">Credit</option>
+            </select>
+          </div>
+        </div>
+        <div style="margin-top:0.9rem; display:flex; justify-content:flex-end;">
+          <button type="button" class="btn btn-primary" id="filterBtn">Filter</button>
+        </div>
+      </div>
+
+      <div class="table-wrap">
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>Invoice#</th>
+              <th>Date</th>
+              <th>Customer</th>
+              <th>Grand Total</th>
+              <th>Paid</th>
+              <th>Remaining</th>
+              <th>Type</th>
+              <th>Status</th>
+              <th style="width: 200px;">Actions</th>
+            </tr>
+          </thead>
+          <tbody id="recentSalesTbody"></tbody>
+        </table>
+      </div>
+    </details>
+  </div>
+</section>
+
+<!-- View Sale Modal -->
+<div id="viewSaleModal" style="
+    display:none;
+    position:fixed;
+    top:0; left:0;
+    width:100%; height:100%;
+    background:rgba(0,0,0,0.5);
+    z-index:9999;
+    justify-content:center;
+    align-items:center;">
+  
+  <div style="
+      background:white;
+      width:80vw;
+      max-width:900px;
+      max-height:85vh;
+      border-radius:12px;
+      overflow-y:auto;
+      padding:32px;
+      position:relative;">
+    
+    <!-- Close button -->
+    <button onclick="closeViewSale()" style="
+        position:absolute;
+        top:16px; right:16px;
+        background:none;
+        border:none;
+        font-size:24px;
+        cursor:pointer;
+        color:#6b7280;">✕</button>
+    
+    <!-- Modal content filled by JS -->
+    <div id="viewSaleContent"></div>
+  
+  </div>
+</div>
+
+<script>
+  const customersData = {{ customers | tojson }};
+  const nextInvoice = {{ next_invoice_number | tojson }};
+  const recentSales = {{ recent_sales | tojson }};
+  const editMode = {{ 'true' if edit_mode else 'false' }};
+  const editSaleData = {{ edit_sale | tojson if edit_mode else 'null' }};
+
+  function money(n) {
+    const v = Number(n || 0);
+    return '$' + v.toFixed(2);
+  }
+
+  function safeTrim(s) {
+    return (s || '').toString().trim();
+  }
+
+  function hideEl(el) {
+    if (!el) return;
+    el.style.display = 'none';
+  }
+
+  function showEl(el) {
+    if (!el) return;
+    el.style.display = 'block';
+  }
+
+  // -----------------------------
+  // Customer searchable input
+  // -----------------------------
+  const customerSearch = document.getElementById('customerSearch');
+  const customerSuggestions = document.getElementById('customerSuggestions');
+  const customerIdField = document.getElementById('customerId');
+  const termsInput = document.getElementById('termsInput');
+
+  function customerDisplay(c) {
+    return c && c.name ? c.name : '';
+  }
+
+  function renderCustomerSuggestions(list) {
+    if (!customerSuggestions) return;
+    if (!list || list.length === 0) {
+      customerSuggestions.innerHTML = '';
+      hideEl(customerSuggestions);
+      return;
+    }
+    customerSuggestions.innerHTML = '';
+    list.forEach((c) => {
+      const item = document.createElement('div');
+      item.className = 'suggestion-item';
+      item.textContent = c.name;
+      item.addEventListener('click', () => {
+        customerSearch.value = customerDisplay(c);
+        customerIdField.value = c.id;
+        termsInput.value = c.terms || '';
+        hideEl(customerSuggestions);
+      });
+      customerSuggestions.appendChild(item);
+    });
+    showEl(customerSuggestions);
+  }
+
+  if (customerSearch) {
+    let customerTimer = null;
+    customerSearch.addEventListener('input', () => {
+      clearTimeout(customerTimer);
+      customerTimer = setTimeout(() => {
+        const q = safeTrim(customerSearch.value).toLowerCase();
+        if (!q) {
+          customerIdField.value = '';
+          termsInput.value = '';
+          hideEl(customerSuggestions);
+          return;
+        }
+        const filtered = customersData
+          .filter((c) => (c.name || '').toLowerCase().includes(q))
+          .slice(0, 8);
+        renderCustomerSuggestions(filtered);
+      }, 150);
+    });
+  }
+
+  document.addEventListener('click', (e) => {
+    if (!customerSuggestions || !customerSearch) return;
+    if (e.target === customerSearch) return;
+    if (customerSuggestions.contains(e.target)) return;
+    if (!customerSearch.contains(e.target)) hideEl(customerSuggestions);
+  });
+
+  // -----------------------------
+  // Invoice number validation
+  // -----------------------------
+  const invoiceNumberEl = document.getElementById('invoiceNumber');
+  const invoiceWarningEl = document.getElementById('invoiceWarning');
+
+  function checkInvoiceDuplicate(invoiceNumber) {
+    if (!invoiceNumber || invoiceNumber.trim() === '') return;
+    
+    fetch('/sales/check-invoice?n=' + encodeURIComponent(invoiceNumber), { credentials: 'same-origin' })
+      .then(res => res.json())
+      .then(data => {
+        if (data.exists) {
+          invoiceWarningEl.textContent = '⚠️ Invoice ' + invoiceNumber + ' already exists';
+          showEl(invoiceWarningEl);
+        } else {
+          hideEl(invoiceWarningEl);
+        }
+      })
+      .catch(() => {
+        hideEl(invoiceWarningEl);
+      });
+  }
+
+  if (invoiceNumberEl) {
+    let invoiceTimer = null;
+    invoiceNumberEl.addEventListener('input', () => {
+      clearTimeout(invoiceTimer);
+      invoiceTimer = setTimeout(() => {
+        checkInvoiceDuplicate(invoiceNumberEl.value);
+      }, 300);
+    });
+  }
+
+  // -----------------------------
+  // Line items (dynamic)
+  // -----------------------------
+  const lineItemsTbody = document.getElementById('lineItemsTbody');
+  const addItemBtn = document.getElementById('addItemBtn');
+  const itemsJsonField = document.getElementById('itemsJson');
+
+  const discountInput = document.getElementById('discountInput');
+  const subtotalEl = document.getElementById('subtotalAmount');
+  const grandTotalEl = document.getElementById('grandTotalAmount');
+
+  function getRowAmount(row) {
+    const amountEl = row.querySelector('.row-amount-cell');
+    if (!amountEl) return 0;
+    return Number(amountEl.dataset.amount || '0');
+  }
+
+  function recalcTotals() {
+    const rows = Array.from(document.querySelectorAll('tr.line-item-row'));
+    let subtotal = 0;
+    rows.forEach((r) => { subtotal += getRowAmount(r); });
+
+    subtotal = Math.round(subtotal * 100) / 100;
+
+    const discount = Number(discountInput.value || 0);
+    const grand = Math.round((subtotal - (Number.isFinite(discount) ? discount : 0)) * 100) / 100;
+    subtotalEl.textContent = money(subtotal);
+    grandTotalEl.textContent = money(grand < 0 ? 0 : grand);
+  }
+
+  function updateRowAmount(row) {
+    const qtyEl = row.querySelector('.qty-input');
+    const rateEl = row.querySelector('.rate-input');
+    const amountEl = row.querySelector('.row-amount-cell');
+
+    const qty = Number(qtyEl.value || 0);
+    const rate = Number(rateEl.value || 0);
+    const amount = Math.round((qty * rate) * 100) / 100;
+
+    amountEl.dataset.amount = String(amount);
+    amountEl.textContent = money(amount);
+    recalcTotals();
+  }
+
+  function fetchProductResults(q) {
+    const url = '/products/search?q=' + encodeURIComponent(q);
+    return fetch(url, { credentials: 'same-origin' })
+      .then((res) => res.json());
+  }
+
+  function buildRowHtml(index, product = null) {
+    const stockBadge = product && product.stock_quantity !== undefined ? 
+      `<span class="stock-badge ${product.stock_quantity >= 5 ? 'green' : product.stock_quantity > 0 ? 'orange' : 'red'}">In stock: ${product.stock_quantity}</span>` : '';
+    
+    return `
+      <tr class="line-item-row" data-row-index="${index}">
+        <td class="line-no">${index + 1}</td>
+        <td>
+          <div class="search-wrap" style="margin-bottom:0.6rem;">
+            <input
+              type="text"
+              class="form-control product-search-input"
+              placeholder="Search product..."
+              autocomplete="off"
+              value="${product ? (product.name + (product.brand ? ' - ' + product.brand : '')) : ''}"
+              />
+            <div class="suggestions product-suggestions" style="display:none;"></div>
+            ${stockBadge}
+          </div>
+          <input type="text" class="form-control description-input" placeholder="Description" value="${product ? (product.name + (product.brand ? ' - ' + product.brand : '')) : ''}" />
+        </td>
+        <td><input type="number" class="form-control qty-input" min="0.01" step="0.01" value="${product ? product.qty || 1 : 1}"></td>
+        <td><input type="number" class="form-control rate-input" min="0" step="0.01" value="${product ? product.selling_price || 0 : 0}"></td>
+        <td class="row-amount"><span class="row-amount-cell" data-amount="0">$0.00</span></td>
+        <td>
+          <button type="button" class="btn btn-danger" style="padding:0.45rem 0.7rem;">✕</button>
+        </td>
+      </tr>
+    `;
+  }
+
+  function hideProductSuggestions(row) {
+    const sugg = row.querySelector('.product-suggestions');
+    if (sugg) hideEl(sugg);
+  }
+
+  function selectProduct(row, product) {
+    const searchInput = row.querySelector('.product-search-input');
+    const descInput = row.querySelector('.description-input');
+    const rateInput = row.querySelector('.rate-input');
+    const qtyInput = row.querySelector('.qty-input');
+
+    const brandPart = product.brand ? (' - ' + product.brand) : '';
+    const display = (product.name || '') + brandPart;
+
+    row.dataset.productId = String(product.id);
+    row.dataset.stockQuantity = String(product.stock_quantity || 0);
+    searchInput.value = display;
+    descInput.value = display;
+    rateInput.value = Number(product.selling_price || 0);
+    if (!qtyInput.value) qtyInput.value = 1;
+    
+    // Update stock badge
+    const existingBadge = row.querySelector('.stock-badge');
+    if (existingBadge) {
+      existingBadge.remove();
+    }
+    const stockBadge = document.createElement('span');
+    stockBadge.className = `stock-badge ${product.stock_quantity >= 5 ? 'green' : product.stock_quantity > 0 ? 'orange' : 'red'}`;
+    stockBadge.textContent = 'In stock: ' + (product.stock_quantity || 0);
+    searchInput.parentNode.appendChild(stockBadge);
+    
+    hideProductSuggestions(row);
+    updateRowAmount(row);
+  }
+
+  function initRowBehaviors(row) {
+    const qtyEl = row.querySelector('.qty-input');
+    const rateEl = row.querySelector('.rate-input');
+    const delBtn = row.querySelector('.btn.btn-danger');
+    const searchInput = row.querySelector('.product-search-input');
+    const productSuggestions = row.querySelector('.product-suggestions');
+
+    if (delBtn) {
+      delBtn.addEventListener('click', () => {
+        row.remove();
+        renumberRows();
+        recalcTotals();
+      });
+    }
+
+    if (qtyEl) qtyEl.addEventListener('input', () => updateRowAmount(row));
+    if (rateEl) rateEl.addEventListener('input', () => updateRowAmount(row));
+
+    if (searchInput) {
+      let timer = null;
+      searchInput.addEventListener('focus', () => {
+        const q = safeTrim(searchInput.value);
+        fetchProductResults(q)
+          .then((results) => {
+            if (!productSuggestions) return;
+            renderProductSuggestions(results, productSuggestions, row);
+            showEl(productSuggestions);
+          })
+          .catch(() => hideEl(productSuggestions));
+      });
+
+      searchInput.addEventListener('input', () => {
+        clearTimeout(timer);
+        timer = setTimeout(() => {
+          const q = safeTrim(searchInput.value);
+          if (!q || q.length < 1) {
+            // Show all products when empty
+            fetchProductResults('')
+              .then((results) => {
+                if (!productSuggestions) return;
+                renderProductSuggestions(results, productSuggestions, row);
+                showEl(productSuggestions);
+              })
+              .catch(() => hideEl(productSuggestions));
+            return;
+          }
+          fetchProductResults(q)
+            .then((results) => {
+              if (!productSuggestions) return;
+              if (!results || results.length === 0) {
+                productSuggestions.innerHTML = '';
+                hideEl(productSuggestions);
+                return;
+              }
+              productSuggestions.innerHTML = '';
+              results.forEach((p) => {
+                const item = document.createElement('div');
+                item.className = 'suggestion-item';
+                const brandPart = p.brand ? (' - ' + p.brand) : '';
+                item.textContent = (p.name || '') + brandPart;
+                item.addEventListener('click', () => {
+                  selectProduct(row, p);
+                });
+                productSuggestions.appendChild(item);
+              });
+              showEl(productSuggestions);
+            })
+            .catch(() => {
+              hideEl(productSuggestions);
+            });
+        }, 150);
+      });
+    }
+
+    document.addEventListener('click', (e) => {
+      if (!row.contains(e.target)) {
+        hideProductSuggestions(row);
+      }
+    });
+  }
+
+  function renderProductSuggestions(results, suggestionsEl, row) {
+    if (!suggestionsEl) return;
+    suggestionsEl.innerHTML = '';
+    if (!results || results.length === 0) {
+      hideEl(suggestionsEl);
+      return;
+    }
+    results.forEach((p) => {
+      const item = document.createElement('div');
+      item.className = 'suggestion-item';
+      item.style.padding = '10px 14px';
+      item.style.cursor = 'pointer';
+      item.style.borderBottom = '1px solid #f3f4f6';
+      item.style.fontSize = '14px';
+      const name = document.createElement('div');
+      name.style.fontWeight = '600';
+      name.style.color = '#1a2332';
+      name.textContent = p.name || '';
+      item.appendChild(name);
+      if (p.brand) {
+        const brand = document.createElement('div');
+        brand.style.fontSize = '12px';
+        brand.style.color = '#6b7280';
+        brand.style.marginTop = '2px';
+        brand.textContent = p.brand;
+        item.appendChild(brand);
+      }
+      item.addEventListener('mouseenter', () => {
+        item.style.background = '#f4f6f9';
+      });
+      item.addEventListener('mouseleave', () => {
+        item.style.background = 'white';
+      });
+      item.addEventListener('mousedown', (e) => {
+        e.preventDefault();
+        // Fill row with product data
+        const searchInput = row.querySelector('.product-search-input');
+        const descInput = row.querySelector('.description-input');
+        const rateEl = row.querySelector('.rate-input');
+        if (searchInput) searchInput.value = p.name + (p.brand ? ' - ' + p.brand : '');
+        if (descInput) descInput.value = p.name + (p.brand ? ' - ' + p.brand : '');
+        if (rateEl) rateEl.value = p.selling_price || 0;
+        row.dataset.productId = String(p.id);
+        row.dataset.stockQuantity = String(p.stock_quantity || 0);
+        updateRowAmount(row);
+        hideEl(suggestionsEl);
+        // Show stock badge
+        let badge = row.querySelector('.stock-badge');
+        if (!badge) {
+          badge = document.createElement('span');
+          badge.className = 'stock-badge';
+          badge.style.fontSize = '11px';
+          badge.style.marginLeft = '6px';
+          badge.style.padding = '2px 6px';
+          badge.style.borderRadius = '10px';
+          badge.style.color = 'white';
+          if (searchInput) searchInput.parentNode.appendChild(badge);
+        }
+        const stock = parseFloat(p.stock_quantity || 0);
+        badge.textContent = 'Stock: ' + stock;
+        badge.style.background = stock === 0 ? '#dc2626' : stock < 5 ? '#e8800a' : '#16a34a';
+      });
+      suggestionsEl.appendChild(item);
+    });
+    // Move dropdown to body to escape overflow clipping
+    const rect = suggestionsEl.previousElementSibling 
+      ? suggestionsEl.previousElementSibling.getBoundingClientRect()
+      : suggestionsEl.parentNode.getBoundingClientRect();
+    
+    // Find the search input in the row
+    const searchInput = suggestionsEl.closest('tr') 
+      ? suggestionsEl.closest('tr').querySelector('.product-search-input')
+      : null;
+    
+    if (searchInput) {
+      const inputRect = searchInput.getBoundingClientRect();
+      suggestionsEl.style.position = 'fixed';
+      suggestionsEl.style.top = (inputRect.bottom + 2) + 'px';
+      suggestionsEl.style.left = inputRect.left + 'px';
+      suggestionsEl.style.width = inputRect.width + 'px';
+      suggestionsEl.style.zIndex = '999999';
+      suggestionsEl.style.maxHeight = '300px';
+      suggestionsEl.style.overflowY = 'auto';
+      suggestionsEl.style.background = 'white';
+      suggestionsEl.style.border = '1px solid #e5e7eb';
+      suggestionsEl.style.borderRadius = '8px';
+      suggestionsEl.style.boxShadow = '0 8px 24px rgba(0,0,0,0.15)';
+      document.body.appendChild(suggestionsEl);
+    }
+    
+    showEl(suggestionsEl);
+  }
+
+  function renumberRows() {
+    const rows = Array.from(document.querySelectorAll('tr.line-item-row'));
+    rows.forEach((r, idx) => {
+      const noEl = r.querySelector('.line-no');
+      if (noEl) noEl.textContent = String(idx + 1);
+    });
+  }
+
+  function addEmptyRow(product = null) {
+    const index = document.querySelectorAll('tr.line-item-row').length;
+    const temp = document.createElement('tbody');
+    temp.innerHTML = buildRowHtml(index, product);
+    const row = temp.firstElementChild;
+    lineItemsTbody.appendChild(row);
+    row.dataset.productId = product ? String(product.id) : '';
+    row.dataset.stockQuantity = product ? String(product.stock_quantity || 0) : '0';
+    initRowBehaviors(row);
+    updateRowAmount(row);
+  }
+
+  if (addItemBtn && lineItemsTbody) {
+    addItemBtn.addEventListener('click', () => {
+      addEmptyRow();
+    });
+  }
+
+  // Initialize edit mode data
+  if (editMode && editSaleData && editSaleData.items) {
+    editSaleData.items.forEach(item => {
+      addEmptyRow(item);
+    });
+  } else if (lineItemsTbody && lineItemsTbody.children.length === 0) {
+    addEmptyRow();
+  }
+
+  // -----------------------------
+  // Stock validation
+  // -----------------------------
+  function validateStock() {
+    const rows = Array.from(document.querySelectorAll('tr.line-item-row'));
+    const insufficientItems = [];
+    
+    rows.forEach((row) => {
+      const productId = row.dataset.productId;
+      const qtyEl = row.querySelector('.qty-input');
+      const searchInput = row.querySelector('.product-search-input');
+      
+      if (productId && qtyEl) {
+        const requestedQty = Number(qtyEl.value || 0);
+        const availableStock = Number(row.dataset.stockQuantity || 0);
+        
+        if (requestedQty > availableStock) {
+          insufficientItems.push({
+            name: searchInput.value,
+            requested: requestedQty,
+            available: availableStock
+          });
+        }
+      }
+    });
+    
+    return insufficientItems;
+  }
+
+  function showStockError(items) {
+    const errorBanner = document.getElementById('stockErrorBanner');
+    const errorMessages = items.map(item => 
+      `${item.name} (requested ${item.requested}, available ${item.available})`
+    ).join(', ');
+    
+    errorBanner.innerHTML = '⚠️ Insufficient stock: ' + errorMessages;
+    showEl(errorBanner);
+  }
+
+  function hideStockError() {
+    const errorBanner = document.getElementById('stockErrorBanner');
+    hideEl(errorBanner);
+  }
+
+  // -----------------------------
+  // History (AJAX filtering)
+  // -----------------------------
+  const recentSalesTbody = document.getElementById('recentSalesTbody');
+  const filterDateFrom = document.getElementById('filterDateFrom');
+  const filterDateTo = document.getElementById('filterDateTo');
+  const filterCustomer = document.getElementById('filterCustomer');
+  const filterPaymentType = document.getElementById('filterPaymentType');
+  const filterBtn = document.getElementById('filterBtn');
+
+  function renderRecentSales(rows) {
+    if (!recentSalesTbody) return;
+    recentSalesTbody.innerHTML = '';
+    if (!rows || rows.length === 0) {
+      const tr = document.createElement('tr');
+      tr.innerHTML = '<td colspan="9" class="empty-state">No sales found for the selected filters.</td>';
+      recentSalesTbody.appendChild(tr);
+      return;
+    }
+    rows.forEach((s) => {
+      const tr = document.createElement('tr');
+      tr.style.cursor = 'pointer';
+      tr.onclick = () => viewSale(s.id);
+
+      const tdInvoice = document.createElement('td');
+      tdInvoice.textContent = s.invoice_number || '';
+      tr.appendChild(tdInvoice);
+
+      const tdDate = document.createElement('td');
+      tdDate.textContent = s.invoice_date || '';
+      tr.appendChild(tdDate);
+
+      const tdCustomer = document.createElement('td');
+      tdCustomer.textContent = s.customer_name || '';
+      tr.appendChild(tdCustomer);
+
+      // Grand Total
+      const tdGrand = document.createElement('td');
+      tdGrand.textContent = money(s.grand_total);
+      tr.appendChild(tdGrand);
+
+      // Paid (green color)
+      const tdPaid = document.createElement('td');
+      tdPaid.style.color = '#10b981';
+      tdPaid.style.fontWeight = '600';
+      tdPaid.textContent = money(s.amount_paid || 0);
+      tr.appendChild(tdPaid);
+
+      // Remaining (red if > 0, grey if 0)
+      const tdRemaining = document.createElement('td');
+      const remaining = parseFloat(s.remaining_amount || 0);
+      tdRemaining.style.fontWeight = '600';
+      if (remaining > 0) {
+        tdRemaining.style.color = '#dc2626';
+      } else {
+        tdRemaining.style.color = '#6b7280';
+      }
+      tdRemaining.textContent = money(remaining);
+      tr.appendChild(tdRemaining);
+
+      // Payment Type Badge
+      const tdType = document.createElement('td');
+      const typeBadge = document.createElement('span');
+      typeBadge.className = 'status-badge';
+      if (s.payment_type === 'cash') {
+        typeBadge.style.background = '#6b7280';
+        typeBadge.textContent = 'Cash';
+      } else if (s.payment_type === 'cheque') {
+        typeBadge.style.background = '#2563eb';
+        typeBadge.textContent = 'Cheque';
+      } else if (s.payment_type === 'credit') {
+        typeBadge.style.background = '#f59e0b';
+        typeBadge.textContent = 'Credit';
+      } else {
+        typeBadge.textContent = s.payment_type || '';
+      }
+      tdType.appendChild(typeBadge);
+      tr.appendChild(tdType);
+
+      // Status Badge
+      const tdStatus = document.createElement('td');
+      const statusBadge = document.createElement('span');
+      statusBadge.className = `status-badge ${s.status || 'unpaid'}`;
+      if (s.status === 'paid') {
+        statusBadge.style.background = '#10b981';
+      } else if (s.status === 'unpaid') {
+        statusBadge.style.background = '#ef4444';
+      } else if (s.status === 'partial') {
+        statusBadge.style.background = '#f59e0b';
+      }
+      statusBadge.textContent = s.status || 'unpaid';
+      tdStatus.appendChild(statusBadge);
+      tr.appendChild(tdStatus);
+
+      const tdActions = document.createElement('td');
+      tdActions.style.display = 'flex';
+      tdActions.style.gap = '0.5rem';
+      
+      const pdfLink = document.createElement('a');
+      pdfLink.className = 'btn btn-pdf';
+      pdfLink.target = '_blank';
+      pdfLink.href = '/sales/' + s.id + '/invoice/pdf';
+      pdfLink.textContent = 'Invoice';
+      pdfLink.style.padding = '6px 14px';
+      pdfLink.style.fontSize = '14px';
+      pdfLink.onclick = (e) => e.stopPropagation();
+
+      const editLink = document.createElement('a');
+      editLink.href = '/sales/edit/' + s.id;
+      editLink.onclick = (e) => e.stopPropagation();
+      const editBtn = document.createElement('button');
+      editBtn.type = 'button';
+      editBtn.textContent = 'Edit';
+      editBtn.style.padding = '4px 10px';
+      editBtn.style.fontSize = '12px';
+      editBtn.style.borderRadius = '4px';
+      editBtn.style.background = '#3b82f6';
+      editBtn.style.color = 'white';
+      editBtn.style.border = 'none';
+      editBtn.style.cursor = 'pointer';
+      editBtn.style.margin = '0 2px';
+      editBtn.onclick = (e) => e.stopPropagation();
+      editLink.appendChild(editBtn);
+
+      const delForm = document.createElement('form');
+      delForm.method = 'post';
+      delForm.action = '/sales/delete/' + s.id;
+      delForm.style.display = 'inline';
+      delForm.onclick = (e) => e.stopPropagation();
+      delForm.onsubmit = () => {
+        return confirm('Are you sure you want to delete sale ' + (s.invoice_number || '') + '?');
+      };
+
+      const delBtn = document.createElement('button');
+      delBtn.type = 'submit';
+      delBtn.textContent = 'Delete';
+      delBtn.style.padding = '4px 10px';
+      delBtn.style.fontSize = '12px';
+      delBtn.style.borderRadius = '4px';
+      delBtn.style.background = '#dc2626';
+      delBtn.style.color = 'white';
+      delBtn.style.border = 'none';
+      delBtn.style.cursor = 'pointer';
+      delBtn.style.margin = '0 2px';
+
+      delForm.appendChild(delBtn);
+      tdActions.appendChild(pdfLink);
+      tdActions.appendChild(editLink);
+      tdActions.appendChild(delForm);
+      tr.appendChild(tdActions);
+
+      recentSalesTbody.appendChild(tr);
+    });
+  }
+
+  async function loadSalesData() {
+    const params = new URLSearchParams();
+    if (filterDateFrom && filterDateFrom.value) params.append('date_from', filterDateFrom.value);
+    if (filterDateTo && filterDateTo.value) params.append('date_to', filterDateTo.value);
+    if (filterCustomer && filterCustomer.value) params.append('customer_id', filterCustomer.value);
+    if (filterPaymentType && filterPaymentType.value) params.append('payment_type', filterPaymentType.value);
+
+    const res = await fetch('/sales/data?' + params.toString(), { credentials: 'same-origin' });
+    const rows = await res.json();
+    renderRecentSales(rows);
+  }
+
+  if (filterBtn) {
+    filterBtn.addEventListener('click', () => {
+      loadSalesData();
+    });
+  }
+
+  // Render initial recent sales
+  loadSalesData();
+
+  // -----------------------------
+  // Submit validation + build items_json
+  // -----------------------------
+  const saleForm = document.getElementById('saleForm');
+
+  function buildItemsPayload() {
+    const rows = Array.from(document.querySelectorAll('tr.line-item-row'));
+    const items = [];
+
+    rows.forEach((row) => {
+      const productId = row.dataset.productId || '';
+      const descInput = row.querySelector('.description-input');
+      const qtyEl = row.querySelector('.qty-input');
+      const rateEl = row.querySelector('.rate-input');
+      const desc = safeTrim(descInput && descInput.value);
+      const qty = Number(qtyEl && qtyEl.value);
+      const rate = Number(rateEl && rateEl.value);
+
+      if (!productId) return;
+
+      if (!desc) return;
+      items.push({
+        product_id: productId,
+        description: desc,
+        qty: qty,
+        rate: rate,
+        amount: Math.round((qty * rate) * 100) / 100,
+      });
+    });
+
+    return items;
+  }
+
+  function ensureSaleFormReady() {
+    hideStockError();
+    
+    const customerId = safeTrim(customerIdField.value);
+    if (!customerId) {
+      alert('Please select a customer.');
+      return false;
+    }
+    
+    if (!lineItemsTbody || lineItemsTbody.children.length === 0) {
+      alert('Please add at least one line item.');
+      return false;
+    }
+    
+    // Check stock validation
+    const insufficientItems = validateStock();
+    if (insufficientItems.length > 0) {
+      showStockError(insufficientItems);
+      return false;
+    }
+    
+    const items = buildItemsPayload();
+    if (items.length === 0) {
+      alert('Please complete at least one line item (product, description, qty, rate).');
+      return false;
+    }
+    
+    document.getElementById('itemsJson').value = JSON.stringify(items);
+    return true;
+  }
+
+  if (saleForm) {
+    saleForm.addEventListener('submit', (e) => {
+      const ok = ensureSaleFormReady();
+      if (!ok) e.preventDefault();
+    });
+  }
+
+  const saveSaleBtn = document.getElementById('saveSaleBtn');
+  const generateInvoiceBtn = document.getElementById('generateInvoiceBtn');
+
+  if (saveSaleBtn) {
+    saveSaleBtn.addEventListener('click', () => {
+      saleForm.target = '_self';
+    });
+  }
+  if (generateInvoiceBtn) {
+    generateInvoiceBtn.addEventListener('click', () => {
+      saleForm.target = '_blank';
+    });
+  }
+
+  // Discount -> totals recalculation
+  if (discountInput) {
+    discountInput.addEventListener('input', () => {
+      recalcTotals();
+    });
+  }
+
+  // Initialize totals
+  recalcTotals();
+
+  // -----------------------------
+  // Credit payment fields logic
+  // -----------------------------
+  // Show/hide credit fields based on payment type selection
+  function handlePaymentTypeChange() {
+    const selectedType = document.querySelector(
+      'input[name="payment_type"]:checked'
+    );
+    const creditFields = document.getElementById(
+      'credit-fields'
+    );
+    
+    if (selectedType && 
+        selectedType.value === 'credit') {
+      creditFields.style.display = 'block';
+      updateRemainingAmount();
+    } else {
+      creditFields.style.display = 'none';
+      // Reset credit fields when switching away
+      const paidUpfront = document.getElementById(
+        'paid-upfront'
+      );
+      if (paidUpfront) paidUpfront.value = '0';
+    }
+  }
+
+  // Add event listeners to all payment type radio buttons
+  document.querySelectorAll(
+    'input[name="payment_type"]'
+  ).forEach(radio => {
+    radio.addEventListener(
+      'change', handlePaymentTypeChange
+    );
+  });
+
+  // Calculate remaining = grand_total - upfront
+  function updateRemainingAmount() {
+    const grandTotal = parseFloat(
+      document.getElementById(
+        'grandTotalAmount'
+      )?.textContent?.replace('$','') || 0
+    );
+    const paidUpfront = parseFloat(
+      document.getElementById(
+        'paid-upfront'
+      )?.value || 0
+    );
+    
+    // Update total bill display
+    const totalBillDisplay = document.getElementById(
+      'total-bill-display'
+    );
+    if (totalBillDisplay) {
+      totalBillDisplay.value = 
+        '$' + grandTotal.toFixed(2);
+    }
+    
+    // Calculate and show remaining
+    const remaining = Math.max(
+      0, grandTotal - paidUpfront
+    );
+    const remainingDisplay = document.getElementById(
+      'remaining-display'
+    );
+    if (remainingDisplay) {
+      remainingDisplay.value = 
+        '$' + remaining.toFixed(2);
+    }
+    
+    // Warn if upfront exceeds total
+    if (paidUpfront > grandTotal) {
+      document.getElementById(
+        'paid-upfront'
+      ).style.borderColor = '#dc2626';
+      document.getElementById(
+        'paid-upfront'
+      ).value = grandTotal.toFixed(2);
+      updateRemainingAmount();
+    } else {
+      document.getElementById(
+        'paid-upfront'
+      ).style.borderColor = '#e8800a';
+    }
+  }
+
+  // Listen for changes on paid upfront field
+  document.addEventListener(
+    'DOMContentLoaded', function() {
+    const paidUpfront = document.getElementById(
+      'paid-upfront'
+    );
+    if (paidUpfront) {
+      paidUpfront.addEventListener(
+        'input', updateRemainingAmount
+      );
+    }
+    
+    // Ensure Cash is selected by default for new sales
+    const cashRadio = document.querySelector('input[name="payment_type"][value="cash"]');
+    if (cashRadio && !document.querySelector('input[name="payment_type"]:checked')) {
+      cashRadio.checked = true;
+    }
+    // Only show credit fields if credit is actually checked
+    const checkedType = document.querySelector('input[name="payment_type"]:checked');
+    if (checkedType && checkedType.value === 'credit') {
+      handlePaymentTypeChange();
+    } else {
+      const creditFields = document.getElementById('credit-fields');
+      if (creditFields) creditFields.style.display = 'none';
+    }
+  });
+
+  // Before form submits, set hidden field
+  document.querySelector('form')
+    ?.addEventListener('submit', function() {
+      const remaining = parseFloat(
+        document.getElementById(
+          'remaining-display'
+        )?.value?.replace('$','') || 0
+      );
+      const hiddenInput = document.getElementById(
+        'remaining-amount-input'
+      );
+      if (hiddenInput) {
+        hiddenInput.value = remaining.toFixed(2);
+      }
+    });
+
+  // Also update remaining amount when totals change
+  const originalRecalcTotals = recalcTotals;
+  recalcTotals = function() {
+    originalRecalcTotals();
+    updateRemainingAmount();
+  };
+
+  function viewSale(saleId) {
+  fetch('/sales/' + saleId + '/details')
+    .then(r => r.json())
+    .then(data => {
+      
+      let itemsHtml = data.items.map((item, i) => `
+        <tr>
+          <td>${i+1}</td>
+          <td>${item.description || ''}</td>
+          <td style="text-align:center">
+            ${item.qty}</td>
+          <td style="text-align:right">
+            $${parseFloat(item.rate).toFixed(2)}</td>
+          <td style="text-align:right">
+            $${parseFloat(item.amount).toFixed(2)}</td>
+        </tr>
+      `).join('');
+
+      let statusColor = 
+        data.status === 'paid' ? '#16a34a' :
+        data.status === 'partial' ? '#e8800a' : 
+        '#dc2626';
+
+      let remainingHtml = 
+        parseFloat(data.remaining_amount) > 0 ?
+        `<div style="margin-top:8px;">
+          <span style="color:#6b7280">Remaining:</span>
+          <strong style="color:#dc2626; 
+            margin-left:8px;">
+            $${parseFloat(
+              data.remaining_amount).toFixed(2)}
+          </strong>
+        </div>` : '';
+
+      let discountHtml = 
+        parseFloat(data.discount_amount) > 0 ?
+        `<tr>
+          <td colspan="4" 
+            style="text-align:right;
+            padding:4px 8px;">Discount:</td>
+          <td style="text-align:right;
+            padding:4px 8px; color:#dc2626;">
+            -$${parseFloat(
+              data.discount_amount).toFixed(2)}
+          </td>
+        </tr>` : '';
+
+      document.getElementById(
+        'viewSaleContent').innerHTML = `
+        <h2 style="margin:0 0 8px; 
+          color:#1a2332;">
+          Invoice #${data.invoice_number}
+        </h2>
+        <p style="color:#6b7280; margin:0 0 24px;">
+          ${data.customer_name}</p>
+        
+        <div style="display:grid; 
+          grid-template-columns:1fr 1fr; 
+          gap:24px; margin-bottom:24px;">
+          
+          <div style="background:#f4f6f9; 
+            padding:16px; border-radius:8px;">
+            <div style="margin-bottom:8px;">
+              <span style="color:#6b7280; 
+                font-size:12px;">INVOICE #</span>
+              <div style="font-weight:bold;">
+                ${data.invoice_number}</div>
+            </div>
+            <div style="margin-bottom:8px;">
+              <span style="color:#6b7280; 
+                font-size:12px;">DATE</span>
+              <div>${data.invoice_date}</div>
+            </div>
+            <div style="margin-bottom:8px;">
+              <span style="color:#6b7280; 
+                font-size:12px;">TERMS</span>
+              <div>${data.terms || '-'}</div>
+            </div>
+            <div>
+              <span style="color:#6b7280; 
+                font-size:12px;">DUE DATE</span>
+              <div>${data.due_date || '-'}</div>
+            </div>
+          </div>
+
+          <div style="background:#f4f6f9; 
+            padding:16px; border-radius:8px;">
+            <div style="margin-bottom:8px;">
+              <span style="color:#6b7280; 
+                font-size:12px;">STATUS</span>
+              <div>
+                <span style="
+                  background:${statusColor};
+                  color:white;
+                  padding:2px 10px;
+                  border-radius:20px;
+                  font-size:13px;">
+                  ${data.status}
+                </span>
+              </div>
+            </div>
+            <div style="margin-bottom:8px;">
+              <span style="color:#6b7280; 
+                font-size:12px;">PAYMENT TYPE</span>
+              <div style="text-transform:capitalize;">
+                ${data.payment_type}</div>
+            </div>
+            <div style="margin-bottom:8px;">
+              <span style="color:#6b7280; 
+                font-size:12px;">GRAND TOTAL</span>
+              <div style="font-weight:bold; 
+                font-size:18px;">
+                $${parseFloat(
+                  data.grand_total).toFixed(2)}
+              </div>
+            </div>
+            <div>
+              <span style="color:#6b7280; 
+                font-size:12px;">PAID</span>
+              <div style="color:#16a34a; 
+                font-weight:bold;">
+                $${parseFloat(
+                  data.amount_paid).toFixed(2)}
+              </div>
+            </div>
+            ${remainingHtml}
+          </div>
+        </div>
+
+        <table style="width:100%; 
+          border-collapse:collapse; 
+          margin-bottom:16px;">
+          <thead>
+            <tr style="background:#1a2332; 
+              color:white;">
+              <th style="padding:10px 8px; 
+                text-align:left; width:40px;">#</th>
+              <th style="padding:10px 8px; 
+                text-align:left;">
+                Item Description</th>
+              <th style="padding:10px 8px; 
+                text-align:center; width:60px;">
+                Qty</th>
+              <th style="padding:10px 8px; 
+                text-align:right; width:80px;">
+                Rate</th>
+              <th style="padding:10px 8px; 
+                text-align:right; width:90px;">
+                Amount</th>
+            </tr>
+          </thead>
+          <tbody>${itemsHtml}</tbody>
+          <tfoot>
+            <tr style="border-top:2px solid #e5e7eb;">
+              <td colspan="4" 
+                style="text-align:right; 
+                padding:8px; color:#6b7280;">
+                Subtotal:</td>
+              <td style="text-align:right; 
+                padding:8px;">
+                $${parseFloat(
+                  data.subtotal).toFixed(2)}</td>
+            </tr>
+            ${discountHtml}
+            <tr style="background:#1a2332; 
+              color:white;">
+              <td colspan="4" 
+                style="text-align:right; 
+                padding:10px 8px; 
+                font-weight:bold;">
+                GRAND TOTAL:</td>
+              <td style="text-align:right; 
+                padding:10px 8px; 
+                font-weight:bold;">
+                $${parseFloat(
+                  data.grand_total).toFixed(2)}</td>
+            </tr>
+          </tfoot>
+        </table>
+      `;
+
+      const modal = document.getElementById(
+        'viewSaleModal');
+      modal.style.display = 'flex';
+    })
+    .catch(err => {
+      console.error('Error loading sale:', err);
+      alert('Could not load sale details.');
+    });
+}
+
+function closeViewSale() {
+  document.getElementById(
+    'viewSaleModal').style.display = 'none';
+}
+
+// Close modal when clicking outside
+document.getElementById(
+  'viewSaleModal')?.addEventListener(
+  'click', function(e) {
+    if (e.target === this) closeViewSale();
+});
+
+  // -----------------------------
+  // Auto-refresh Sales Table
+  // -----------------------------
+  function refreshSalesTable() {
+    loadSalesData().then(() => {
+      console.log('Sales table refreshed');
+    }).catch(error => {
+      console.error('Error refreshing sales table:', error);
+    });
+  }
+
+  // Override form submission to refresh table after successful save
+  document.addEventListener('DOMContentLoaded', function() {
+    const form = document.querySelector('form[action="/sales/new"]');
+    if (form) {
+      form.addEventListener('submit', function(e) {
+        // Let the form submit normally, but refresh after successful redirect
+        setTimeout(() => {
+          if (window.location.pathname === '/sales') {
+            refreshSalesTable();
+          }
+        }, 1000);
+      });
+    }
+    
+    // Handle edit form similarly
+    const editForm = document.querySelector('form[action*="/sales/update/"]');
+    if (editForm) {
+      editForm.addEventListener('submit', function(e) {
+        setTimeout(() => {
+          if (window.location.pathname === '/sales') {
+            refreshSalesTable();
+          }
+        }, 1000);
+      });
+    }
+  });
+
+  // Close modal when clicking outside
+  document.addEventListener('click', function(e) {
+    const modal = document.getElementById('viewSaleModal');
+    if (e.target === modal) {
+      closeViewSaleModal();
+    }
+  });
+</script>
+{% endblock %}

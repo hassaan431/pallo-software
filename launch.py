@@ -8,6 +8,17 @@ import time
 if getattr(sys, 'frozen', False):
     # Running as PyInstaller bundle
     bundle_dir = os.path.dirname(sys.executable)
+    # Check for templates in Resources folder (macOS .app)
+    resources_dir = os.path.join(
+        os.path.dirname(bundle_dir), 'Resources')
+    if os.path.exists(os.path.join(
+            resources_dir, 'templates')):
+        bundle_dir = resources_dir
+    elif os.path.exists(os.path.join(
+            os.path.dirname(bundle_dir), 
+            'Frameworks', 'templates')):
+        bundle_dir = os.path.join(
+            os.path.dirname(bundle_dir), 'Frameworks')
     os.chdir(bundle_dir)
 else:
     bundle_dir = os.path.dirname(
