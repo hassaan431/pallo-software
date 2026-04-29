@@ -1197,6 +1197,19 @@
   if (addProductForm && addVariantsContainer && addVariantsJson) {
     addProductForm.addEventListener('submit', () => {
       syncVariantsJson(addVariantsContainer, addVariantsJson);
+      
+      // If user typed a new product name, copy it to hidden field
+      if (addProductNameSelect && addProductNameSelect.value === '__add_new__') {
+        const newName = addNewProductNameInput?.value?.trim() || '';
+        setHiddenProductName(addProductNameHidden, newName);
+      }
+      
+      // If a product was selected from dropdown, make sure hidden field is set
+      if (addProductNameSelect && addProductNameSelect.value !== '__add_new__') {
+        const opt = addProductNameSelect.selectedOptions[0];
+        const productName = (opt?.textContent || '').trim();
+        setHiddenProductName(addProductNameHidden, productName);
+      }
     });
   }
 

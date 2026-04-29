@@ -697,6 +697,12 @@
             <div class="suggestions product-suggestions" style="display:none;"></div>
             ${stockBadge}
           </div>
+          <div class="variant-wrap" style="margin-bottom:0.6rem; display:none;">
+            <label style="font-size: 0.85rem; color: #6b7280; margin-bottom: 2px; display: block;">Variant (optional)</label>
+            <select class="form-control variant-select" style="border: 2px solid #fb923c;">
+              <option value="">-- No Variant --</option>
+            </select>
+          </div>
           <input type="text" class="form-control description-input" placeholder="Description" value="${product ? (product.name + (product.brand ? ' - ' + product.brand : '')) : ''}" />
         </td>
         <td><input type="number" class="form-control qty-input" min="0.01" step="0.01" value="${product ? product.qty || 1 : 1}"></td>
@@ -719,12 +725,15 @@
     const descInput = row.querySelector('.description-input');
     const rateInput = row.querySelector('.rate-input');
     const qtyInput = row.querySelector('.qty-input');
+    const variantWrap = row.querySelector('.variant-wrap');
+    const variantSelect = row.querySelector('.variant-select');
 
     const brandPart = product.brand ? (' - ' + product.brand) : '';
     const display = (product.name || '') + brandPart;
 
     row.dataset.productId = String(product.id);
     row.dataset.stockQuantity = String(product.stock_quantity || 0);
+    row.dataset.baseSellingPrice = String(product.selling_price || 0);
     searchInput.value = display;
     descInput.value = display;
     rateInput.value = Number(product.selling_price || 0);
@@ -740,6 +749,42 @@
     stockBadge.textContent = 'In stock: ' + (product.stock_quantity || 0);
     searchInput.parentNode.appendChild(stockBadge);
     
+    // Fetch and display variants
+    fetch(`/products/${product.id}/variants`, {
+      headers: { 'X-Requested-With': 'fetch' },
+      credentials: 'same-origin'
+    })
+      .then(res => res.json())
+      .then(variants => {
+        if (variants && variants.length > 0) {
+          // Show variant dropdown
+          variantWrap.style.display = 'block';
+          
+          // Clear existing options except the first one
+          variantSelect.innerHTML = '<option value="">-- No Variant --</option>';
+          
+          // Add variant options
+          variants.forEach(variant => {
+            const option = document.createElement('option');
+            option.value = variant.id;
+            const adjustment = variant.price_adjustment ? ` (+$${variant.price_adjustment.toFixed(2)})` : '';
+            const variantText = `${variant.size || ''}${variant.size && variant.flavor ? ' - ' : ''}${variant.flavor || ''}${adjustment}`;
+            option.textContent = variantText;
+            option.dataset.priceAdjustment = variant.price_adjustment || 0;
+            option.dataset.size = variant.size || '';
+            option.dataset.flavor = variant.flavor || '';
+            variantSelect.appendChild(option);
+          });
+        } else {
+          // Hide variant dropdown if no variants
+          variantWrap.style.display = 'none';
+        }
+      })
+      .catch(err => {
+        console.error('Error fetching variants:', err);
+        variantWrap.style.display = 'none';
+      });
+    
     hideProductSuggestions(row);
     updateRowAmount(row);
   }
@@ -750,6 +795,7 @@
     const delBtn = row.querySelector('.btn.btn-danger');
     const searchInput = row.querySelector('.product-search-input');
     const productSuggestions = row.querySelector('.product-suggestions');
+    const variantSelect = row.querySelector('.variant-select');
 
     if (delBtn) {
       delBtn.addEventListener('click', () => {
@@ -761,6 +807,39 @@
 
     if (qtyEl) qtyEl.addEventListener('input', () => updateRowAmount(row));
     if (rateEl) rateEl.addEventListener('input', () => updateRowAmount(row));
+    
+    // Add variant change listener
+    if (variantSelect) {
+      variantSelect.addEventListener('change', () => {
+        const descInput = row.querySelector('.description-input');
+        const rateInput = row.querySelector('.rate-input');
+        const selectedOption = variantSelect.options[variantSelect.selectedIndex];
+        
+        if (selectedOption && selectedOption.value) {
+          // Update rate with price adjustment
+          const basePrice = parseFloat(row.dataset.baseSellingPrice || 0);
+          const priceAdjustment = parseFloat(selectedOption.dataset.priceAdjustment || 0);
+          const newRate = basePrice + priceAdjustment;
+          rateInput.value = newRate.toFixed(2);
+          
+          // Update description with variant info
+          const baseDesc = descInput.value.split(' - ').slice(0, -1).join(' - '); // Remove existing variant info
+          const size = selectedOption.dataset.size || '';
+          const flavor = selectedOption.dataset.flavor || '';
+          const variantInfo = size && flavor ? `${size} ${flavor}` : (size || flavor || '');
+          descInput.value = variantInfo ? `${baseDesc} - ${variantInfo}` : baseDesc;
+        } else {
+          // Reset to base price and description
+          const basePrice = parseFloat(row.dataset.baseSellingPrice || 0);
+          rateInput.value = basePrice.toFixed(2);
+          
+          const searchInput = row.querySelector('.product-search-input');
+          descInput.value = searchInput.value;
+        }
+        
+        updateRowAmount(row);
+      });
+    }
 
     if (searchInput) {
       let timer = null;
@@ -860,32 +939,9 @@
       });
       item.addEventListener('mousedown', (e) => {
         e.preventDefault();
-        // Fill row with product data
-        const searchInput = row.querySelector('.product-search-input');
-        const descInput = row.querySelector('.description-input');
-        const rateEl = row.querySelector('.rate-input');
-        if (searchInput) searchInput.value = p.name + (p.brand ? ' - ' + p.brand : '');
-        if (descInput) descInput.value = p.name + (p.brand ? ' - ' + p.brand : '');
-        if (rateEl) rateEl.value = p.selling_price || 0;
-        row.dataset.productId = String(p.id);
-        row.dataset.stockQuantity = String(p.stock_quantity || 0);
-        updateRowAmount(row);
+        // Use selectProduct function to fill row
+        selectProduct(row, p);
         hideEl(suggestionsEl);
-        // Show stock badge
-        let badge = row.querySelector('.stock-badge');
-        if (!badge) {
-          badge = document.createElement('span');
-          badge.className = 'stock-badge';
-          badge.style.fontSize = '11px';
-          badge.style.marginLeft = '6px';
-          badge.style.padding = '2px 6px';
-          badge.style.borderRadius = '10px';
-          badge.style.color = 'white';
-          if (searchInput) searchInput.parentNode.appendChild(badge);
-        }
-        const stock = parseFloat(p.stock_quantity || 0);
-        badge.textContent = 'Stock: ' + stock;
-        badge.style.background = stock === 0 ? '#dc2626' : stock < 5 ? '#e8800a' : '#16a34a';
       });
       suggestionsEl.appendChild(item);
     });

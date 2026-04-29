@@ -1348,6 +1348,10 @@ def sales_edit(sale_id: int):
                 s.terms,
                 s.payment_type,
                 s.discount_amount,
+                s.subtotal,
+                s.grand_total,
+                s.amount_paid,
+                s.remaining_amount,
                 s.notes,
                 s.status
             FROM sales s
@@ -1387,6 +1391,7 @@ def sales_edit(sale_id: int):
         edit_sale = dict(sale)
         edit_sale["customer_name"] = customer["name"] if customer else ""
         edit_sale["items"] = [dict(item, qty=float(item["qty"])) for item in items]
+        print("DEBUG:", edit_sale.get("amount_paid"), edit_sale.get("remaining_amount"))
         
         # Get other data for the form
         customers = conn.execute(
@@ -1404,6 +1409,8 @@ def sales_edit(sale_id: int):
                 COALESCE(s.subtotal, 0) AS subtotal,
                 COALESCE(s.discount_amount, 0) AS discount_amount,
                 COALESCE(s.grand_total, 0) AS grand_total,
+                COALESCE(s.amount_paid, 0) AS amount_paid,
+                COALESCE(s.remaining_amount, 0) AS remaining_amount,
                 s.payment_type,
                 s.status
             FROM sales s
@@ -1442,6 +1449,8 @@ def sales_update(sale_id: int):
     discount_amount_raw = (request.form.get("discount_amount") or "").strip()
     items_json = request.form.get("items_json") or "[]"
     generate_invoice = "generate_invoice" in request.form
+    amount_paid = float(request.form.get("amount_paid") or 0)
+    remaining_amount = 0
 
     error = None
 
@@ -1490,6 +1499,7 @@ def sales_update(sale_id: int):
         error = error or "Invalid line items payload."
 
     parsed_items = []
+    print("DEBUG items:", items)
     if not error:
         for idx, it in enumerate(items):
             try:
@@ -1922,6 +1932,40 @@ def sales_delete(id: int):
 
     flash("Sale deleted successfully.", "success")
     return redirect(url_for("sales"))
+
+
+@app.route('/sales/<int:sale_id>/record_payment', methods=['POST'])
+@login_required
+def record_payment(sale_id):
+    try:
+        data = request.get_json()
+        amount = float(data.get('amount', 0))
+        payment_method = data.get('payment_method', 'Cash')
+        notes = data.get('notes', '')
+
+        conn = get_connection()
+        sale = conn.execute('SELECT * FROM sales WHERE id = ?', (sale_id,)).fetchone()
+
+        if not sale:
+            return jsonify({'success': False, 'error': 'Sale not found'})
+
+        if amount <= 0 or amount > float(sale['remaining_amount']):
+            return jsonify({'success': False, 'error': 'Invalid amount'})
+
+        new_amount_paid = float(sale['amount_paid']) + amount
+        new_remaining = float(sale['remaining_amount']) - amount
+        new_status = 'paid' if new_remaining <= 0.01 else 'partial'
+
+        conn.execute('''UPDATE sales 
+                      SET amount_paid = ?, remaining_amount = ?, status = ?
+                      WHERE id = ?''',
+                   (new_amount_paid, new_remaining, new_status, sale_id))
+
+        conn.commit()
+        return jsonify({'success': True})
+
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)})
 
 
 @app.route("/reports")

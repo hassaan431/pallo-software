@@ -6,7 +6,7 @@
 	<dict>
 		<key>Resources/base_library.zip</key>
 		<data>
-		NYhNNJiUomAaDCIpJy72mW5nki0=
+		r7mVSEF7IsWKB2QinOjicKhq60c=
 		</data>
 		<key>Resources/click-8.3.1.dist-info/INSTALLER</key>
 		<data>
@@ -170,7 +170,7 @@
 		</data>
 		<key>Resources/templates/customers.html</key>
 		<data>
-		9pOGorSwpr29tHrIdSkIDBTQ3oI=
+		rQQ6YWoTBzD7mNAC9S+WCFl4VR4=
 		</data>
 		<key>Resources/templates/dashboard.html</key>
 		<data>
@@ -178,7 +178,7 @@
 		</data>
 		<key>Resources/templates/inventory.html</key>
 		<data>
-		/JjjnvUwSu8fFXCe/AGUJkPJTwM=
+		sr959OJhVsRabmHimhxuVojwsQk=
 		</data>
 		<key>Resources/templates/login.html</key>
 		<data>
@@ -190,7 +190,7 @@
 		</data>
 		<key>Resources/templates/sales.html</key>
 		<data>
-		F220YtB4FyH/hbBYP4VrCHu3SE8=
+		X9iLk2kh2Zd7ZURFtq9Dv6jV+bk=
 		</data>
 		<key>Resources/templates/section.html</key>
 		<data>
@@ -1111,7 +1111,7 @@
 		<dict>
 			<key>hash2</key>
 			<data>
-			ujpgew5r1GwdETXUWR0E9EAxEZyCe47ED/OYj9k6Fqk=
+			3GH/HWUilh5rLQiB3hUKvrh9SnyWHJzeIv7W57TXI08=
 			</data>
 		</dict>
 		<key>Resources/charset_normalizer</key>
@@ -1493,7 +1493,7 @@
 		<dict>
 			<key>hash2</key>
 			<data>
-			bl5JASLxwizn8DHXLNhSkibtUiRSMrvx4NKKC+uicl4=
+			SP4WBHsSp/V/U5udtgpMzj99VcGHDLrqbJJrjZF8ZlU=
 			</data>
 		</dict>
 		<key>Resources/templates/dashboard.html</key>
@@ -1507,7 +1507,7 @@
 		<dict>
 			<key>hash2</key>
 			<data>
-			y+BMUV4keS+xMjAt2q6Uq+mpTmOA0NP4DVM3iOZnZiU=
+			bbIJeHwYT9XJJkuC/MUZJiAgbPVkDprelcCPBzdZIcI=
 			</data>
 		</dict>
 		<key>Resources/templates/login.html</key>
@@ -1528,7 +1528,7 @@
 		<dict>
 			<key>hash2</key>
 			<data>
-			hC60y4R/6QWsM8vUZPNw+0wRaqGv02buNlBdwCmUllI=
+			qCo9FAKBrfpAlmf/aPlckYdfrpsdPMQw+LIk1wGjkjk=
 			</data>
 		</dict>
 		<key>Resources/templates/section.html</key>

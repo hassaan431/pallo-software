@@ -207,14 +207,18 @@
   ('python3.13/lib-dynload/_heapq.cpython-313-darwin.so',
    '/Library/Frameworks/Python.framework/Versions/3.13/lib/python3.13/lib-dynload/_heapq.cpython-313-darwin.so',
    'EXTENSION'),
-  ('libssl.3.dylib',
-   '/Library/Frameworks/Python.framework/Versions/3.13/lib/libssl.3.dylib',
-   'BINARY'),
   ('libcrypto.3.dylib',
    '/Library/Frameworks/Python.framework/Versions/3.13/lib/libcrypto.3.dylib',
    'BINARY'),
+  ('libssl.3.dylib',
+   '/Library/Frameworks/Python.framework/Versions/3.13/lib/libssl.3.dylib',
+   'BINARY'),
   ('libncurses.6.dylib',
    '/Library/Frameworks/Python.framework/Versions/3.13/lib/libncurses.6.dylib',
+   'BINARY'),
+  ('PIL/.dylibs/libwebpdemux.2.dylib',
+   '/Users/hassaanjazz/Desktop/Cursor/Inventory and Invoice '
+   'Software/.venv/lib/python3.13/site-packages/PIL/.dylibs/libwebpdemux.2.dylib',
    'BINARY'),
   ('PIL/.dylibs/libwebpmux.3.dylib',
    '/Users/hassaanjazz/Desktop/Cursor/Inventory and Invoice '
@@ -224,10 +228,6 @@
    '/Users/hassaanjazz/Desktop/Cursor/Inventory and Invoice '
    'Software/.venv/lib/python3.13/site-packages/PIL/.dylibs/libwebp.7.dylib',
    'BINARY'),
-  ('PIL/.dylibs/libwebpdemux.2.dylib',
-   '/Users/hassaanjazz/Desktop/Cursor/Inventory and Invoice '
-   'Software/.venv/lib/python3.13/site-packages/PIL/.dylibs/libwebpdemux.2.dylib',
-   'BINARY'),
   ('PIL/.dylibs/libavif.16.3.0.dylib',
    '/Users/hassaanjazz/Desktop/Cursor/Inventory and Invoice '
    'Software/.venv/lib/python3.13/site-packages/PIL/.dylibs/libavif.16.3.0.dylib',
@@ -235,6 +235,14 @@
   ('PIL/.dylibs/liblcms2.2.dylib',
    '/Users/hassaanjazz/Desktop/Cursor/Inventory and Invoice '
    'Software/.venv/lib/python3.13/site-packages/PIL/.dylibs/liblcms2.2.dylib',
+   'BINARY'),
+  ('PIL/.dylibs/libxcb.1.1.0.dylib',
+   '/Users/hassaanjazz/Desktop/Cursor/Inventory and Invoice '
+   'Software/.venv/lib/python3.13/site-packages/PIL/.dylibs/libxcb.1.1.0.dylib',
+   'BINARY'),
+  ('PIL/.dylibs/libz.1.3.1.zlib-ng.dylib',
+   '/Users/hassaanjazz/Desktop/Cursor/Inventory and Invoice '
+   'Software/.venv/lib/python3.13/site-packages/PIL/.dylibs/libz.1.3.1.zlib-ng.dylib',
    'BINARY'),
   ('PIL/.dylibs/libjpeg.62.4.0.dylib',
    '/Users/hassaanjazz/Desktop/Cursor/Inventory and Invoice '
@@ -244,17 +252,9 @@
    '/Users/hassaanjazz/Desktop/Cursor/Inventory and Invoice '
    'Software/.venv/lib/python3.13/site-packages/PIL/.dylibs/libopenjp2.2.5.4.dylib',
    'BINARY'),
-  ('PIL/.dylibs/libxcb.1.1.0.dylib',
-   '/Users/hassaanjazz/Desktop/Cursor/Inventory and Invoice '
-   'Software/.venv/lib/python3.13/site-packages/PIL/.dylibs/libxcb.1.1.0.dylib',
-   'BINARY'),
   ('PIL/.dylibs/libtiff.6.dylib',
    '/Users/hassaanjazz/Desktop/Cursor/Inventory and Invoice '
    'Software/.venv/lib/python3.13/site-packages/PIL/.dylibs/libtiff.6.dylib',
-   'BINARY'),
-  ('PIL/.dylibs/libz.1.3.1.zlib-ng.dylib',
-   '/Users/hassaanjazz/Desktop/Cursor/Inventory and Invoice '
-   'Software/.venv/lib/python3.13/site-packages/PIL/.dylibs/libz.1.3.1.zlib-ng.dylib',
    'BINARY'),
   ('PIL/.dylibs/libsharpyuv.0.dylib',
    '/Users/hassaanjazz/Desktop/Cursor/Inventory and Invoice '
@@ -328,25 +328,9 @@
    '/Users/hassaanjazz/Desktop/Cursor/Inventory and Invoice '
    'Software/templates/section.html',
    'DATA'),
-  ('setuptools/_vendor/importlib_metadata-8.7.1.dist-info/METADATA',
-   '/Users/hassaanjazz/Desktop/Cursor/Inventory and Invoice '
-   'Software/.venv/lib/python3.13/site-packages/setuptools/_vendor/importlib_metadata-8.7.1.dist-info/METADATA',
-   'DATA'),
   ('setuptools/_vendor/importlib_metadata-8.7.1.dist-info/WHEEL',
    '/Users/hassaanjazz/Desktop/Cursor/Inventory and Invoice '
    'Software/.venv/lib/python3.13/site-packages/setuptools/_vendor/importlib_metadata-8.7.1.dist-info/WHEEL',
-   'DATA'),
-  ('setuptools/_vendor/importlib_metadata-8.7.1.dist-info/REQUESTED',
-   '/Users/hassaanjazz/Desktop/Cursor/Inventory and Invoice '
-   'Software/.venv/lib/python3.13/site-packages/setuptools/_vendor/importlib_metadata-8.7.1.dist-info/REQUESTED',
-   'DATA'),
-  ('setuptools/_vendor/importlib_metadata-8.7.1.dist-info/INSTALLER',
-   '/Users/hassaanjazz/Desktop/Cursor/Inventory and Invoice '
-   'Software/.venv/lib/python3.13/site-packages/setuptools/_vendor/importlib_metadata-8.7.1.dist-info/INSTALLER',
-   'DATA'),
-  ('setuptools/_vendor/importlib_metadata-8.7.1.dist-info/top_level.txt',
-   '/Users/hassaanjazz/Desktop/Cursor/Inventory and Invoice '
-   'Software/.venv/lib/python3.13/site-packages/setuptools/_vendor/importlib_metadata-8.7.1.dist-info/top_level.txt',
    'DATA'),
   ('setuptools/_vendor/importlib_metadata-8.7.1.dist-info/licenses/LICENSE',
    '/Users/hassaanjazz/Desktop/Cursor/Inventory and Invoice '
@@ -356,59 +340,103 @@
    '/Users/hassaanjazz/Desktop/Cursor/Inventory and Invoice '
    'Software/.venv/lib/python3.13/site-packages/setuptools/_vendor/importlib_metadata-8.7.1.dist-info/RECORD',
    'DATA'),
+  ('setuptools/_vendor/importlib_metadata-8.7.1.dist-info/INSTALLER',
+   '/Users/hassaanjazz/Desktop/Cursor/Inventory and Invoice '
+   'Software/.venv/lib/python3.13/site-packages/setuptools/_vendor/importlib_metadata-8.7.1.dist-info/INSTALLER',
+   'DATA'),
+  ('setuptools/_vendor/importlib_metadata-8.7.1.dist-info/METADATA',
+   '/Users/hassaanjazz/Desktop/Cursor/Inventory and Invoice '
+   'Software/.venv/lib/python3.13/site-packages/setuptools/_vendor/importlib_metadata-8.7.1.dist-info/METADATA',
+   'DATA'),
+  ('setuptools/_vendor/importlib_metadata-8.7.1.dist-info/top_level.txt',
+   '/Users/hassaanjazz/Desktop/Cursor/Inventory and Invoice '
+   'Software/.venv/lib/python3.13/site-packages/setuptools/_vendor/importlib_metadata-8.7.1.dist-info/top_level.txt',
+   'DATA'),
+  ('setuptools/_vendor/importlib_metadata-8.7.1.dist-info/REQUESTED',
+   '/Users/hassaanjazz/Desktop/Cursor/Inventory and Invoice '
+   'Software/.venv/lib/python3.13/site-packages/setuptools/_vendor/importlib_metadata-8.7.1.dist-info/REQUESTED',
+   'DATA'),
   ('setuptools/_vendor/jaraco/text/Lorem ipsum.txt',
    '/Users/hassaanjazz/Desktop/Cursor/Inventory and Invoice '
    'Software/.venv/lib/python3.13/site-packages/setuptools/_vendor/jaraco/text/Lorem '
    'ipsum.txt',
    'DATA'),
   ('Python', 'Python.framework/Versions/3.13/Python', 'SYMLINK'),
-  ('markupsafe-3.0.3.dist-info/top_level.txt',
+  ('click-8.3.1.dist-info/METADATA',
    '/Users/hassaanjazz/Desktop/Cursor/Inventory and Invoice '
-   'Software/.venv/lib/python3.13/site-packages/markupsafe-3.0.3.dist-info/top_level.txt',
+   'Software/.venv/lib/python3.13/site-packages/click-8.3.1.dist-info/METADATA',
    'DATA'),
-  ('werkzeug-3.1.7.dist-info/licenses/LICENSE.txt',
+  ('flask-3.1.3.dist-info/WHEEL',
    '/Users/hassaanjazz/Desktop/Cursor/Inventory and Invoice '
-   'Software/.venv/lib/python3.13/site-packages/werkzeug-3.1.7.dist-info/licenses/LICENSE.txt',
-   'DATA'),
-  ('itsdangerous-2.2.0.dist-info/WHEEL',
-   '/Users/hassaanjazz/Desktop/Cursor/Inventory and Invoice '
-   'Software/.venv/lib/python3.13/site-packages/itsdangerous-2.2.0.dist-info/WHEEL',
+   'Software/.venv/lib/python3.13/site-packages/flask-3.1.3.dist-info/WHEEL',
    'DATA'),
   ('click-8.3.1.dist-info/INSTALLER',
    '/Users/hassaanjazz/Desktop/Cursor/Inventory and Invoice '
    'Software/.venv/lib/python3.13/site-packages/click-8.3.1.dist-info/INSTALLER',
    'DATA'),
-  ('click-8.3.1.dist-info/licenses/LICENSE.txt',
+  ('flask-3.1.3.dist-info/INSTALLER',
    '/Users/hassaanjazz/Desktop/Cursor/Inventory and Invoice '
-   'Software/.venv/lib/python3.13/site-packages/click-8.3.1.dist-info/licenses/LICENSE.txt',
+   'Software/.venv/lib/python3.13/site-packages/flask-3.1.3.dist-info/INSTALLER',
    'DATA'),
   ('werkzeug-3.1.7.dist-info/INSTALLER',
    '/Users/hassaanjazz/Desktop/Cursor/Inventory and Invoice '
    'Software/.venv/lib/python3.13/site-packages/werkzeug-3.1.7.dist-info/INSTALLER',
    'DATA'),
-  ('markupsafe-3.0.3.dist-info/INSTALLER',
+  ('werkzeug-3.1.7.dist-info/REQUESTED',
    '/Users/hassaanjazz/Desktop/Cursor/Inventory and Invoice '
-   'Software/.venv/lib/python3.13/site-packages/markupsafe-3.0.3.dist-info/INSTALLER',
+   'Software/.venv/lib/python3.13/site-packages/werkzeug-3.1.7.dist-info/REQUESTED',
    'DATA'),
-  ('itsdangerous-2.2.0.dist-info/LICENSE.txt',
+  ('markupsafe-3.0.3.dist-info/top_level.txt',
    '/Users/hassaanjazz/Desktop/Cursor/Inventory and Invoice '
-   'Software/.venv/lib/python3.13/site-packages/itsdangerous-2.2.0.dist-info/LICENSE.txt',
+   'Software/.venv/lib/python3.13/site-packages/markupsafe-3.0.3.dist-info/top_level.txt',
+   'DATA'),
+  ('werkzeug-3.1.7.dist-info/RECORD',
+   '/Users/hassaanjazz/Desktop/Cursor/Inventory and Invoice '
+   'Software/.venv/lib/python3.13/site-packages/werkzeug-3.1.7.dist-info/RECORD',
+   'DATA'),
+  ('markupsafe-3.0.3.dist-info/METADATA',
+   '/Users/hassaanjazz/Desktop/Cursor/Inventory and Invoice '
+   'Software/.venv/lib/python3.13/site-packages/markupsafe-3.0.3.dist-info/METADATA',
+   'DATA'),
+  ('flask-3.1.3.dist-info/licenses/LICENSE.txt',
+   '/Users/hassaanjazz/Desktop/Cursor/Inventory and Invoice '
+   'Software/.venv/lib/python3.13/site-packages/flask-3.1.3.dist-info/licenses/LICENSE.txt',
+   'DATA'),
+  ('werkzeug-3.1.7.dist-info/licenses/LICENSE.txt',
+   '/Users/hassaanjazz/Desktop/Cursor/Inventory and Invoice '
+   'Software/.venv/lib/python3.13/site-packages/werkzeug-3.1.7.dist-info/licenses/LICENSE.txt',
+   'DATA'),
+  ('click-8.3.1.dist-info/licenses/LICENSE.txt',
+   '/Users/hassaanjazz/Desktop/Cursor/Inventory and Invoice '
+   'Software/.venv/lib/python3.13/site-packages/click-8.3.1.dist-info/licenses/LICENSE.txt',
    'DATA'),
   ('flask-3.1.3.dist-info/METADATA',
    '/Users/hassaanjazz/Desktop/Cursor/Inventory and Invoice '
    'Software/.venv/lib/python3.13/site-packages/flask-3.1.3.dist-info/METADATA',
    'DATA'),
-  ('markupsafe-3.0.3.dist-info/WHEEL',
+  ('markupsafe-3.0.3.dist-info/INSTALLER',
    '/Users/hassaanjazz/Desktop/Cursor/Inventory and Invoice '
-   'Software/.venv/lib/python3.13/site-packages/markupsafe-3.0.3.dist-info/WHEEL',
+   'Software/.venv/lib/python3.13/site-packages/markupsafe-3.0.3.dist-info/INSTALLER',
    'DATA'),
-  ('click-8.3.1.dist-info/WHEEL',
+  ('click-8.3.1.dist-info/RECORD',
    '/Users/hassaanjazz/Desktop/Cursor/Inventory and Invoice '
-   'Software/.venv/lib/python3.13/site-packages/click-8.3.1.dist-info/WHEEL',
+   'Software/.venv/lib/python3.13/site-packages/click-8.3.1.dist-info/RECORD',
    'DATA'),
-  ('flask-3.1.3.dist-info/licenses/LICENSE.txt',
+  ('itsdangerous-2.2.0.dist-info/INSTALLER',
    '/Users/hassaanjazz/Desktop/Cursor/Inventory and Invoice '
-   'Software/.venv/lib/python3.13/site-packages/flask-3.1.3.dist-info/licenses/LICENSE.txt',
+   'Software/.venv/lib/python3.13/site-packages/itsdangerous-2.2.0.dist-info/INSTALLER',
+   'DATA'),
+  ('flask-3.1.3.dist-info/entry_points.txt',
+   '/Users/hassaanjazz/Desktop/Cursor/Inventory and Invoice '
+   'Software/.venv/lib/python3.13/site-packages/flask-3.1.3.dist-info/entry_points.txt',
+   'DATA'),
+  ('itsdangerous-2.2.0.dist-info/LICENSE.txt',
+   '/Users/hassaanjazz/Desktop/Cursor/Inventory and Invoice '
+   'Software/.venv/lib/python3.13/site-packages/itsdangerous-2.2.0.dist-info/LICENSE.txt',
+   'DATA'),
+  ('itsdangerous-2.2.0.dist-info/WHEEL',
+   '/Users/hassaanjazz/Desktop/Cursor/Inventory and Invoice '
+   'Software/.venv/lib/python3.13/site-packages/itsdangerous-2.2.0.dist-info/WHEEL',
    'DATA'),
   ('itsdangerous-2.2.0.dist-info/METADATA',
    '/Users/hassaanjazz/Desktop/Cursor/Inventory and Invoice '
@@ -418,82 +446,54 @@
    '/Users/hassaanjazz/Desktop/Cursor/Inventory and Invoice '
    'Software/.venv/lib/python3.13/site-packages/werkzeug-3.1.7.dist-info/WHEEL',
    'DATA'),
-  ('itsdangerous-2.2.0.dist-info/INSTALLER',
+  ('itsdangerous-2.2.0.dist-info/RECORD',
    '/Users/hassaanjazz/Desktop/Cursor/Inventory and Invoice '
-   'Software/.venv/lib/python3.13/site-packages/itsdangerous-2.2.0.dist-info/INSTALLER',
+   'Software/.venv/lib/python3.13/site-packages/itsdangerous-2.2.0.dist-info/RECORD',
    'DATA'),
-  ('werkzeug-3.1.7.dist-info/RECORD',
+  ('markupsafe-3.0.3.dist-info/WHEEL',
    '/Users/hassaanjazz/Desktop/Cursor/Inventory and Invoice '
-   'Software/.venv/lib/python3.13/site-packages/werkzeug-3.1.7.dist-info/RECORD',
-   'DATA'),
-  ('flask-3.1.3.dist-info/RECORD',
-   '/Users/hassaanjazz/Desktop/Cursor/Inventory and Invoice '
-   'Software/.venv/lib/python3.13/site-packages/flask-3.1.3.dist-info/RECORD',
-   'DATA'),
-  ('markupsafe-3.0.3.dist-info/METADATA',
-   '/Users/hassaanjazz/Desktop/Cursor/Inventory and Invoice '
-   'Software/.venv/lib/python3.13/site-packages/markupsafe-3.0.3.dist-info/METADATA',
-   'DATA'),
-  ('werkzeug-3.1.7.dist-info/REQUESTED',
-   '/Users/hassaanjazz/Desktop/Cursor/Inventory and Invoice '
-   'Software/.venv/lib/python3.13/site-packages/werkzeug-3.1.7.dist-info/REQUESTED',
-   'DATA'),
-  ('click-8.3.1.dist-info/RECORD',
-   '/Users/hassaanjazz/Desktop/Cursor/Inventory and Invoice '
-   'Software/.venv/lib/python3.13/site-packages/click-8.3.1.dist-info/RECORD',
-   'DATA'),
-  ('markupsafe-3.0.3.dist-info/RECORD',
-   '/Users/hassaanjazz/Desktop/Cursor/Inventory and Invoice '
-   'Software/.venv/lib/python3.13/site-packages/markupsafe-3.0.3.dist-info/RECORD',
-   'DATA'),
-  ('flask-3.1.3.dist-info/REQUESTED',
-   '/Users/hassaanjazz/Desktop/Cursor/Inventory and Invoice '
-   'Software/.venv/lib/python3.13/site-packages/flask-3.1.3.dist-info/REQUESTED',
+   'Software/.venv/lib/python3.13/site-packages/markupsafe-3.0.3.dist-info/WHEEL',
    'DATA'),
   ('markupsafe-3.0.3.dist-info/licenses/LICENSE.txt',
    '/Users/hassaanjazz/Desktop/Cursor/Inventory and Invoice '
    'Software/.venv/lib/python3.13/site-packages/markupsafe-3.0.3.dist-info/licenses/LICENSE.txt',
    'DATA'),
-  ('flask-3.1.3.dist-info/entry_points.txt',
-   '/Users/hassaanjazz/Desktop/Cursor/Inventory and Invoice '
-   'Software/.venv/lib/python3.13/site-packages/flask-3.1.3.dist-info/entry_points.txt',
-   'DATA'),
   ('werkzeug-3.1.7.dist-info/METADATA',
    '/Users/hassaanjazz/Desktop/Cursor/Inventory and Invoice '
    'Software/.venv/lib/python3.13/site-packages/werkzeug-3.1.7.dist-info/METADATA',
    'DATA'),
-  ('flask-3.1.3.dist-info/WHEEL',
+  ('markupsafe-3.0.3.dist-info/RECORD',
    '/Users/hassaanjazz/Desktop/Cursor/Inventory and Invoice '
-   'Software/.venv/lib/python3.13/site-packages/flask-3.1.3.dist-info/WHEEL',
+   'Software/.venv/lib/python3.13/site-packages/markupsafe-3.0.3.dist-info/RECORD',
    'DATA'),
-  ('flask-3.1.3.dist-info/INSTALLER',
+  ('click-8.3.1.dist-info/WHEEL',
    '/Users/hassaanjazz/Desktop/Cursor/Inventory and Invoice '
-   'Software/.venv/lib/python3.13/site-packages/flask-3.1.3.dist-info/INSTALLER',
+   'Software/.venv/lib/python3.13/site-packages/click-8.3.1.dist-info/WHEEL',
    'DATA'),
-  ('itsdangerous-2.2.0.dist-info/RECORD',
+  ('flask-3.1.3.dist-info/REQUESTED',
    '/Users/hassaanjazz/Desktop/Cursor/Inventory and Invoice '
-   'Software/.venv/lib/python3.13/site-packages/itsdangerous-2.2.0.dist-info/RECORD',
+   'Software/.venv/lib/python3.13/site-packages/flask-3.1.3.dist-info/REQUESTED',
    'DATA'),
-  ('click-8.3.1.dist-info/METADATA',
+  ('flask-3.1.3.dist-info/RECORD',
    '/Users/hassaanjazz/Desktop/Cursor/Inventory and Invoice '
-   'Software/.venv/lib/python3.13/site-packages/click-8.3.1.dist-info/METADATA',
+   'Software/.venv/lib/python3.13/site-packages/flask-3.1.3.dist-info/RECORD',
    'DATA'),
   ('base_library.zip',
    '/Users/hassaanjazz/Desktop/Cursor/Inventory and Invoice '
    'Software/build/AKDistributors/base_library.zip',
    'DATA'),
+  ('libwebpdemux.2.dylib', 'PIL/.dylibs/libwebpdemux.2.dylib', 'SYMLINK'),
   ('libwebpmux.3.dylib', 'PIL/.dylibs/libwebpmux.3.dylib', 'SYMLINK'),
   ('libwebp.7.dylib', 'PIL/.dylibs/libwebp.7.dylib', 'SYMLINK'),
-  ('libwebpdemux.2.dylib', 'PIL/.dylibs/libwebpdemux.2.dylib', 'SYMLINK'),
   ('libavif.16.3.0.dylib', 'PIL/.dylibs/libavif.16.3.0.dylib', 'SYMLINK'),
   ('liblcms2.2.dylib', 'PIL/.dylibs/liblcms2.2.dylib', 'SYMLINK'),
-  ('libjpeg.62.4.0.dylib', 'PIL/.dylibs/libjpeg.62.4.0.dylib', 'SYMLINK'),
-  ('libopenjp2.2.5.4.dylib', 'PIL/.dylibs/libopenjp2.2.5.4.dylib', 'SYMLINK'),
   ('libxcb.1.1.0.dylib', 'PIL/.dylibs/libxcb.1.1.0.dylib', 'SYMLINK'),
-  ('libtiff.6.dylib', 'PIL/.dylibs/libtiff.6.dylib', 'SYMLINK'),
   ('libz.1.3.1.zlib-ng.dylib',
    'PIL/.dylibs/libz.1.3.1.zlib-ng.dylib',
    'SYMLINK'),
+  ('libjpeg.62.4.0.dylib', 'PIL/.dylibs/libjpeg.62.4.0.dylib', 'SYMLINK'),
+  ('libopenjp2.2.5.4.dylib', 'PIL/.dylibs/libopenjp2.2.5.4.dylib', 'SYMLINK'),
+  ('libtiff.6.dylib', 'PIL/.dylibs/libtiff.6.dylib', 'SYMLINK'),
   ('libsharpyuv.0.dylib', 'PIL/.dylibs/libsharpyuv.0.dylib', 'SYMLINK'),
   ('libXau.6.dylib', 'PIL/.dylibs/libXau.6.dylib', 'SYMLINK'),
   ('liblzma.5.dylib', 'PIL/.dylibs/liblzma.5.dylib', 'SYMLINK'),

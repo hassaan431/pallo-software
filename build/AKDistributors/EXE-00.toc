@@ -68,7 +68,7 @@
  [],
  False,
  False,
- 1775453590,
+ 1776859044,
  [('run',
    '/Users/hassaanjazz/Desktop/Cursor/Inventory and Invoice '
    'Software/.venv/lib/python3.13/site-packages/PyInstaller/bootloader/Darwin-64bit/run',

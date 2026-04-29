@@ -458,7 +458,6 @@
               <th>Paid</th>
               <th>Remaining</th>
               <th>Type</th>
-              <th>Status</th>
               <th style="width: 200px;">Actions</th>
             </tr>
           </thead>
@@ -679,41 +678,51 @@
   }
 
   function buildRowHtml(index, product = null) {
-    const stockBadge = product && product.stock_quantity !== undefined ? 
-      `<span class="stock-badge ${product.stock_quantity >= 5 ? 'green' : product.stock_quantity > 0 ? 'orange' : 'red'}">In stock: ${product.stock_quantity}</span>` : '';
-    
-    return `
-      <tr class="line-item-row" data-row-index="${index}">
-        <td class="line-no">${index + 1}</td>
-        <td>
-          <div class="search-wrap" style="margin-bottom:0.6rem;">
-            <input
-              type="text"
-              class="form-control product-search-input"
-              placeholder="Search product..."
-              autocomplete="off"
-              value="${product ? (product.name + (product.brand ? ' - ' + product.brand : '')) : ''}"
-              />
-            <div class="suggestions product-suggestions" style="display:none;"></div>
-            ${stockBadge}
-          </div>
-          <div class="variant-wrap" style="margin-bottom:0.6rem; display:none;">
-            <label style="font-size: 0.85rem; color: #6b7280; margin-bottom: 2px; display: block;">Variant (optional)</label>
-            <select class="form-control variant-select" style="border: 2px solid #fb923c;">
-              <option value="">-- No Variant --</option>
-            </select>
-          </div>
-          <input type="text" class="form-control description-input" placeholder="Description" value="${product ? (product.name + (product.brand ? ' - ' + product.brand : '')) : ''}" />
-        </td>
-        <td><input type="number" class="form-control qty-input" min="0.01" step="0.01" value="${product ? product.qty || 1 : 1}"></td>
-        <td><input type="number" class="form-control rate-input" min="0" step="0.01" value="${product ? product.selling_price || 0 : 0}"></td>
-        <td class="row-amount"><span class="row-amount-cell" data-amount="0">$0.00</span></td>
-        <td>
-          <button type="button" class="btn btn-danger" style="padding:0.45rem 0.7rem;">✕</button>
-        </td>
-      </tr>
-    `;
-  }
+  const isEditItem = product && product.description && !product.name;  
+  const displayName = isEditItem 
+    ? product.description 
+    : (product ? (product.name + (product.brand ? ' - ' + product.brand : '')) : '');
+  const displayRate = isEditItem
+    ? (product.rate || 0)
+    : (product ? (product.rate || product.selling_price || 0) : 0);
+  const displayQty = product ? (product.qty || 1) : 1;
+  const stockQty = product && product.stock_quantity !== undefined ? product.stock_quantity : null;
+  const stockBadge = stockQty !== null
+    ? `<span class="stock-badge ${stockQty >= 5 ? 'green' : stockQty > 0 ? 'orange' : 'red'}">In stock: ${stockQty}</span>` 
+    : '';
+
+  return `
+    <tr class="line-item-row" data-row-index="${index}">
+      <td class="line-no">${index + 1}</td>
+      <td>
+        <div class="search-wrap" style="margin-bottom:0.6rem;">
+          <input
+            type="text"
+            class="form-control product-search-input"
+            placeholder="Search product..."
+            autocomplete="off"
+            value="${displayName}"
+            />
+          <div class="suggestions product-suggestions" style="display:none;"></div>
+          ${stockBadge}
+        </div>
+        <div class="variant-wrap" style="margin-bottom:0.6rem; display:none;">
+          <label style="font-size: 0.85rem; color: #6b7280; margin-bottom: 2px; display: block;">Variant (optional)</label>
+          <select class="form-control variant-select" style="border: 2px solid #fb923c;">
+            <option value="">-- No Variant --</option>
+          </select>
+        </div>
+        <input type="text" class="form-control description-input" placeholder="Description" value="${displayName}" />
+      </td>
+      <td><input type="number" class="form-control qty-input" min="1" step="1" value="${displayQty}"></td>
+      <td><input type="number" class="form-control rate-input" min="0" step="0.01" value="${displayRate}"></td>
+      <td class="row-amount"><span class="row-amount-cell" data-amount="0">$0.00</span></td>
+      <td>
+        <button type="button" class="btn btn-danger" style="padding:0.45rem 0.7rem;">✕</button>
+      </td>
+    </tr>
+  `;
+}
 
   function hideProductSuggestions(row) {
     const sugg = row.querySelector('.product-suggestions');
@@ -988,8 +997,12 @@
     temp.innerHTML = buildRowHtml(index, product);
     const row = temp.firstElementChild;
     lineItemsTbody.appendChild(row);
-    row.dataset.productId = product ? String(product.id) : '';
+    
+    // Handle both new products (have .id) and edit items (have .product_id)
+    const productId = product ? (product.id || product.product_id || '') : '';
+    row.dataset.productId = String(productId);
     row.dataset.stockQuantity = product ? String(product.stock_quantity || 0) : '0';
+    row.dataset.baseSellingPrice = product ? String(product.rate || product.selling_price || 0) : '0';
     initRowBehaviors(row);
     updateRowAmount(row);
   }
@@ -1002,9 +1015,37 @@
 
   // Initialize edit mode data
   if (editMode && editSaleData && editSaleData.items) {
-    editSaleData.items.forEach(item => {
+        editSaleData.items.forEach(item => {
       addEmptyRow(item);
-    });
+          });
+
+    // Wait for DOM + totals to settle before setting payment fields
+    setTimeout(() => {
+      recalcTotals();
+
+      if (editSaleData.payment_type) {
+        const radio = document.querySelector(
+          `input[name="payment_type"][value="${editSaleData.payment_type}"]` 
+        );
+        if (radio) {
+          radio.checked = true;
+          handlePaymentTypeChange();
+        }
+      }
+
+      if (editSaleData.payment_type === 'credit') {
+        const paidUpfront = document.getElementById('paid-upfront');
+        const amountPaid = parseFloat(editSaleData.amount_paid || 0);
+        console.log('amount_paid from editSaleData:', editSaleData.amount_paid);
+        console.log('parsed amountPaid:', amountPaid);
+        if (paidUpfront) {
+            paidUpfront.value = amountPaid.toFixed(2);
+            paidUpfront.dispatchEvent(new Event('input'));
+        }
+        setTimeout(() => updateRemainingAmount(), 50);
+      }
+    }, 150);
+
   } else if (lineItemsTbody && lineItemsTbody.children.length === 0) {
     addEmptyRow();
   }
@@ -1132,21 +1173,7 @@
       tdType.appendChild(typeBadge);
       tr.appendChild(tdType);
 
-      // Status Badge
-      const tdStatus = document.createElement('td');
-      const statusBadge = document.createElement('span');
-      statusBadge.className = `status-badge ${s.status || 'unpaid'}`;
-      if (s.status === 'paid') {
-        statusBadge.style.background = '#10b981';
-      } else if (s.status === 'unpaid') {
-        statusBadge.style.background = '#ef4444';
-      } else if (s.status === 'partial') {
-        statusBadge.style.background = '#f59e0b';
-      }
-      statusBadge.textContent = s.status || 'unpaid';
-      tdStatus.appendChild(statusBadge);
-      tr.appendChild(tdStatus);
-
+      
       const tdActions = document.createElement('td');
       tdActions.style.display = 'flex';
       tdActions.style.gap = '0.5rem';
@@ -1199,9 +1226,30 @@
       delBtn.style.margin = '0 2px';
 
       delForm.appendChild(delBtn);
+      
       tdActions.appendChild(pdfLink);
       tdActions.appendChild(editLink);
       tdActions.appendChild(delForm);
+
+      // Record Payment Button (after Delete, Credit sales with remaining only)
+      if ((s.payment_type === 'credit' || s.payment_type === 'Credit') && parseFloat(s.remaining_amount) > 0) {
+          const payBtn = document.createElement('button');
+          payBtn.type = 'button';
+          payBtn.textContent = 'Record Payment';
+          payBtn.style.padding = '4px 10px';
+          payBtn.style.fontSize = '12px';
+          payBtn.style.borderRadius = '4px';
+          payBtn.style.background = '#16a34a';
+          payBtn.style.color = 'white';
+          payBtn.style.border = 'none';
+          payBtn.style.cursor = 'pointer';
+          payBtn.style.margin = '0 2px';
+          payBtn.onclick = (e) => {
+              e.stopPropagation();
+              openRecordPaymentModal(s.id, s.invoice_number, s.remaining_amount);
+          };
+          tdActions.appendChild(payBtn);
+      }
       tr.appendChild(tdActions);
 
       recentSalesTbody.appendChild(tr);
@@ -1276,11 +1324,13 @@
       return false;
     }
     
-    // Check stock validation
-    const insufficientItems = validateStock();
-    if (insufficientItems.length > 0) {
-      showStockError(insufficientItems);
-      return false;
+    // Check stock validation only for new sales, not edits
+    if (!editMode) {
+      const insufficientItems = validateStock();
+      if (insufficientItems.length > 0) {
+        showStockError(insufficientItems);
+        return false;
+      }
     }
     
     const items = buildItemsPayload();
@@ -1322,7 +1372,10 @@
   }
 
   // Initialize totals
-  recalcTotals();
+  setTimeout(() => {
+    recalcTotals();
+    updateRemainingAmount();
+  }, 100);
 
   // -----------------------------
   // Credit payment fields logic
@@ -1707,5 +1760,84 @@ document.getElementById(
       closeViewSaleModal();
     }
   });
+</script>
+
+<!-- Record Payment Modal -->
+<div id="recordPaymentModal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); z-index:9999; justify-content:center; align-items:center;">
+  <div style="background:white; padding:2rem; border-radius:8px; width:400px;">
+    <h3 style="margin-bottom:1rem;">Record Payment</h3>
+    <p>Invoice: <strong id="rpInvoiceNumber"></strong></p>
+    <p>Remaining: <strong id="rpRemaining"></strong></p>
+    <div style="margin:1rem 0;">
+      <label>Amount Received</label>
+      <input type="number" id="rpAmount" step="0.01" min="0.01" class="form-control" placeholder="Enter amount">
+    </div>
+    <div style="margin:1rem 0;">
+      <label>Payment Method</label>
+      <select id="rpMethod" class="form-control">
+        <option value="Cash">Cash</option>
+        <option value="Cheque">Cheque</option>
+        <option value="Bank Transfer">Bank Transfer</option>
+      </select>
+    </div>
+    <div style="margin:1rem 0;">
+      <label>Notes (optional)</label>
+      <input type="text" id="rpNotes" class="form-control" placeholder="Any notes">
+    </div>
+    <div style="display:flex; gap:1rem; justify-content:flex-end;">
+      <button onclick="closeRecordPaymentModal()" style="padding:8px 16px; border-radius:4px; border:1px solid #ccc; cursor:pointer;">Cancel</button>
+      <button onclick="submitRecordPayment()" style="padding:8px 16px; border-radius:4px; background:#16a34a; color:white; border:none; cursor:pointer;">Save Payment</button>
+    </div>
+  </div>
+</div>
+
+<script>
+let currentSaleId = null;
+let currentRemaining = 0;
+
+function openRecordPaymentModal(saleId, invoiceNumber, remaining) {
+    currentSaleId = saleId;
+    currentRemaining = remaining;
+    document.getElementById('rpInvoiceNumber').textContent = invoiceNumber;
+    document.getElementById('rpRemaining').textContent = '$' + parseFloat(remaining).toFixed(2);
+    document.getElementById('rpAmount').value = '';
+    document.getElementById('rpAmount').max = remaining;
+    document.getElementById('rpNotes').value = '';
+    document.getElementById('recordPaymentModal').style.display = 'flex';
+}
+
+function closeRecordPaymentModal() {
+    document.getElementById('recordPaymentModal').style.display = 'none';
+    currentSaleId = null;
+}
+
+async function submitRecordPayment() {
+    const amount = parseFloat(document.getElementById('rpAmount').value);
+    const method = document.getElementById('rpMethod').value;
+    const notes = document.getElementById('rpNotes').value;
+
+    if (!amount || amount <= 0) {
+        alert('Please enter a valid amount');
+        return;
+    }
+    if (amount > currentRemaining) {
+        alert('Amount cannot exceed remaining balance of $' + currentRemaining.toFixed(2));
+        return;
+    }
+
+    const response = await fetch('/sales/' + currentSaleId + '/record_payment', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ amount, payment_method: method, notes })
+    });
+
+    const result = await response.json();
+    if (result.success) {
+        closeRecordPaymentModal();
+        loadSalesData(); // refresh sales table
+    } else {
+        alert('Error: ' + result.error);
+    }
+}
 </script>
 {% endblock %}

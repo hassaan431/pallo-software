@@ -132,14 +132,13 @@
             <th>City, State</th>
             <th>Phone</th>
             <th>Email</th>
-            <th>Terms</th>
             <th style="width: 320px;">Actions</th>
           </tr>
         </thead>
         <tbody>
           {% if customers|length == 0 %}
           <tr>
-            <td colspan="8" class="empty-state">No customers found.</td>
+            <td colspan="7" class="empty-state">No customers found.</td>
           </tr>
           {% else %}
           {% for c in customers %}
@@ -150,13 +149,12 @@
             <td>{{ (c.area or '') + ((', ' + c.state) if c.state else '') }}</td>
             <td>{{ c.phone or '' }}</td>
             <td>{{ c.email or '' }}</td>
-            <td>{{ c.terms or '' }}</td>
             <td>
               <button
                 type="button"
                 class="btn btn-edit"
                 data-action="edit-customer"
-                data-customer='{{ {"id": c.id, "name": c.name, "bill_address": c.bill_address or "", "ship_address": c.ship_address or "", "area": c.area or "", "state": c.state or "", "phone": c.phone or "", "email": c.email or "", "terms": c.terms or ""} | tojson }}'
+                data-customer='{{ {"id": c.id, "name": c.name, "bill_address": c.bill_address or "", "ship_address": c.ship_address or "", "area": c.area or "", "state": c.state or "", "phone": c.phone or "", "email": c.email or ""} | tojson }}'
               >
                 Edit
               </button>
@@ -226,18 +224,13 @@
         </div>
 
         <div class="modal-field">
-          <label for="addPhone">Phone <span class="required">*</span></label>
-          <input class="form-control" type="text" id="addPhone" name="phone" required>
+          <label for="addPhone">Phone</label>
+          <input class="form-control" type="tel" id="addPhone" name="phone">
         </div>
 
         <div class="modal-field">
           <label for="addEmail">Email</label>
-          <input class="form-control" type="text" id="addEmail" name="email">
-        </div>
-
-        <div class="modal-field">
-          <label for="addTerms">Terms</label>
-          <input class="form-control" type="text" id="addTerms" name="terms" placeholder="e.g. Due on Receipt, Net 30">
+          <input class="form-control" type="email" id="addEmail" name="email">
         </div>
 
         <div class="inline-flex" style="justify-content: flex-end; gap: 0.65rem; margin-top: 0.25rem;">
@@ -298,12 +291,7 @@
 
         <div class="modal-field">
           <label for="editEmail">Email</label>
-          <input class="form-control" type="text" id="editEmail" name="email">
-        </div>
-
-        <div class="modal-field">
-          <label for="editTerms">Terms</label>
-          <input class="form-control" type="text" id="editTerms" name="terms">
+          <input class="form-control" type="email" id="editEmail" name="email">
         </div>
 
         <div class="inline-flex" style="justify-content: flex-end; gap: 0.65rem; margin-top: 0.25rem;">
@@ -465,7 +453,6 @@ document.addEventListener('DOMContentLoaded', function() {
     const editState = document.getElementById('editState');
     const editPhone = document.getElementById('editPhone');
     const editEmail = document.getElementById('editEmail');
-    const editTerms = document.getElementById('editTerms');
 
     if (editCustomerId) editCustomerId.value = customer.id;
     editCustomerForm.action = '/customers/edit/' + customer.id;
@@ -477,7 +464,6 @@ document.addEventListener('DOMContentLoaded', function() {
     if (editState) editState.value = customer.state || '';
     if (editPhone) editPhone.value = customer.phone || '';
     if (editEmail) editEmail.value = customer.email || '';
-    if (editTerms) editTerms.value = customer.terms || '';
 
     const billingNorm = normalizeAddress(customer.bill_address);
     const shippingNorm = normalizeAddress(customer.ship_address);
@@ -541,7 +527,7 @@ document.addEventListener('DOMContentLoaded', function() {
             '<td>$' + grand.toFixed(2) + '</td>' +
             '<td>' + (r.payment_type || '') + '</td>' +
             '<td>' + (r.status || '') + '</td>' +
-            '<td><button class="btn btn-sm btn-primary">View</button></td>';
+            '<td><button class="btn btn-sm btn-primary" onclick="viewSaleFromHistory(\''+r.invoice_number+'\')">View</button></td>';
           historyTbody.appendChild(tr);
         });
         
@@ -591,6 +577,113 @@ document.addEventListener('DOMContentLoaded', function() {
     }
   });
 });
+
+// Function to view sale details from history
+  function viewSaleFromHistory(invoiceNumber) {
+    fetch('/sales/by-invoice/' + invoiceNumber, {
+      method: 'GET',
+      headers: { 'X-Requested-With': 'fetch' },
+      credentials: 'same-origin'
+    })
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.error) {
+          alert(data.error);
+          return;
+        }
+        
+        // Show modal with sale details
+        showSaleDetailsModal(data);
+      })
+      .catch((err) => {
+        console.error('Error fetching sale details:', err);
+        alert('Failed to load sale details');
+      });
+  }
+
+  // Function to show sale details modal
+  function showSaleDetailsModal(saleData) {
+    // Create modal HTML
+    const modalHtml = `
+      <div id="saleDetailsModal" style="display: flex; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 99999; justify-content: center; align-items: center;">
+        <div class="modal" style="position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); z-index: 9999; background: white; border-radius: 8px; box-shadow: 0 8px 24px rgba(0,0,0,0.15); max-width: 900px; width: 80vw;">
+          <div class="modal-header" style="display: flex; justify-content: space-between; align-items: center; padding: 1rem; border-bottom: 1px solid #e5e7eb;">
+            <h3 style="margin: 0; color: #1a2332;">Sale Details - Invoice #${saleData.invoice_number}</h3>
+            <button type="button" onclick="closeSaleDetailsModal()" style="background: none; border: none; font-size: 1.5rem; cursor: pointer; color: #6b7280;">&times;</button>
+          </div>
+          <div class="modal-body" style="padding: 1.5rem; max-height: 70vh; overflow-y: auto;">
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-bottom: 1rem;">
+              <div>
+                <strong>Invoice #:</strong> ${saleData.invoice_number}
+              </div>
+              <div>
+                <strong>Date:</strong> ${saleData.invoice_date}
+              </div>
+              <div>
+                <strong>Customer:</strong> ${saleData.customer_name}
+              </div>
+            </div>
+            
+            <div style="margin-bottom: 1rem;">
+              <h4 style="margin: 0 0 0.5rem 0; color: #1a2332;">Items</h4>
+              <table style="width: 100%; border-collapse: collapse; margin-bottom: 1rem;">
+                <thead>
+                  <tr style="background: #f9fafb;">
+                    <th style="padding: 0.5rem; text-align: left; border: 1px solid #e5e7eb;">Product</th>
+                    <th style="padding: 0.5rem; text-align: left; border: 1px solid #e5e7eb;">Unit</th>
+                    <th style="padding: 0.5rem; text-align: left; border: 1px solid #e5e7eb;">Qty</th>
+                    <th style="padding: 0.5rem; text-align: right; border: 1px solid #e5e7eb;">Amount</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  ${saleData.items.map(item => `
+                    <tr>
+                      <td style="padding: 0.5rem; border: 1px solid #e5e7eb;">${item.product_name}</td>
+                      <td style="padding: 0.5rem; border: 1px solid #e5e7eb;">${item.unit || 'Each'}</td>
+                      <td style="padding: 0.5rem; text-align: center; border: 1px solid #e5e7eb;">${item.qty}</td>
+                      <td style="padding: 0.5rem; text-align: right; border: 1px solid #e5e7eb;">$${item.amount.toFixed(2)}</td>
+                    </tr>
+                  `).join('')}
+                </tbody>
+              </table>
+            </div>
+            
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
+              <div>
+                <strong>Subtotal:</strong> $${saleData.subtotal.toFixed(2)}
+              </div>
+              <div>
+                <strong>Discount:</strong> $${saleData.discount_amount.toFixed(2)}
+              </div>
+              <div>
+                <strong>Grand Total:</strong> $${saleData.grand_total.toFixed(2)}
+              </div>
+              <div>
+                <strong>Paid:</strong> $${saleData.amount_paid.toFixed(2)}
+              </div>
+              <div>
+                <strong>Remaining:</strong> $${saleData.remaining_amount.toFixed(2)}
+              </div>
+            </div>
+          </div>
+          <div class="modal-footer" style="padding: 1rem; text-align: right; border-top: 1px solid #e5e7eb;">
+            <button type="button" onclick="closeSaleDetailsModal()" style="padding: 0.75rem 1.5rem; background: #6b7280; color: white; border: none; border-radius: 6px; cursor: pointer;">Close</button>
+          </div>
+        </div>
+      </div>
+    `;
+    
+    // Add modal to page
+    document.body.insertAdjacentHTML('beforeend', modalHtml);
+  }
+
+  // Function to close sale details modal
+  function closeSaleDetailsModal() {
+    const modal = document.getElementById('saleDetailsModal');
+    if (modal) {
+      modal.remove();
+    }
+  }
 </script>
 {% endblock %}
 
