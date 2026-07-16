@@ -1,20 +1,20 @@
 :root {
-  --color-sidebar: #1a2332;
-  --color-accent: #e8800a;
-  --color-accent-hover: #cf7208;
+  --color-sidebar: #ffffff;
+  --color-accent: #10b981;
+  --color-accent-hover: #059669;
   --color-bg-main: #ffffff;
-  --color-bg-muted: #f4f6f9;
-  --color-text: #1f2937;
-  --color-text-muted: #6b7280;
-  --color-border: #e5e7eb;
-  --color-danger: #dc2626;
-  --color-danger-hover: #b91c1c;
-  --color-secondary: #6b7280;
-  --color-secondary-hover: #4b5563;
+  --color-bg-muted: #f8fafc;
+  --color-text: #0f172a;
+  --color-text-muted: #475569;
+  --color-border: #e2e8f0;
+  --color-danger: #ef4444;
+  --color-danger-hover: #dc2626;
+  --color-secondary: #64748b;
+  --color-secondary-hover: #475569;
   --sidebar-width: 250px;
-  --radius: 10px;
-  --shadow-card: 0 1px 3px rgba(26, 35, 50, 0.08), 0 4px 12px rgba(26, 35, 50, 0.06);
-  --shadow-modal: 0 20px 50px rgba(0, 0, 0, 0.2);
+  --radius: 12px;
+  --shadow-card: 0 4px 6px -1px rgb(0 0 0 / 0.05), 0 2px 4px -2px rgb(0 0 0 / 0.05);
+  --shadow-modal: 0 20px 25px -5px rgb(0 0 0 / 0.1), 0 8px 10px -6px rgb(0 0 0 / 0.1);
   --font: "Inter", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
 }
 
@@ -54,16 +54,17 @@ a {
   bottom: 0;
   width: var(--sidebar-width);
   background: var(--color-sidebar);
-  color: #f9fafb;
+  color: var(--color-text);
   display: flex;
   flex-direction: column;
   z-index: 100;
-  box-shadow: 2px 0 16px rgba(0, 0, 0, 0.12);
+  border-right: 1px solid var(--color-border);
+  box-shadow: none;
 }
 
 .sidebar-brand {
   padding: 1.35rem 1.25rem 1.25rem;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  border-bottom: 1px solid var(--color-border);
 }
 
 .sidebar-brand h1 {
@@ -79,7 +80,7 @@ a {
   margin-top: 0.2rem;
   font-size: 0.72rem;
   font-weight: 500;
-  color: rgba(255, 255, 255, 0.55);
+  color: var(--color-text-muted);
   text-transform: uppercase;
   letter-spacing: 0.06em;
 }
@@ -96,8 +97,8 @@ a {
   gap: 0.65rem;
   padding: 0.75rem 1.25rem;
   font-size: 0.925rem;
-  font-weight: 500;
-  color: rgba(255, 255, 255, 0.88);
+  font-weight: 600;
+  color: var(--color-text-muted);
   border-left: 3px solid transparent;
   transition:
     background 0.15s ease,
@@ -113,14 +114,14 @@ a {
 }
 
 .sidebar-nav a:hover {
-  background: rgba(255, 255, 255, 0.06);
+  background: rgba(16, 185, 129, 0.06);
   color: var(--color-accent);
   border-left-color: var(--color-accent);
 }
 
 .sidebar-nav a.is-active {
-  background: rgba(232, 128, 10, 0.12);
-  color: #fff;
+  background: rgba(16, 185, 129, 0.1);
+  color: var(--color-accent);
   border-left-color: var(--color-accent);
 }
 
@@ -274,7 +275,7 @@ table.data-table tbody tr:nth-child(even) {
 }
 
 table.data-table tbody tr:hover {
-  background: rgba(232, 128, 10, 0.06);
+  background: rgba(16, 185, 129, 0.04);
 }
 
 table.data-table tbody tr:last-child td {
@@ -310,7 +311,7 @@ table.data-table tbody tr:last-child td {
 .btn-primary {
   background: var(--color-accent);
   color: #fff;
-  box-shadow: 0 1px 2px rgba(232, 128, 10, 0.35);
+  box-shadow: 0 1px 2px rgba(16, 185, 129, 0.35);
 }
 
 .btn-primary:hover {
@@ -459,7 +460,7 @@ table.data-table tbody tr:last-child td {
 .form-control:focus {
   outline: none;
   border-color: var(--color-accent);
-  box-shadow: 0 0 0 3px rgba(232, 128, 10, 0.2);
+  box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.2);
 }
 
 .login-page {
