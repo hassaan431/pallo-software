@@ -4,7 +4,7 @@ import sqlite3
 
 import csv
 
-from datetime import date
+from datetime import date, timedelta
 
 from collections import defaultdict
 
@@ -170,6 +170,22 @@ def dashboard():
             """
         ).fetchall()
         
+        # Get daily sales for the last 30 days
+        thirty_days_ago = (date.today() - timedelta(days=30)).isoformat()
+        daily_sales_rows = conn.execute(
+            """
+            SELECT invoice_date, SUM(grand_total) as daily_total
+            FROM sales
+            WHERE invoice_date >= ?
+            GROUP BY invoice_date
+            ORDER BY invoice_date ASC
+            """,
+            (thirty_days_ago,)
+        ).fetchall()
+        
+        daily_sales_labels = [row["invoice_date"] for row in daily_sales_rows]
+        daily_sales_data = [row["daily_total"] for row in daily_sales_rows]
+        
     finally:
         conn.close()
     
@@ -179,7 +195,9 @@ def dashboard():
         total_customers=total_customers,
         todays_sales=todays_sales,
         monthly_revenue=float(monthly_revenue),
-        recent_sales=[dict(sale) for sale in recent_sales]
+        recent_sales=[dict(sale) for sale in recent_sales],
+        daily_sales_labels=daily_sales_labels,
+        daily_sales_data=daily_sales_data
     )
 
 

@@ -24,6 +24,15 @@
     <p class="stat-note">Current month to date</p>
   </article>
 </div>
+
+<section class="panel" style="margin-bottom: 1.75rem;">
+  <div class="panel-header">
+    <h2>Daily Sales (Last 30 Days)</h2>
+  </div>
+  <div class="panel-body" style="padding: 1.5rem;">
+    <canvas id="salesChart" height="80"></canvas>
+  </div>
+</section>
 <section class="panel">
   <div class="panel-header">
     <h2>Recent Sales</h2>
@@ -110,4 +119,77 @@
     color: #fff;
   }
 </style>
+</style>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+  document.addEventListener('DOMContentLoaded', function() {
+    const ctx = document.getElementById('salesChart').getContext('2d');
+    
+    // Parse data passed from Flask
+    const labels = {{ daily_sales_labels | tojson | safe }};
+    const data = {{ daily_sales_data | tojson | safe }};
+    
+    new Chart(ctx, {
+      type: 'line',
+      data: {
+        labels: labels,
+        datasets: [{
+          label: 'Total Sales ($)',
+          data: data,
+          borderColor: '#10b981', // Emerald Green
+          backgroundColor: 'rgba(16, 185, 129, 0.1)',
+          borderWidth: 2,
+          tension: 0.3,
+          fill: true,
+          pointBackgroundColor: '#10b981',
+          pointBorderColor: '#fff',
+          pointBorderWidth: 2,
+          pointRadius: 4,
+          pointHoverRadius: 6
+        }]
+      },
+      options: {
+        responsive: true,
+        plugins: {
+          legend: {
+            display: false
+          },
+          tooltip: {
+            callbacks: {
+              label: function(context) {
+                let label = context.dataset.label || '';
+                if (label) {
+                  label += ': ';
+                }
+                if (context.parsed.y !== null) {
+                  label += new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(context.parsed.y);
+                }
+                return label;
+              }
+            }
+          }
+        },
+        scales: {
+          y: {
+            beginAtZero: true,
+            ticks: {
+              callback: function(value) {
+                return '$' + value;
+              }
+            },
+            grid: {
+              color: '#f1f5f9'
+            }
+          },
+          x: {
+            grid: {
+              display: false
+            }
+          }
+        }
+      }
+    });
+  });
+</script>
 {% endblock %}

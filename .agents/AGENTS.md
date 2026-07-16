@@ -1,0 +1,7 @@
+# Deployment Workflow Rules
+
+Whenever making code changes to this project, you MUST follow this workflow:
+
+1. **Test Locally First**: After making code changes, run the application locally to test it. Start the application using `python3 launch.py` as a background command so the user can test the app in their local browser.
+2. **Push to GitHub**: Once testing is complete and the user is satisfied, commit all changes and push them to the GitHub repository (`git add .`, `git commit -m "..."`, `git push origin main`).
+3. **Deploy to Web**: Inform the user to go to their PythonAnywhere console, run `git pull`, and reload the web app to apply the changes to the live version.
