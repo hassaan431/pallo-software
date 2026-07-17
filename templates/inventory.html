@@ -182,7 +182,8 @@
             <th>Product Name</th>
             <th>Brand</th>
             <th>Category</th>
-            <th>Unit Size</th>
+            
+            
             <th>Selling Price</th>
             <th>MARGIN</th>
             <th>Stock Qty</th>
@@ -209,15 +210,6 @@
             <td>{{ p.name }}</td>
             <td>{{ p.brand or '' }}</td>
             <td>{{ p.category_name or '' }}</td>
-            <td>
-              {% if p.unit_quantity and p.unit %}
-                {{ p.unit_quantity|int if p.unit_quantity == p.unit_quantity|int else p.unit_quantity }} {{ p.unit }}
-              {% elif p.unit and p.unit != 'Each' %}
-                {{ p.unit }}
-              {% else %}
-                -
-              {% endif %}
-            </td>
 
             <td>${{ '%.2f' % (p.selling_price|default(0)|float) }}</td>
             <td>

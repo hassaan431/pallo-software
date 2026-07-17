@@ -215,7 +215,6 @@
             <th>Brand</th>
             <th>Product Name</th>
             <th>Category</th>
-            <th>Unit Size</th>
             <th>Selling Price</th>
             <th>Margin</th>
             <th>Stock Qty</th>
@@ -242,7 +241,8 @@
             <th>Product Name</th>
             <th>Brand</th>
             <th>Category</th>
-            <th>Unit Size</th>
+            
+            
             <th>Selling Price</th>
             <th>MARGIN</th>
             <th>Stock Qty</th>
@@ -269,15 +269,6 @@
             <td>{{ p.name }}</td>
             <td>{{ p.brand or '' }}</td>
             <td>{{ p.category_name or '' }}</td>
-            <td>
-              {% if p.unit_quantity and p.unit %}
-                {{ p.unit_quantity|int if p.unit_quantity == p.unit_quantity|int else p.unit_quantity }} {{ p.unit }}
-              {% elif p.unit and p.unit != 'Each' %}
-                {{ p.unit }}
-              {% else %}
-                -
-              {% endif %}
-            </td>
 
             <td>${{ '%.2f' % (p.selling_price|default(0)|float) }}</td>
             <td>
@@ -1458,26 +1449,10 @@
             }
             var stock = parseInt(p.stock_quantity || 0);
             var stockStyle = stock === 0 ? 'color:#dc2626;font-weight:600;' : stock < 5 ? 'color:#d97706;font-weight:600;' : '';
-            var unitQtyStr = '';
-            var uQty = parseFloat(p.unit_quantity || 0);
-            if (uQty > 0) {
-              unitQtyStr = Number.isInteger(uQty) ? uQty.toString() : uQty.toString();
-            }
-            var unitName = p.unit && p.unit !== 'Each' ? p.unit : '';
-            var unitDisplay = '';
-            if (unitQtyStr && unitName) {
-              unitDisplay = unitQtyStr + ' ' + unitName;
-            } else if (unitName) {
-              unitDisplay = unitName;
-            } else {
-              unitDisplay = '-';
-            }
-
             html += '<tr>';
             html += '<td>' + (i === 0 ? '<strong>' + brand + '</strong>' : '') + '</td>';
             html += '<td>' + (p.name || '') + '</td>';
             html += '<td>' + (p.category_name || '') + '</td>';
-            html += '<td>' + unitDisplay + '</td>';
             html += '<td>$' + sp.toFixed(2) + '</td>';
             html += '<td>' + margin + '</td>';
             html += '<td style="' + stockStyle + '">' + stock + '</td>';
