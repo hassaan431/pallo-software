@@ -213,7 +213,6 @@ def inventory():
                 p.name,
                 p.brand,
                 p.unit,
-                p.unit_quantity,
                 p.cost_price,
                 p.selling_price,
                 p.stock_quantity,
@@ -269,7 +268,6 @@ def inventory_add():
     if brand == "__add_new__":
         brand = ""
     unit = (request.form.get("unit") or "Each").strip()
-    unit_quantity = float(request.form.get("unit_quantity") or 0)
     category_id_raw = (request.form.get("category_id") or "").strip()
 
     try:
@@ -289,11 +287,11 @@ def inventory_add():
         cur = conn.execute(
             """
             INSERT INTO products
-                (name, category_id, brand, unit, unit_quantity, cost_price, selling_price, stock_quantity)
+                (name, category_id, brand, unit, cost_price, selling_price, stock_quantity)
             VALUES
-                (?, ?, ?, ?, ?, ?, ?, ?)
+                (?, ?, ?, ?, ?, ?, ?)
             """,
-            (product_name, category_id, brand or None, unit, unit_quantity, cost_price, selling_price, stock_quantity),
+            (product_name, category_id, brand or None, unit, cost_price, selling_price, stock_quantity),
         )
         product_id = int(cur.lastrowid)
 
@@ -316,7 +314,6 @@ def inventory_edit(product_id: int):
     if brand == "__add_new__":
         brand = ""
     unit = (request.form.get("unit") or "Each").strip()
-    unit_quantity = float(request.form.get("unit_quantity") or 0)
     category_id_raw = (request.form.get("category_id") or "").strip()
 
     try:
@@ -341,7 +338,6 @@ def inventory_edit(product_id: int):
                 brand = ?,
                 category_id = ?,
                 unit = ?,
-                unit_quantity = ?,
                 cost_price = ?,
                 selling_price = ?,
                 stock_quantity = ?
@@ -352,7 +348,6 @@ def inventory_edit(product_id: int):
                 brand or None,
                 category_id,
                 unit,
-                unit_quantity,
                 cost_price,
                 selling_price,
                 stock_quantity,
@@ -583,7 +578,6 @@ def products_list():
                 p.brand AS brand_name,
                 p.category_id AS category_id,
                 p.unit AS unit,
-                p.unit_quantity AS unit_quantity,
                 p.cost_price AS cost_price,
                 p.selling_price AS selling_price
             FROM products p
@@ -602,7 +596,6 @@ def products_list():
                     "brand_name": r["brand_name"],
                     "category_id": int(r["category_id"]) if r["category_id"] is not None else None,
                     "unit": r["unit"] or "Each",
-                    "unit_quantity": float(r["unit_quantity"] or 0),
                     "cost_price": float(r["cost_price"] or 0),
                     "selling_price": float(r["selling_price"] or 0),
                 }
@@ -897,7 +890,6 @@ def products_search():
                     brand,
                     selling_price,
                     unit,
-                    unit_quantity,
                     stock_quantity
                 FROM products
                 ORDER BY name COLLATE NOCASE
@@ -913,7 +905,6 @@ def products_search():
                     brand,
                     selling_price,
                     unit,
-                    unit_quantity,
                     stock_quantity
                 FROM products
                 WHERE name LIKE ? OR brand LIKE ?
@@ -931,7 +922,6 @@ def products_search():
                     "brand": r["brand"],
                     "selling_price": r["selling_price"],
                     "unit": r["unit"],
-                    "unit_quantity": float(r["unit_quantity"] or 0),
                     "stock_quantity": r["stock_quantity"],
                 }
             )
