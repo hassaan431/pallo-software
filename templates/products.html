@@ -263,7 +263,7 @@
           {% elif qty_int > 0 and qty_int < 5 %}
             {% set row_class = 'row-low-stock' %}
           {% endif %}
-          {% set variant_count = (variants_by_product.get(p.id, [])|length) %}
+
           <tr id="product-row-{{ p.id }}" class="{{ row_class }}">
             <td>{{ loop.index }}</td>
             <td>{{ p.name }}</td>
@@ -287,15 +287,7 @@
             </td>
             <td>{{ qty_int }}</td>
             <td>
-              <button
-                type="button"
-                class="variants-badge"
-                data-action="toggle-variants"
-                data-product-id="{{ p.id }}"
-                {% if variant_count == 0 %}style="opacity:0.55; cursor:default;" disabled{% endif %}
-              >
-                {{ variant_count }} variants
-              </button>
+
               <button type="button" class="btn btn-edit" data-action="edit-product"
                 data-id="{{ p.id }}"
                 data-name="{{ p.name|e }}"
@@ -317,37 +309,6 @@
               >
                 Delete
               </button>
-            </td>
-          </tr>
-          <tr id="variants-row-{{ p.id }}" class="variants-subrow" style="display:none;">
-            <td colspan="10">
-              {% if variant_count == 0 %}
-                <div style="padding: 0.8rem 0.2rem; color: var(--color-text-muted); font-weight:600;">No variants.</div>
-              {% else %}
-                <div style="padding: 0.8rem 0.2rem;">
-                  <table class="variants-table">
-                    <thead>
-                      <tr>
-                        <th>Size</th>
-                        <th>Flavor</th>
-                        <th style="text-align:right;">Adjustment</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {% for v in variants_by_product.get(p.id, []) %}
-                      <tr>
-                        <td>{{ v.size or '' }}</td>
-                        <td>{{ v.flavor or '' }}</td>
-                        <td style="text-align:right; font-weight:800;">
-                          {% set adj = v.price_adjustment|default(0)|float %}
-                          {% if adj > 0 %}+{% endif %}{{ adj|round(2) }}
-                        </td>
-                      </tr>
-                      {% endfor %}
-                    </tbody>
-                  </table>
-                </div>
-              {% endif %}
             </td>
           </tr>
           {% endfor %}
@@ -443,16 +404,6 @@
         <div class="modal-field">
           <label for="addStockQuantity">Stock Quantity</label>
           <input class="form-control" type="number" step="1" min="0" id="addStockQuantity" name="stock_quantity" required>
-        </div>
-
-        <div class="modal-field">
-          <label>Variants (optional)</label>
-          <div style="display:flex; justify-content:space-between; align-items:center; gap:1rem; flex-wrap:wrap;">
-            <div style="color: var(--color-text-muted); font-weight:600; font-size:0.85rem;">Add size/flavor variations for this product.</div>
-            <button type="button" class="btn btn-primary" id="addVariantBtn">Add Variant</button>
-          </div>
-          <div id="addVariantsContainer" style="margin-top:0.9rem;"></div>
-          <input type="hidden" id="addVariantsJson" name="variants_json" value="[]">
         </div>
 
         <div class="inline-flex" style="justify-content: flex-end; gap: 0.65rem; margin-top: 0.25rem;">
@@ -551,16 +502,6 @@
           <input class="form-control" type="number" step="1" min="0" id="editStockQuantity" name="stock_quantity" required>
         </div>
 
-        <div class="modal-field">
-          <label>Variants (optional)</label>
-          <div style="display:flex; justify-content:space-between; align-items:center; gap:1rem; flex-wrap:wrap;">
-            <div style="color: var(--color-text-muted); font-weight:600; font-size:0.85rem;">Add size/flavor variations for this product.</div>
-            <button type="button" class="btn btn-primary" id="editVariantBtn">Add Variant</button>
-          </div>
-          <div id="editVariantsContainer" style="margin-top:0.9rem;"></div>
-          <input type="hidden" id="editVariantsJson" name="variants_json" value="[]">
-        </div>
-
         <div class="inline-flex" style="justify-content: flex-end; gap: 0.65rem; margin-top: 0.25rem;">
           <button type="button" class="btn btn-secondary" data-close-modal="editProductModal">Cancel</button>
           <button type="submit" class="btn btn-primary">Save Changes</button>
@@ -608,7 +549,7 @@
 </section>
 
 <script>
-  const variantsByProduct = {{ variants_by_product | tojson }};
+
 
   const addProductModal = document.getElementById('addProductModal');
   const editProductModal = document.getElementById('editProductModal');
@@ -1087,7 +1028,7 @@
       if (costEl) costEl.value = '';
       if (sellEl) sellEl.value = '';
       if (stockEl) stockEl.value = '';
-      clearVariants(addVariantsContainer, addVariantsJson);
+
       if (addNewProductNameInline) hideProductInline(addNewProductNameInline);
     } else {
       if (editBrandSelect) editBrandSelect.value = '';
@@ -1104,7 +1045,7 @@
       if (costEl) costEl.value = '';
       if (sellEl) sellEl.value = '';
       if (stockEl) stockEl.value = '';
-      clearVariants(editVariantsContainer, editVariantsJson);
+
       if (editNewProductNameInline) hideProductInline(editNewProductNameInline);
     }
   }
@@ -1200,63 +1141,11 @@
     });
   }
 
-  // -------- Variants (Add) --------
-  const addVariantsContainer = document.getElementById('addVariantsContainer');
-  const addVariantsJson = document.getElementById('addVariantsJson');
-  const addVariantBtn = document.getElementById('addVariantBtn');
 
-  function createVariantRowHtml({ size = '', flavor = '', price_adjustment = 0 } = {}) {
-    return `
-      <div class="variant-row">
-        <input class="form-control variant-size" type="text" placeholder="Size (e.g. 500gm)" value="${String(size).replace(/"/g, '&quot;')}">
-        <input class="form-control variant-flavor" type="text" placeholder="Flavor (e.g. Mango)" value="${String(flavor).replace(/"/g, '&quot;')}">
-        <input class="form-control variant-adjustment" type="number" step="0.01" placeholder="Adj" value="${price_adjustment}">
-        <button type="button" class="btn btn-danger variant-delete-btn">✕</button>
-      </div>
-    `;
-  }
-
-  function syncVariantsJson(containerEl, hiddenEl) {
-    const rows = containerEl ? Array.from(containerEl.querySelectorAll('.variant-row')) : [];
-    const variants = [];
-    rows.forEach((row) => {
-      const size = (row.querySelector('.variant-size')?.value || '').trim();
-      const flavor = (row.querySelector('.variant-flavor')?.value || '').trim();
-      const adjRaw = row.querySelector('.variant-adjustment')?.value || '0';
-      let adj = 0;
-      try { adj = parseFloat(adjRaw); } catch (e) { adj = 0; }
-      if (!size && !flavor) return;
-      variants.push({ size: size, flavor: flavor, price_adjustment: adj });
-    });
-    hiddenEl.value = JSON.stringify(variants);
-  }
-
-  function clearVariants(containerEl, hiddenEl) {
-    if (!containerEl) return;
-    containerEl.innerHTML = '';
-    if (hiddenEl) hiddenEl.value = '[]';
-  }
-
-  if (addVariantBtn) {
-    addVariantBtn.addEventListener('click', () => {
-      if (!addVariantsContainer) return;
-      addVariantsContainer.insertAdjacentHTML('beforeend', createVariantRowHtml({}));
-    });
-  }
-
-  if (addVariantsContainer) {
-    addVariantsContainer.addEventListener('click', (e) => {
-      const btn = e.target.closest('.variant-delete-btn');
-      if (!btn) return;
-      btn.closest('.variant-row')?.remove();
-    });
-  }
 
   const addProductForm = document.getElementById('addProductForm');
-  if (addProductForm && addVariantsContainer && addVariantsJson) {
+  if (addProductForm) {
     addProductForm.addEventListener('submit', () => {
-      syncVariantsJson(addVariantsContainer, addVariantsJson);
-      
       // If user typed a new product name, copy it to hidden field
       if (addProductNameSelect && addProductNameSelect.value === '__add_new__') {
         const newName = addNewProductNameInput?.value?.trim() || '';
@@ -1272,31 +1161,11 @@
     });
   }
 
-  // -------- Variants (Edit) --------
-  const editVariantsContainer = document.getElementById('editVariantsContainer');
-  const editVariantsJson = document.getElementById('editVariantsJson');
-  const editVariantBtn = document.getElementById('editVariantBtn');
 
-  if (editVariantBtn) {
-    editVariantBtn.addEventListener('click', () => {
-      if (!editVariantsContainer) return;
-      editVariantsContainer.insertAdjacentHTML('beforeend', createVariantRowHtml({}));
-    });
-  }
-
-  if (editVariantsContainer) {
-    editVariantsContainer.addEventListener('click', (e) => {
-      const btn = e.target.closest('.variant-delete-btn');
-      if (!btn) return;
-      btn.closest('.variant-row')?.remove();
-    });
-  }
 
   const editProductForm = document.getElementById('editProductForm');
-  if (editProductForm && editVariantsContainer && editVariantsJson) {
-    editProductForm.addEventListener('submit', () => {
-      syncVariantsJson(editVariantsContainer, editVariantsJson);
-    });
+  if (editProductForm) {
+    editProductForm.addEventListener('submit', () => {});
   }
 
   // -------- Open Add Modal --------
@@ -1315,7 +1184,7 @@
       document.getElementById('addCostPrice').value = '';
       document.getElementById('addSellingPrice').value = '';
       document.getElementById('addStockQuantity').value = '';
-      clearVariants(addVariantsContainer, addVariantsJson);
+
       openModal(addProductModal);
     });
   }
@@ -1372,17 +1241,7 @@
           editNewCategoryInline.style.display = 'flex';
         }
 
-        // Preload variants for this product
-        clearVariants(editVariantsContainer, editVariantsJson);
-        const existing = variantsByProduct[String(productId)] || [];
-        existing.forEach((v) => {
-          editVariantsContainer.insertAdjacentHTML('beforeend', createVariantRowHtml({
-            size: v.size || '',
-            flavor: v.flavor || '',
-            price_adjustment: v.price_adjustment ?? 0,
-          }));
-        });
-        syncVariantsJson(editVariantsContainer, editVariantsJson);
+
         hideInline(editNewBrandInline);
         openModal(editProductModal);
         return;

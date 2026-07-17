@@ -225,33 +225,6 @@ def inventory():
         )
         products = [dict(row) for row in cur.fetchall()]
 
-        variants_by_product = {}
-        product_ids = [int(p["id"]) for p in products]
-        if product_ids:
-            placeholders = ",".join(["?"] * len(product_ids))
-            v_cur = conn.execute(
-                f"""
-                SELECT
-                    product_id,
-                    size,
-                    flavor,
-                    price_adjustment
-                FROM product_variants
-                WHERE product_id IN ({placeholders})
-                ORDER BY id ASC
-                """,
-                tuple(product_ids),
-            )
-            for v in v_cur.fetchall():
-                pid = int(v["product_id"])
-                variants_by_product.setdefault(pid, []).append(
-                    {
-                        "size": v["size"] or "",
-                        "flavor": v["flavor"] or "",
-                        "price_adjustment": float(v["price_adjustment"] or 0),
-                    }
-                )
-
         cur = conn.execute("SELECT COUNT(*) AS total_products FROM products")
         total_products = int(cur.fetchone()["total_products"] or 0)
 
@@ -281,7 +254,6 @@ def inventory():
         "inventory.html",
         products=products,
         categories=categories,
-        variants_by_product=variants_by_product,
         total_products=total_products,
         total_stock_value=total_stock_value,
         low_stock_count=low_stock_count,
@@ -297,7 +269,6 @@ def inventory_add():
         brand = ""
     unit = (request.form.get("unit") or "Each").strip()
     category_id_raw = (request.form.get("category_id") or "").strip()
-    variants_json = (request.form.get("variants_json") or "").strip()
 
     try:
         category_id = int(category_id_raw)
@@ -328,32 +299,6 @@ def inventory_add():
         if brand:
             conn.execute("INSERT OR IGNORE INTO brands (name) VALUES (?)", (brand,))
 
-        # Save variants (optional)
-        try:
-            variants = json.loads(variants_json) if variants_json else []
-        except Exception:
-            variants = []
-
-        conn.execute("DELETE FROM product_variants WHERE product_id = ?", (product_id,))
-        for v in variants if isinstance(variants, list) else []:
-            if not isinstance(v, dict):
-                continue
-            size = (v.get("size") or "").strip()
-            flavor = (v.get("flavor") or "").strip()
-            raw_adj = v.get("price_adjustment", 0)
-            try:
-                adj = float(raw_adj or 0)
-            except (TypeError, ValueError):
-                adj = 0.0
-            if not size and not flavor:
-                continue
-            conn.execute(
-                """
-                INSERT INTO product_variants (product_id, size, flavor, price_adjustment)
-                VALUES (?, ?, ?, ?)
-                """,
-                (product_id, size or None, flavor or None, adj),
-            )
         conn.commit()
     finally:
         conn.close()
@@ -370,7 +315,6 @@ def inventory_edit(product_id: int):
         brand = ""
     unit = (request.form.get("unit") or "Each").strip()
     category_id_raw = (request.form.get("category_id") or "").strip()
-    variants_json = (request.form.get("variants_json") or "").strip()
 
     try:
         category_id = int(category_id_raw)
@@ -415,32 +359,6 @@ def inventory_edit(product_id: int):
         if brand:
             conn.execute("INSERT OR IGNORE INTO brands (name) VALUES (?)", (brand,))
 
-        # Save variants (optional)
-        try:
-            variants = json.loads(variants_json) if variants_json else []
-        except Exception:
-            variants = []
-
-        conn.execute("DELETE FROM product_variants WHERE product_id = ?", (product_id,))
-        for v in variants if isinstance(variants, list) else []:
-            if not isinstance(v, dict):
-                continue
-            size = (v.get("size") or "").strip()
-            flavor = (v.get("flavor") or "").strip()
-            raw_adj = v.get("price_adjustment", 0)
-            try:
-                adj = float(raw_adj or 0)
-            except (TypeError, ValueError):
-                adj = 0.0
-            if not size and not flavor:
-                continue
-            conn.execute(
-                """
-                INSERT INTO product_variants (product_id, size, flavor, price_adjustment)
-                VALUES (?, ?, ?, ?)
-                """,
-                (product_id, size or None, flavor or None, adj),
-            )
         conn.commit()
     finally:
         conn.close()
@@ -458,7 +376,7 @@ def inventory_delete(product_id: int):
     error = None
     try:
         conn.execute("UPDATE sale_items SET product_id = NULL WHERE product_id = ?", (product_id,))
-        conn.execute("DELETE FROM product_variants WHERE product_id = ?", (product_id,))
+
         cur = conn.execute("DELETE FROM products WHERE id = ?", (product_id,))
         conn.commit()
         ok = cur.rowcount > 0
@@ -1012,28 +930,6 @@ def products_search():
         conn.close()
 
 
-@app.route("/products/<int:product_id>/variants", methods=["GET"])
-@login_required
-def product_variants(product_id: int):
-    conn = get_connection()
-    try:
-        variants = conn.execute(
-            """
-            SELECT
-                id,
-                size,
-                flavor,
-                price_adjustment
-            FROM product_variants
-            WHERE product_id = ?
-            ORDER BY size, flavor
-            """,
-            (product_id,),
-        ).fetchall()
-        
-        return jsonify([dict(v) for v in variants])
-    finally:
-        conn.close()
 
 
 @app.route("/sales/data", methods=["GET"])

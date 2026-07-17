@@ -101,13 +101,6 @@ def init_db():
                 amount REAL DEFAULT 0
             );
 
-            CREATE TABLE IF NOT EXISTS product_variants (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                product_id INTEGER REFERENCES products(id),
-                size TEXT,
-                flavor TEXT,
-                price_adjustment REAL DEFAULT 0
-            );
             """
         )
         
