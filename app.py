@@ -457,6 +457,7 @@ def inventory_delete(product_id: int):
     ok = False
     error = None
     try:
+        conn.execute("UPDATE sale_items SET product_id = NULL WHERE product_id = ?", (product_id,))
         conn.execute("DELETE FROM product_variants WHERE product_id = ?", (product_id,))
         cur = conn.execute("DELETE FROM products WHERE id = ?", (product_id,))
         conn.commit()

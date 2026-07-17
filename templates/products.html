@@ -410,7 +410,7 @@
         <div class="modal-field">
           <label for="addUnitSelect">Unit</label>
           <select class="form-control" id="addUnitSelect" name="unit" required>
-            {% set units = ['Each','Box','KG','GM','LB','Dozen','Case','Pack'] %}
+            {% set units = ['Each','Box','KG','G','LB','Dozen','Case','Pack'] %}
             {% for u in units %}
             <option value="{{ u }}" {% if u == 'Each' %}selected{% endif %}>{{ u }}</option>
             {% endfor %}
@@ -516,7 +516,7 @@
         <div class="modal-field">
           <label for="editUnitSelect">Unit</label>
           <select class="form-control" id="editUnitSelect" name="unit" required>
-            {% set units = ['Each','Box','KG','GM','LB','Dozen','Case','Pack'] %}
+            {% set units = ['Each','Box','KG','G','LB','Dozen','Case','Pack'] %}
             {% for u in units %}
             <option value="{{ u }}" {% if u == 'Each' %}selected{% endif %}>{{ u }}</option>
             {% endfor %}

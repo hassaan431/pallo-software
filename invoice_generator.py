@@ -14,8 +14,8 @@ from database import get_connection
 
 
 _DARK_NAVY = colors.HexColor("#1a2332")
-_LIGHT_GREY = colors.HexColor("#f4f6f9")
-_VERY_LIGHT_GREY = colors.HexColor("#f8f8f8")
+_LIGHT_GREY = colors.HexColor("#fafafa")
+_VERY_LIGHT_GREY = colors.HexColor("#fdfdfd")
 _TEXT_GREY = colors.HexColor("#6b7280")
 
 _LOGO_MAX_SIZE = 70  # points (approx to requested 70x70px)
@@ -196,7 +196,7 @@ def generate_invoice_pdf(sale_id: int) -> bytes:
     usable_width = page_width - (2 * margin)
 
     # Layout metrics
-    header_height = 88
+    header_height = 100
     meta_height = 80  # Height for 4 rows with padding
     bill_height = 112
     spacer_after_header = 12  # Increased from 8
@@ -437,11 +437,14 @@ def generate_invoice_pdf(sale_id: int) -> bytes:
 
         # Table header row
         y_header_bottom = bill_box_bottom - table_header_height - 18
-        cnv.setFillColor(_DARK_NAVY)
-        cnv.setStrokeColor(_DARK_NAVY)
+        cnv.setFillColor(_VERY_LIGHT_GREY)
+        cnv.setStrokeColor(colors.black)
         cnv.rect(x0, y_header_bottom, usable_width, table_header_height, stroke=0, fill=1)
+        cnv.setStrokeColor(colors.HexColor("#d1d5db"))
+        cnv.line(x0, y_header_bottom, x0 + usable_width, y_header_bottom)
+        cnv.line(x0, y_header_bottom + table_header_height, x0 + usable_width, y_header_bottom + table_header_height)
 
-        cnv.setFillColor(colors.white)
+        cnv.setFillColor(colors.black)
         cnv.setFont("Helvetica-Bold", 9)
         header_y_text = y_header_bottom + 6
 
@@ -602,13 +605,13 @@ def generate_invoice_pdf(sale_id: int) -> bytes:
             line_y = totals_top - 54
             cnv.line(totals_x, line_y, totals_right_x, line_y)
 
-            # Grand total block with navy background and white text
-            cnv.setFillColor(_DARK_NAVY)
-            cnv.setStrokeColor(_DARK_NAVY)
+            # Grand total block without solid background to save ink
             grand_y = totals_bottom + 10
             grand_h = 32
-            cnv.rect(totals_x, grand_y, totals_right_x - totals_x, grand_h, stroke=0, fill=1)
-            cnv.setFillColor(colors.white)
+            cnv.setStrokeColor(colors.HexColor("#d1d5db"))
+            cnv.setLineWidth(1)
+            cnv.rect(totals_x, grand_y, totals_right_x - totals_x, grand_h, stroke=1, fill=0)
+            cnv.setFillColor(colors.black)
             cnv.setFont("Helvetica-Bold", 12)  # 12pt font as requested
             cnv.drawRightString(totals_right_x - 6, grand_y + 10, f"GRAND TOTAL:    ${grand_total:.2f}")
 
