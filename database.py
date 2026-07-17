@@ -69,6 +69,7 @@ def init_db():
                 category_id INTEGER REFERENCES categories(id),
                 brand TEXT,
                 unit TEXT DEFAULT 'Each',
+                unit_quantity REAL DEFAULT 0,
                 cost_price REAL DEFAULT 0,
                 selling_price REAL DEFAULT 0,
                 stock_quantity REAL DEFAULT 0,
@@ -160,6 +161,12 @@ def _migrate_database(conn):
     columns = [row[1] for row in cur.fetchall()]
     if 'state' not in columns:
         cur.execute("ALTER TABLE customers ADD COLUMN state TEXT")
+        conn.commit()
+        
+    cur.execute("PRAGMA table_info(products)")
+    p_columns = [row[1] for row in cur.fetchall()]
+    if 'unit_quantity' not in p_columns:
+        cur.execute("ALTER TABLE products ADD COLUMN unit_quantity REAL DEFAULT 0")
         conn.commit()
 
 
