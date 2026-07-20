@@ -521,10 +521,14 @@ def generate_invoice_pdf(sale_id: int) -> bytes:
 
             row_bottom = y_cursor - rh
 
-            # Row background
+            # Row background and bottom border
             cnv.setFillColor(_VERY_LIGHT_GREY if row_alternator % 2 == 0 else colors.white)
             cnv.setStrokeColor(colors.HexColor("#e5e7eb"))
+            cnv.setLineWidth(1)
             cnv.rect(x0, row_bottom, usable_width, rh, stroke=0, fill=1)
+            
+            # Draw subtle bottom line for separation
+            cnv.line(x0, row_bottom, x0 + usable_width, row_bottom)
 
             # Divider line subtle
             # Item number
