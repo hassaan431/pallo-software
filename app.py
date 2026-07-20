@@ -260,6 +260,85 @@ def inventory():
     )
 
 
+@app.route("/inventory/download_csv")
+@login_required
+def inventory_download_csv():
+    brand = request.args.get("brand", "").strip()
+    conn = get_connection()
+    try:
+        if brand:
+            cur = conn.execute(
+                """
+                SELECT
+                    p.id,
+                    p.name,
+                    p.brand,
+                    p.unit,
+                    p.cost_price,
+                    p.selling_price,
+                    p.stock_quantity,
+                    c.name AS category_name
+                FROM products p
+                LEFT JOIN categories c ON p.category_id = c.id
+                WHERE p.brand = ?
+                ORDER BY p.name COLLATE NOCASE
+                """,
+                (brand,)
+            )
+        else:
+            cur = conn.execute(
+                """
+                SELECT
+                    p.id,
+                    p.name,
+                    p.brand,
+                    p.unit,
+                    p.cost_price,
+                    p.selling_price,
+                    p.stock_quantity,
+                    c.name AS category_name
+                FROM products p
+                LEFT JOIN categories c ON p.category_id = c.id
+                ORDER BY p.name COLLATE NOCASE
+                """
+            )
+        products = [dict(row) for row in cur.fetchall()]
+    finally:
+        conn.close()
+
+    import io
+    import csv
+    
+    output = io.StringIO()
+    writer = csv.writer(output)
+    
+    # Write header
+    writer.writerow([
+        "ID", "Product Name", "Brand", "Category", 
+        "Unit", "Cost Price", "Selling Price", "Stock Quantity"
+    ])
+    
+    # Write rows
+    for p in products:
+        writer.writerow([
+            p["id"],
+            p["name"],
+            p["brand"] or "",
+            p["category_name"] or "",
+            p["unit"] or "Each",
+            f"{p['cost_price']:.2f}" if p['cost_price'] is not None else "0.00",
+            f"{p['selling_price']:.2f}" if p['selling_price'] is not None else "0.00",
+            p["stock_quantity"] if p["stock_quantity"] is not None else 0
+        ])
+    
+    response = Response(output.getvalue(), mimetype="text/csv")
+    filename = f"inventory_{brand}.csv" if brand else "inventory_all.csv"
+    response.headers["Content-Disposition"] = f"attachment; filename={filename}"
+    return response
+
+
+
+
 @app.route("/inventory/add", methods=["POST"])
 @login_required
 def inventory_add():

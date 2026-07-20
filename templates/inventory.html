@@ -170,8 +170,24 @@
 </div>
 
 <section class="panel">
-  <div class="panel-header">
-    <h2>Products</h2>
+  <div class="panel-header" style="display: flex; justify-content: space-between; align-items: center;">
+    <h2 style="margin: 0;">Products</h2>
+    <form action="/inventory/download_csv" method="GET" style="display: flex; gap: 0.5rem;">
+      <select name="brand" class="form-control" style="width: auto; padding: 0.25rem 0.5rem; height: auto;">
+        <option value="">All Brands</option>
+        <!-- Use unique brands from products or categories, since brands dropdown might not be passed, we can extract from products -->
+        {% set unique_brands = [] %}
+        {% for p in products %}
+          {% if p.brand and p.brand not in unique_brands %}
+            {% set _ = unique_brands.append(p.brand) %}
+          {% endif %}
+        {% endfor %}
+        {% for b in unique_brands|sort %}
+          <option value="{{ b }}">{{ b }}</option>
+        {% endfor %}
+      </select>
+      <button type="submit" class="btn btn-secondary" style="padding: 0.25rem 0.75rem;">Download CSV</button>
+    </form>
   </div>
   <div class="panel-body">
     <div class="table-wrap">
