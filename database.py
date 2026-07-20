@@ -98,13 +98,37 @@ def init_db():
                 description TEXT,
                 qty REAL DEFAULT 1,
                 rate REAL DEFAULT 0,
-                amount REAL DEFAULT 0
+                amount REAL DEFAULT 0,
+                cost_price REAL DEFAULT 0
             );
 
             """
         )
         
-        # Safely add amount_paid column to sales table
+        # Safely add brand column to products table
+        try:
+            conn.execute(
+                "ALTER TABLE products ADD COLUMN brand TEXT"
+            )
+        except sqlite3.OperationalError:
+            pass
+
+        # Safely add cost_price column to sale_items table if it doesn't exist
+        try:
+            conn.execute(
+                "ALTER TABLE sale_items ADD COLUMN cost_price REAL DEFAULT 0"
+            )
+            # Update existing sale_items with current cost_price from products
+            conn.execute(
+                """
+                UPDATE sale_items 
+                SET cost_price = COALESCE((SELECT cost_price FROM products WHERE id = sale_items.product_id), 0)
+                WHERE cost_price = 0
+                """
+            )
+        except sqlite3.OperationalError:
+            pass
+
         try:
             conn.execute(
                 "ALTER TABLE sales ADD COLUMN "
@@ -140,6 +164,20 @@ def init_db():
                 WHERE payment_type = 'credit'
                 AND (remaining_amount = 0 
                      OR remaining_amount IS NULL)
+            """)
+            conn.commit()
+        except Exception:
+            pass
+        
+        # Ensure that the statuses reflect correct paid/partial/unpaid states for all sales
+        try:
+            conn.execute("""
+                UPDATE sales 
+                SET status = CASE 
+                    WHEN remaining_amount <= 0 THEN 'paid'
+                    WHEN amount_paid > 0 THEN 'partial'
+                    ELSE 'unpaid'
+                END
             """)
             conn.commit()
         except Exception:

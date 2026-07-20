@@ -8,7 +8,7 @@ from datetime import date, timedelta
 
 from collections import defaultdict
 
-from database import get_connection, get_next_invoice_number, get_user_by_id, get_user_by_username, init_db
+from database import get_connection, get_next_invoice_number, get_user_by_id, get_user_by_username, init_db, DB_PATH
 
 init_db()
 
@@ -126,12 +126,6 @@ def logout():
 def dashboard():
     conn = get_connection()
     try:
-        # Get total products
-        total_products = conn.execute("SELECT COUNT(*) as count FROM products").fetchone()["count"]
-        
-        # Get total customers
-        total_customers = conn.execute("SELECT COUNT(*) as count FROM customers").fetchone()["count"]
-        
         # Get today's sales
         today = date.today().isoformat()
         todays_sales = conn.execute(
@@ -139,21 +133,29 @@ def dashboard():
             (today,)
         ).fetchone()["count"]
         
-        # Get monthly revenue
+        # Get monthly revenue and cost
         now = date.today()
         current_month = now.month
         current_year = now.year
-        monthly_revenue = conn.execute(
+        monthly_data = conn.execute(
             """
-            SELECT COALESCE(SUM(grand_total), 0) as total 
-            FROM sales 
-            WHERE strftime('%m', invoice_date) = ? AND strftime('%Y', invoice_date) = ?
+            SELECT 
+                COALESCE(SUM(s.grand_total), 0) as total_revenue,
+                COALESCE(SUM(si.qty * si.cost_price), 0) as total_cost
+            FROM sales s
+            LEFT JOIN sale_items si ON si.sale_id = s.id
+            WHERE strftime('%m', s.invoice_date) = ? AND strftime('%Y', s.invoice_date) = ?
             """,
             (f"{current_month:02d}", str(current_year))
-        ).fetchone()["total"]
+        ).fetchone()
+        
+        monthly_revenue = float(monthly_data["total_revenue"] or 0)
+        monthly_cost = float(monthly_data["total_cost"] or 0)
+        monthly_profit = monthly_revenue - monthly_cost
+        monthly_margin = round((monthly_profit / monthly_revenue * 100), 2) if monthly_revenue > 0 else 0
         
         # Get recent sales (last 5)
-        recent_sales = conn.execute(
+        recent_sales_rows = conn.execute(
             """
             SELECT
                 s.id,
@@ -162,13 +164,43 @@ def dashboard():
                 c.name AS customer_name,
                 s.grand_total,
                 s.payment_type,
-                s.status
+                s.status,
+                (SELECT COALESCE(SUM(si.qty * si.cost_price), 0) FROM sale_items si WHERE si.sale_id = s.id) as total_cost
             FROM sales s
             LEFT JOIN customers c ON c.id = s.customer_id
-            ORDER BY s.invoice_date DESC, s.id DESC
+            ORDER BY s.id DESC
             LIMIT 5
             """
         ).fetchall()
+        recent_sales = []
+        for r in recent_sales_rows:
+            d = dict(r)
+            rev = float(d["grand_total"] or 0)
+            cost = float(d["total_cost"] or 0)
+            d["profit_margin"] = round(((rev - cost) / rev * 100), 2) if rev > 0 else 0
+            recent_sales.append(d)
+
+        # Get upcoming/overdue payments (limit 10)
+        upcoming_payments_rows = conn.execute(
+            """
+            SELECT
+                s.id,
+                s.invoice_number,
+                s.invoice_date,
+                s.due_date,
+                c.name AS customer_name,
+                c.phone AS customer_phone,
+                s.remaining_amount
+            FROM sales s
+            LEFT JOIN customers c ON c.id = s.customer_id
+            WHERE s.remaining_amount > 0
+              AND s.due_date IS NOT NULL
+              AND s.due_date != ''
+            ORDER BY s.due_date ASC
+            LIMIT 10
+            """
+        ).fetchall()
+        upcoming_payments = [dict(r) for r in upcoming_payments_rows]
         
         # Get daily sales for the last 30 days
         thirty_days_ago = (date.today() - timedelta(days=30)).isoformat()
@@ -191,13 +223,14 @@ def dashboard():
     
     return render_template(
         "dashboard.html",
-        total_products=total_products,
-        total_customers=total_customers,
+        monthly_profit=monthly_profit,
+        monthly_margin=monthly_margin,
         todays_sales=todays_sales,
-        monthly_revenue=float(monthly_revenue),
-        recent_sales=[dict(sale) for sale in recent_sales],
+        monthly_revenue=monthly_revenue,
+        recent_sales=recent_sales,
+        upcoming_payments=upcoming_payments,
         daily_sales_labels=daily_sales_labels,
-        daily_sales_data=daily_sales_data
+        daily_sales_data=daily_sales_data,
     )
 
 
@@ -710,6 +743,46 @@ def brands_search():
         conn.close()
 
 
+@app.route("/backup/download")
+@login_required
+def backup_download():
+    import io
+    import csv
+    import zipfile
+    from flask import send_file
+    from datetime import date
+    
+    conn = get_connection()
+    try:
+        tables = ["users", "customers", "categories", "brands", "products", "sales", "sale_items"]
+        
+        memory_file = io.BytesIO()
+        with zipfile.ZipFile(memory_file, 'w', zipfile.ZIP_DEFLATED) as zf:
+            # Add database.db
+            zf.write(DB_PATH, arcname='database.db')
+            
+            # Export each table to CSV
+            for table in tables:
+                rows = conn.execute(f"SELECT * FROM {table}").fetchall()
+                if rows:
+                    csv_io = io.StringIO()
+                    writer = csv.writer(csv_io)
+                    writer.writerow(rows[0].keys())
+                    for row in rows:
+                        writer.writerow(tuple(row))
+                    zf.writestr(f"{table}.csv", csv_io.getvalue())
+        
+        memory_file.seek(0)
+        return send_file(
+            memory_file,
+            mimetype="application/zip",
+            as_attachment=True,
+            download_name=f"AK_Distributors_Backup_{date.today().isoformat()}.zip"
+        )
+    finally:
+        conn.close()
+
+
 @app.route("/customers")
 @login_required
 def customers():
@@ -925,7 +998,8 @@ def sales():
                 s.payment_type,
                 s.status,
                 COALESCE(s.amount_paid, 0) AS amount_paid,
-                COALESCE(s.remaining_amount, 0) AS remaining_amount
+                COALESCE(s.remaining_amount, 0) AS remaining_amount,
+                COALESCE(SUM(si.qty * si.cost_price), 0) AS total_cost
             FROM sales s
             LEFT JOIN customers c ON c.id = s.customer_id
             LEFT JOIN sale_items si ON si.sale_id = s.id
@@ -934,7 +1008,13 @@ def sales():
             LIMIT 10
             """
         ).fetchall()
-        recent_sales = [dict(r) for r in recent_sales_rows]
+        recent_sales = []
+        for r in recent_sales_rows:
+            d = dict(r)
+            rev = float(d["grand_total"] or 0)
+            cost = float(d["total_cost"] or 0)
+            d["profit_margin"] = round(((rev - cost) / rev * 100), 2) if rev > 0 else 0
+            recent_sales.append(d)
     finally:
         conn.close()
 
@@ -968,6 +1048,7 @@ def products_search():
                     name,
                     brand,
                     selling_price,
+                    cost_price,
                     unit,
                     stock_quantity
                 FROM products
@@ -983,6 +1064,7 @@ def products_search():
                     name,
                     brand,
                     selling_price,
+                    cost_price,
                     unit,
                     stock_quantity
                 FROM products
@@ -1000,6 +1082,7 @@ def products_search():
                     "name": r["name"],
                     "brand": r["brand"],
                     "selling_price": r["selling_price"],
+                    "cost_price": r["cost_price"],
                     "unit": r["unit"],
                     "stock_quantity": r["stock_quantity"],
                 }
@@ -1060,16 +1143,129 @@ def sales_data():
                 s.notes,
                 s.amount_paid,
                 s.remaining_amount,
-                c.name as customer_name
+                c.name as customer_name,
+                (SELECT COALESCE(SUM(si.qty * si.cost_price), 0) FROM sale_items si WHERE si.sale_id = s.id) as total_cost
             FROM sales s
             LEFT JOIN customers c ON c.id = s.customer_id
             {where_sql}
             ORDER BY s.id DESC
             """
         , params)
-        return jsonify([dict(r) for r in cur.fetchall()])
+        sales_list = []
+        for r in cur.fetchall():
+            d = dict(r)
+            rev = float(d["grand_total"] or 0)
+            cost = float(d["total_cost"] or 0)
+            d["profit_margin"] = round(((rev - cost) / rev * 100), 2) if rev > 0 else 0
+            sales_list.append(d)
+        return jsonify(sales_list)
     finally:
         conn.close()
+
+
+@app.route("/sales/export", methods=["GET"])
+@login_required
+def sales_export():
+    import csv
+    import io
+    import datetime
+
+    date_from = (request.args.get("date_from") or "").strip()
+    date_to = (request.args.get("date_to") or "").strip()
+    customer_id = (request.args.get("customer_id") or "").strip()
+    payment_type = (request.args.get("payment_type") or "").strip()
+
+    conditions = []
+    params = []
+
+    if date_from:
+        conditions.append("s.invoice_date >= ?")
+        params.append(date_from)
+    if date_to:
+        conditions.append("s.invoice_date <= ?")
+        params.append(date_to)
+    if customer_id and customer_id not in ("all", "0"):
+        try:
+            customer_id_int = int(customer_id)
+            conditions.append("s.customer_id = ?")
+            params.append(customer_id_int)
+        except ValueError:
+            pass
+    if payment_type and payment_type not in ("all", ""):
+        conditions.append("s.payment_type = ?")
+        params.append(payment_type)
+
+    where_sql = ""
+    if conditions:
+        where_sql = "WHERE " + " AND ".join(conditions)
+
+    conn = get_connection()
+    try:
+        cur = conn.execute(
+            f"""
+            SELECT
+                s.id,
+                s.invoice_number,
+                s.invoice_date,
+                s.customer_id,
+                s.payment_type,
+                s.subtotal,
+                s.discount_amount,
+                s.grand_total,
+                s.status,
+                s.notes,
+                s.amount_paid,
+                s.remaining_amount,
+                c.name as customer_name,
+                (SELECT COUNT(si.id) FROM sale_items si WHERE si.sale_id = s.id) as item_count,
+                (SELECT COALESCE(SUM(si.qty * si.cost_price), 0) FROM sale_items si WHERE si.sale_id = s.id) as total_cost
+            FROM sales s
+            LEFT JOIN customers c ON c.id = s.customer_id
+            {where_sql}
+            ORDER BY s.id DESC
+            """
+        , params)
+        rows = cur.fetchall()
+    finally:
+        conn.close()
+
+    header = [
+        "Invoice Number", "Date", "Customer", "Item Count", 
+        "Subtotal", "Discount", "Grand Total", "Profit Margin (%)", 
+        "Payment Type", "Status", "Amount Paid", "Remaining Balance"
+    ]
+    
+    csv_rows = []
+    for r in rows:
+        d = dict(r)
+        rev = float(d["grand_total"] or 0)
+        cost = float(d["total_cost"] or 0)
+        margin = round(((rev - cost) / rev * 100), 2) if rev > 0 else 0.0
+        csv_rows.append([
+            d["invoice_number"] or "",
+            d["invoice_date"] or "",
+            d["customer_name"] or "Walk-in",
+            str(d["item_count"] or 0),
+            f'{float(d["subtotal"] or 0):.2f}',
+            f'{float(d["discount_amount"] or 0):.2f}',
+            f'{rev:.2f}',
+            f'{margin:.2f}',
+            d["payment_type"] or "",
+            d["status"] or "",
+            f'{float(d["amount_paid"] or 0):.2f}',
+            f'{float(d["remaining_amount"] or 0):.2f}'
+        ])
+
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow(header)
+    writer.writerows(csv_rows)
+    csv_bytes = output.getvalue().encode("utf-8")
+
+    year = datetime.datetime.now().year
+    resp = Response(csv_bytes, mimetype="text/csv")
+    resp.headers["Content-Disposition"] = f'attachment; filename="sales_export_{year}.csv"'
+    return resp
 
 
 @app.route("/sales/new", methods=["POST"])
@@ -1255,9 +1451,9 @@ def sales_new():
                 conn.execute(
                     """
                     INSERT INTO sale_items
-                        (sale_id, product_id, description, qty, rate, amount)
+                        (sale_id, product_id, description, qty, rate, amount, cost_price)
                     VALUES
-                        (?, ?, ?, ?, ?, ?)
+                        (?, ?, ?, ?, ?, ?, COALESCE((SELECT cost_price FROM products WHERE id = ?), 0))
                     """,
                     (
                         sale_id,
@@ -1266,6 +1462,7 @@ def sales_new():
                         li["qty"],
                         li["rate"],
                         li["amount"],
+                        li["product_id"],
                     ),
                 )
 
@@ -1647,9 +1844,9 @@ def sales_update(sale_id: int):
                 conn.execute(
                     """
                     INSERT INTO sale_items
-                        (sale_id, product_id, description, qty, rate, amount)
+                        (sale_id, product_id, description, qty, rate, amount, cost_price)
                     VALUES
-                        (?, ?, ?, ?, ?, ?)
+                        (?, ?, ?, ?, ?, ?, COALESCE((SELECT cost_price FROM products WHERE id = ?), 0))
                     """,
                     (
                         sale_id,
@@ -1658,6 +1855,7 @@ def sales_update(sale_id: int):
                         li["qty"],
                         li["rate"],
                         li["amount"],
+                        li["product_id"],
                     ),
                 )
 
@@ -1707,6 +1905,7 @@ def sale_details(sale_id: int):
         sale = conn.execute(
             """
             SELECT 
+                s.id,
                 s.invoice_number,
                 s.invoice_date,
                 s.due_date,
@@ -1718,7 +1917,8 @@ def sale_details(sale_id: int):
                 s.grand_total,
                 s.amount_paid,
                 s.remaining_amount,
-                c.name as customer_name
+                c.name as customer_name,
+                (SELECT COALESCE(SUM(si.qty * si.cost_price), 0) FROM sale_items si WHERE si.sale_id = s.id) as total_cost
             FROM sales s
             LEFT JOIN customers c ON c.id = s.customer_id
             WHERE s.id = ?
@@ -1744,7 +1944,12 @@ def sale_details(sale_id: int):
             (sale_id,),
         ).fetchall()
         
+        rev = float(sale["grand_total"] or 0)
+        cost = float(sale["total_cost"] or 0)
+        profit_margin = round(((rev - cost) / rev * 100), 2) if rev > 0 else 0
+
         return jsonify({
+            "id": sale["id"],
             "invoice_number": sale["invoice_number"],
             "invoice_date": sale["invoice_date"],
             "due_date": sale["due_date"],
@@ -1757,6 +1962,7 @@ def sale_details(sale_id: int):
             "amount_paid": sale["amount_paid"],
             "remaining_amount": sale["remaining_amount"],
             "customer_name": sale["customer_name"],
+            "profit_margin": profit_margin,
             "items": [dict(item) for item in items]
         })
     finally:
@@ -1965,62 +2171,95 @@ def record_payment(sale_id):
 @app.route("/reports")
 @login_required
 def reports():
-    return render_template("reports.html")
+    conn = get_connection()
+    try:
+        cur_c = conn.execute("SELECT id, name FROM customers ORDER BY name COLLATE NOCASE")
+        customers = [dict(r) for r in cur_c.fetchall()]
+
+        cur_p = conn.execute("SELECT id, name FROM products ORDER BY name COLLATE NOCASE")
+        products = [dict(r) for r in cur_p.fetchall()]
+
+        cur_b = conn.execute("SELECT DISTINCT brand FROM products WHERE brand IS NOT NULL AND brand != '' ORDER BY brand COLLATE NOCASE")
+        brands = [r["brand"] for r in cur_b.fetchall()]
+    finally:
+        conn.close()
+
+    return render_template(
+        "reports.html",
+        customers=customers,
+        products=products,
+        brands=brands
+    )
 
 
-def _sales_filters_from_request():
+
+def parse_date_filters(conditions, params):
     date_from = (request.args.get("date_from") or "").strip()
     date_to = (request.args.get("date_to") or "").strip()
-    payment_type = (request.args.get("payment_type") or "all").strip()
-
-    conditions = ["s.customer_id IS NOT NULL"]
-    params = []
-
     if date_from:
         conditions.append("s.invoice_date >= ?")
         params.append(date_from)
     if date_to:
         conditions.append("s.invoice_date <= ?")
         params.append(date_to)
-    if payment_type and payment_type != "all":
-        conditions.append("s.payment_type = ?")
-        params.append(payment_type)
-
-    return " AND ".join(conditions), params
 
 
 @app.route("/reports/by-customer", methods=["GET"])
 @login_required
 def reports_by_customer():
-    where_sql, params = _sales_filters_from_request()
+    conditions = ["s.customer_id IS NOT NULL"]
+    params = []
+    parse_date_filters(conditions, params)
+
+    product_id = (request.args.get("product_id") or "").strip()
+    brand = (request.args.get("brand") or "").strip()
+    
+    join_sale_items = False
+    
+    if product_id:
+        conditions.append("si.product_id = ?")
+        params.append(product_id)
+        join_sale_items = True
+    if brand:
+        conditions.append("p.brand = ?")
+        params.append(brand)
+        join_sale_items = True
+        
+    where_sql = " AND ".join(conditions)
 
     conn = get_connection()
     try:
+        # If we need to filter by product/brand, we must join sale_items for the summary.
+        # But wait, to calculate profit margin we ALWAYS need sale_items.
+        
         summary = conn.execute(
-            f"""
+            f'''
             SELECT 
               c.id as customer_id,
               c.name as customer_name,
               c.area,
-              COUNT(s.id) as invoice_count,
-              COALESCE(SUM(s.grand_total), 0) 
-                as total_revenue,
-              COALESCE(SUM(s.remaining_amount), 0) 
-                as outstanding,
+              COUNT(DISTINCT s.id) as invoice_count,
+              COALESCE(SUM(si.amount), 0) as total_revenue,
+              COALESCE(SUM(si.qty * si.cost_price), 0) as total_cost,
+              (SELECT COALESCE(SUM(remaining_amount), 0) FROM sales WHERE customer_id = c.id) as outstanding,
               MAX(s.invoice_date) as last_sale_date
             FROM customers c
-            LEFT JOIN sales s ON s.customer_id = c.id
+            JOIN sales s ON s.customer_id = c.id
+            JOIN sale_items si ON si.sale_id = s.id
+            JOIN products p ON p.id = si.product_id
             WHERE {where_sql}
             GROUP BY c.id, c.name, c.area
             ORDER BY total_revenue DESC
-            """
+            '''
             ,
             params,
         ).fetchall()
 
+        # For invoices, we just need to get the invoices that match the filters.
         invoices = conn.execute(
-            f"""
-            SELECT
+            f'''
+            SELECT DISTINCT
+                s.id as sale_id,
                 s.customer_id,
                 s.invoice_number,
                 s.invoice_date,
@@ -2028,9 +2267,11 @@ def reports_by_customer():
                 s.payment_type,
                 s.status
             FROM sales s
+            JOIN sale_items si ON si.sale_id = s.id
+            JOIN products p ON p.id = si.product_id
             WHERE {where_sql}
             ORDER BY s.invoice_date DESC, s.id DESC
-            """
+            '''
             ,
             params,
         ).fetchall()
@@ -2039,12 +2280,16 @@ def reports_by_customer():
 
     by_customer = {}
     for row in summary:
+        revenue = float(row["total_revenue"] or 0)
+        cost = float(row["total_cost"] or 0)
+        margin = ((revenue - cost) / revenue * 100) if revenue > 0 else 0
         by_customer[int(row["customer_id"])] = {
             "customer_id": int(row["customer_id"]),
             "customer_name": row["customer_name"] or "",
             "area": row["area"] or "",
             "invoice_count": int(row["invoice_count"] or 0),
-            "total_revenue": float(row["total_revenue"] or 0),
+            "total_revenue": revenue,
+            "profit_margin": margin,
             "outstanding": float(row["outstanding"] or 0),
             "last_sale_date": row["last_sale_date"] or "",
             "invoices": [],
@@ -2052,401 +2297,375 @@ def reports_by_customer():
 
     for inv in invoices:
         cid = int(inv["customer_id"])
-        item = {
-            "invoice_number": inv["invoice_number"] or "",
-            "invoice_date": inv["invoice_date"] or "",
-            "grand_total": float(inv["grand_total"] or 0),
-            "payment_type": inv["payment_type"] or "",
-            "status": inv["status"] or "",
-        }
         if cid in by_customer:
-            by_customer[cid]["invoices"].append(item)
+            by_customer[cid]["invoices"].append(dict(inv))
 
     return jsonify(list(by_customer.values()))
 
 
-@app.route("/reports/by-area", methods=["GET"])
+@app.route("/reports/by-brand", methods=["GET"])
 @login_required
-def reports_by_area():
-    where_sql, params = _sales_filters_from_request()
+def reports_by_brand():
+    conditions = ["s.customer_id IS NOT NULL", "p.brand IS NOT NULL", "p.brand != ''"]
+    params = []
+    parse_date_filters(conditions, params)
+
+    customer_id = (request.args.get("customer_id") or "").strip()
+    if customer_id:
+        conditions.append("s.customer_id = ?")
+        params.append(customer_id)
+        
+    where_sql = " AND ".join(conditions)
 
     conn = get_connection()
     try:
         rows = conn.execute(
-            f"""
+            f'''
             SELECT
-                COALESCE(NULLIF(TRIM(c.area), ''), 'Unspecified') AS area,
-                COUNT(DISTINCT c.id) AS customer_count,
-                COUNT(DISTINCT s.id) AS invoice_count,
-                COALESCE(SUM(s.grand_total), 0) AS total_revenue
-            FROM sales s
-            JOIN customers c ON c.id = s.customer_id
+                p.brand,
+                COALESCE(SUM(si.qty), 0) AS units_sold,
+                COALESCE(SUM(si.amount), 0) AS total_revenue,
+                COALESCE(SUM(si.qty * si.cost_price), 0) as total_cost
+            FROM sale_items si
+            JOIN products p ON p.id = si.product_id
+            JOIN sales s ON s.id = si.sale_id
             WHERE {where_sql}
-            GROUP BY area
-            ORDER BY area COLLATE NOCASE
-            """,
+            GROUP BY p.brand
+            ORDER BY total_revenue DESC
+            ''',
             params,
         ).fetchall()
     finally:
         conn.close()
 
-    return jsonify(
-        [
-            {
-                "area": r["area"] or "",
-                "customer_count": int(r["customer_count"] or 0),
-                "invoice_count": int(r["invoice_count"] or 0),
-                "total_revenue": float(r["total_revenue"] or 0),
-            }
-            for r in rows
-        ]
-    )
+    result = []
+    for r in rows:
+        revenue = float(r["total_revenue"] or 0)
+        cost = float(r["total_cost"] or 0)
+        margin = ((revenue - cost) / revenue * 100) if revenue > 0 else 0
+        result.append({
+            "brand": r["brand"],
+            "units_sold": float(r["units_sold"] or 0),
+            "total_revenue": revenue,
+            "profit_margin": margin
+        })
+    return jsonify(result)
 
 
 @app.route("/reports/by-category", methods=["GET"])
 @login_required
 def reports_by_category():
-    # Category reports are driven by sale_items joined to sales.
-    date_from = (request.args.get("date_from") or "").strip()
-    date_to = (request.args.get("date_to") or "").strip()
-    payment_type = (request.args.get("payment_type") or "all").strip()
-
     conditions = ["s.customer_id IS NOT NULL"]
     params = []
-    if date_from:
-        conditions.append("s.invoice_date >= ?")
-        params.append(date_from)
-    if date_to:
-        conditions.append("s.invoice_date <= ?")
-        params.append(date_to)
-    if payment_type and payment_type != "all":
-        conditions.append("s.payment_type = ?")
-        params.append(payment_type)
+    parse_date_filters(conditions, params)
+
+    customer_id = (request.args.get("customer_id") or "").strip()
+    if customer_id:
+        conditions.append("s.customer_id = ?")
+        params.append(customer_id)
+        
     where_sql = " AND ".join(conditions)
 
     conn = get_connection()
     try:
         rows = conn.execute(
-            f"""
+            f'''
             SELECT
                 COALESCE(cat.name, 'Uncategorized') AS category_name,
                 COALESCE(SUM(si.qty), 0) AS qty_sold,
-                COALESCE(SUM(si.amount), 0) AS total_revenue
+                COALESCE(SUM(si.amount), 0) AS total_revenue,
+                COALESCE(SUM(si.qty * si.cost_price), 0) as total_cost,
+                SUM(p.stock_quantity) as current_stock
             FROM sale_items si
             JOIN products p ON p.id = si.product_id
             LEFT JOIN categories cat ON cat.id = p.category_id
             JOIN sales s ON s.id = si.sale_id
             WHERE {where_sql}
-            GROUP BY category_name
-            ORDER BY category_name COLLATE NOCASE
-            """,
+            GROUP BY p.category_id, cat.name
+            ORDER BY total_revenue DESC
+            ''',
             params,
         ).fetchall()
     finally:
         conn.close()
 
-    return jsonify(
-        [
-            {
-                "category_name": r["category_name"] or "",
-                "qty_sold": float(r["qty_sold"] or 0),
-                "total_revenue": float(r["total_revenue"] or 0),
-            }
-            for r in rows
-        ]
-    )
+    result = []
+    for r in rows:
+        revenue = float(r["total_revenue"] or 0)
+        cost = float(r["total_cost"] or 0)
+        margin = ((revenue - cost) / revenue * 100) if revenue > 0 else 0
+        
+        result.append({
+            "category_name": r["category_name"],
+            "qty_sold": float(r["qty_sold"] or 0),
+            "total_revenue": revenue,
+            "profit_margin": margin,
+            "current_stock": float(r["current_stock"] or 0)
+        })
+    return jsonify(result)
 
 
 @app.route("/reports/by-product", methods=["GET"])
 @login_required
 def reports_by_product():
-    date_from = (request.args.get("date_from") or "").strip()
-    date_to = (request.args.get("date_to") or "").strip()
-    payment_type = (request.args.get("payment_type") or "all").strip()
-
     conditions = ["s.customer_id IS NOT NULL"]
     params = []
-    if date_from:
-        conditions.append("s.invoice_date >= ?")
-        params.append(date_from)
-    if date_to:
-        conditions.append("s.invoice_date <= ?")
-        params.append(date_to)
-    if payment_type and payment_type != "all":
-        conditions.append("s.payment_type = ?")
-        params.append(payment_type)
+    parse_date_filters(conditions, params)
+
+    customer_id = (request.args.get("customer_id") or "").strip()
+    if customer_id:
+        conditions.append("s.customer_id = ?")
+        params.append(customer_id)
+        
     where_sql = " AND ".join(conditions)
 
     conn = get_connection()
     try:
         rows = conn.execute(
-            f"""
+            f'''
             SELECT
-                p.name AS product_name,
-                p.brand AS brand,
-                COALESCE(cat.name, 'Uncategorized') AS category,
-                COALESCE(SUM(si.qty), 0) AS units_sold,
-                COALESCE(SUM(si.amount), 0) AS total_revenue,
-                COALESCE(p.stock_quantity, 0) AS current_stock
+                p.id as product_id,
+                p.name as product_name,
+                p.brand,
+                COALESCE(cat.name, 'Uncategorized') as category,
+                COALESCE(SUM(si.qty), 0) as units_sold,
+                COALESCE(SUM(si.amount), 0) as total_revenue,
+                COALESCE(SUM(si.qty * si.cost_price), 0) as total_cost,
+                p.stock_quantity as current_stock
             FROM sale_items si
             JOIN products p ON p.id = si.product_id
             LEFT JOIN categories cat ON cat.id = p.category_id
             JOIN sales s ON s.id = si.sale_id
             WHERE {where_sql}
             GROUP BY p.id
-            ORDER BY p.name COLLATE NOCASE
-            """,
+            ORDER BY total_revenue DESC
+            ''',
             params,
         ).fetchall()
     finally:
         conn.close()
 
-    return jsonify(
-        [
-            {
-                "product_name": r["product_name"] or "",
-                "brand": r["brand"] or "",
-                "category": r["category"] or "",
-                "units_sold": float(r["units_sold"] or 0),
-                "total_revenue": float(r["total_revenue"] or 0),
-                "current_stock": float(r["current_stock"] or 0),
-            }
-            for r in rows
-        ]
-    )
+    result = []
+    for r in rows:
+        revenue = float(r["total_revenue"] or 0)
+        cost = float(r["total_cost"] or 0)
+        margin = ((revenue - cost) / revenue * 100) if revenue > 0 else 0
+        
+        result.append({
+            "product_name": r["product_name"] or "",
+            "brand": r["brand"] or "",
+            "category": r["category"] or "",
+            "units_sold": float(r["units_sold"] or 0),
+            "total_revenue": revenue,
+            "profit_margin": margin,
+            "current_stock": float(r["current_stock"] or 0)
+        })
+    return jsonify(result)
 
 
 def _export_csv_bytes(rows, header):
-    buf = io.StringIO()
-    writer = csv.writer(buf)
+    import csv
+    import io
+    output = io.StringIO()
+    writer = csv.writer(output)
     writer.writerow(header)
-    for row in rows:
-        writer.writerow(row)
-    return buf.getvalue().encode("utf-8")
-
-
-import io  # used for CSV buffer
+    writer.writerows(rows)
+    return output.getvalue().encode("utf-8")
 
 
 @app.route("/reports/export/<type>", methods=["GET"])
 @login_required
 def reports_export(type: str):
-    date_from = (request.args.get("date_from") or "").strip()
-    date_to = (request.args.get("date_to") or "").strip()
-    payment_type = (request.args.get("payment_type") or "all").strip()
+    import datetime
+    year = datetime.datetime.now().year
 
-    query = {"date_from": date_from, "date_to": date_to, "payment_type": payment_type}
-    qs = {k: v for k, v in query.items() if v}
-
-    # Best-effort year in filename.
-    year = None
-    for candidate in (date_from, date_to):
-        if candidate and len(candidate) >= 4:
-            year = candidate[:4]
-            break
-    if not year:
-        year = str(date.today().year)
-
-    if type == "customer":
-        where_sql, params = _sales_filters_from_request()
-        conn = get_connection()
-        try:
-            rows = conn.execute(
-                f"""
-                SELECT
-                    c.name AS customer_name,
-                    c.area AS area,
-                    COUNT(DISTINCT s.id) AS invoice_count,
-                    COALESCE(SUM(s.grand_total), 0) AS total_revenue,
-                    COALESCE(
-                        SUM(
-                            CASE
-                                WHEN s.payment_type = 'credit' AND s.status = 'unpaid'
-                                THEN COALESCE(s.grand_total, 0)
-                                ELSE 0
-                            END
-                        ),
-                        0
-                    ) AS outstanding,
-                    MAX(s.invoice_date) AS last_sale_date
-                FROM sales s
-                JOIN customers c ON c.id = s.customer_id
-                WHERE {where_sql}
-                GROUP BY c.id
-                ORDER BY total_revenue DESC
-                """,
-                params,
-            ).fetchall()
-        finally:
-            conn.close()
-
-        header = [
-            "Customer Name",
-            "Area",
-            "Total Invoices",
-            "Total Revenue",
-            "Outstanding",
-            "Last Sale Date",
-        ]
-        csv_rows = [
-            [
-                r["customer_name"] or "",
-                r["area"] or "",
-                str(int(r["invoice_count"] or 0)),
-                f'{float(r["total_revenue"] or 0):.2f}',
-                f'{float(r["outstanding"] or 0):.2f}',
-                r["last_sale_date"] or "",
-            ]
-            for r in rows
-        ]
-
-        filename = f"sales_by_customer_{year}.csv"
-
-    elif type == "area":
-        where_sql, params = _sales_filters_from_request()
-        conn = get_connection()
-        try:
-            rows = conn.execute(
-                f"""
-                SELECT
-                    COALESCE(NULLIF(TRIM(c.area), ''), 'Unspecified') AS area,
-                    COUNT(DISTINCT c.id) AS customer_count,
-                    COUNT(DISTINCT s.id) AS invoice_count,
-                    COALESCE(SUM(s.grand_total), 0) AS total_revenue
-                FROM sales s
-                JOIN customers c ON c.id = s.customer_id
-                WHERE {where_sql}
-                GROUP BY area
-                ORDER BY area COLLATE NOCASE
-                """,
-                params,
-            ).fetchall()
-        finally:
-            conn.close()
-
-        header = ["Area", "Total Customers", "Total Invoices", "Total Revenue"]
-        csv_rows = [
-            [
-                r["area"] or "",
-                str(int(r["customer_count"] or 0)),
-                str(int(r["invoice_count"] or 0)),
-                f'{float(r["total_revenue"] or 0):.2f}',
-            ]
-            for r in rows
-        ]
-        filename = f"sales_by_area_{year}.csv"
-
-    elif type == "category":
-        # Need category summary query without nested exports.
-        date_from = (request.args.get("date_from") or "").strip()
-        date_to = (request.args.get("date_to") or "").strip()
-        payment_type = (request.args.get("payment_type") or "all").strip()
+    conn = get_connection()
+    try:
         conditions = ["s.customer_id IS NOT NULL"]
         params = []
-        if date_from:
-            conditions.append("s.invoice_date >= ?")
-            params.append(date_from)
-        if date_to:
-            conditions.append("s.invoice_date <= ?")
-            params.append(date_to)
-        if payment_type and payment_type != "all":
-            conditions.append("s.payment_type = ?")
-            params.append(payment_type)
-        where_sql = " AND ".join(conditions)
+        parse_date_filters(conditions, params)
 
-        conn = get_connection()
-        try:
+        if type == "customer":
+            product_id = (request.args.get("product_id") or "").strip()
+            brand = (request.args.get("brand") or "").strip()
+            if product_id:
+                conditions.append("si.product_id = ?")
+                params.append(product_id)
+            if brand:
+                conditions.append("p.brand = ?")
+                params.append(brand)
+            where_sql = " AND ".join(conditions)
+
             rows = conn.execute(
-                f"""
+                f'''
+                SELECT 
+                  c.name as customer_name,
+                  c.area,
+                  COUNT(DISTINCT s.id) as invoice_count,
+                  COALESCE(SUM(si.amount), 0) as total_revenue,
+                  COALESCE(SUM(si.qty * si.cost_price), 0) as total_cost,
+                  (SELECT COALESCE(SUM(remaining_amount), 0) FROM sales WHERE customer_id = c.id) as outstanding,
+                  MAX(s.invoice_date) as last_sale_date
+                FROM customers c
+                JOIN sales s ON s.customer_id = c.id
+                JOIN sale_items si ON si.sale_id = s.id
+                JOIN products p ON p.id = si.product_id
+                WHERE {where_sql}
+                GROUP BY c.id, c.name, c.area
+                ORDER BY total_revenue DESC
+                '''
+                ,
+                params,
+            ).fetchall()
+            header = ["Customer Name", "Area", "Total Invoices", "Total Revenue", "Profit Margin (%)", "Outstanding", "Last Sale Date"]
+            csv_rows = []
+            for r in rows:
+                rev = float(r["total_revenue"] or 0)
+                cost = float(r["total_cost"] or 0)
+                margin = f'{((rev - cost) / rev * 100):.2f}' if rev > 0 else '0.00'
+                csv_rows.append([
+                    r["customer_name"] or "",
+                    r["area"] or "",
+                    str(r["invoice_count"] or 0),
+                    f'{rev:.2f}',
+                    margin,
+                    f'{float(r["outstanding"] or 0):.2f}',
+                    r["last_sale_date"] or ""
+                ])
+            filename = f"sales_by_customer_{year}.csv"
+
+        elif type == "brand":
+            customer_id = (request.args.get("customer_id") or "").strip()
+            if customer_id:
+                conditions.append("s.customer_id = ?")
+                params.append(customer_id)
+            conditions.extend(["p.brand IS NOT NULL", "p.brand != ''"])
+            where_sql = " AND ".join(conditions)
+
+            rows = conn.execute(
+                f'''
+                SELECT
+                    p.brand,
+                    COALESCE(SUM(si.qty), 0) AS units_sold,
+                    COALESCE(SUM(si.amount), 0) AS total_revenue,
+                    COALESCE(SUM(si.qty * si.cost_price), 0) as total_cost
+                FROM sale_items si
+                JOIN products p ON p.id = si.product_id
+                JOIN sales s ON s.id = si.sale_id
+                WHERE {where_sql}
+                GROUP BY p.brand
+                ORDER BY total_revenue DESC
+                ''',
+                params,
+            ).fetchall()
+            header = ["Brand Name", "Units Sold", "Total Revenue", "Profit Margin (%)"]
+            csv_rows = []
+            for r in rows:
+                rev = float(r["total_revenue"] or 0)
+                cost = float(r["total_cost"] or 0)
+                margin = f'{((rev - cost) / rev * 100):.2f}' if rev > 0 else '0.00'
+                csv_rows.append([
+                    r["brand"] or "Unbranded",
+                    f'{float(r["units_sold"] or 0):.3f}',
+                    f'{rev:.2f}',
+                    margin
+                ])
+            filename = f"sales_by_brand_{year}.csv"
+
+        elif type == "category":
+            customer_id = (request.args.get("customer_id") or "").strip()
+            if customer_id:
+                conditions.append("s.customer_id = ?")
+                params.append(customer_id)
+            where_sql = " AND ".join(conditions)
+
+            rows = conn.execute(
+                f'''
                 SELECT
                     COALESCE(cat.name, 'Uncategorized') AS category_name,
                     COALESCE(SUM(si.qty), 0) AS qty_sold,
-                    COALESCE(SUM(si.amount), 0) AS total_revenue
+                    COALESCE(SUM(si.amount), 0) AS total_revenue,
+                    COALESCE(SUM(si.qty * si.cost_price), 0) as total_cost,
+                    SUM(p.stock_quantity) as current_stock
                 FROM sale_items si
                 JOIN products p ON p.id = si.product_id
                 LEFT JOIN categories cat ON cat.id = p.category_id
                 JOIN sales s ON s.id = si.sale_id
                 WHERE {where_sql}
-                GROUP BY category_name
-                ORDER BY category_name COLLATE NOCASE
-                """,
+                GROUP BY p.category_id, cat.name
+                ORDER BY total_revenue DESC
+                ''',
                 params,
             ).fetchall()
-        finally:
-            conn.close()
+            header = ["Category", "Total Items Sold (Qty)", "Total Revenue", "Profit Margin (%)", "Current Stock"]
+            csv_rows = []
+            for r in rows:
+                rev = float(r["total_revenue"] or 0)
+                cost = float(r["total_cost"] or 0)
+                margin = f'{((rev - cost) / rev * 100):.2f}' if rev > 0 else '0.00'
+                csv_rows.append([
+                    r["category_name"] or "",
+                    f'{float(r["qty_sold"] or 0):.3f}',
+                    f'{rev:.2f}',
+                    margin,
+                    f'{float(r["current_stock"] or 0):.3f}'
+                ])
+            filename = f"sales_by_category_{year}.csv"
 
-        header = ["Category", "Total Items Sold (Qty)", "Total Revenue"]
-        csv_rows = [
-            [r["category_name"] or "", f'{float(r["qty_sold"] or 0):.3f}', f'{float(r["total_revenue"] or 0):.2f}']
-            for r in rows
-        ]
-        filename = f"sales_by_category_{year}.csv"
+        elif type == "product":
+            customer_id = (request.args.get("customer_id") or "").strip()
+            if customer_id:
+                conditions.append("s.customer_id = ?")
+                params.append(customer_id)
+            where_sql = " AND ".join(conditions)
 
-    elif type == "product":
-        date_from = (request.args.get("date_from") or "").strip()
-        date_to = (request.args.get("date_to") or "").strip()
-        payment_type = (request.args.get("payment_type") or "all").strip()
-        conditions = ["s.customer_id IS NOT NULL"]
-        params = []
-        if date_from:
-            conditions.append("s.invoice_date >= ?")
-            params.append(date_from)
-        if date_to:
-            conditions.append("s.invoice_date <= ?")
-            params.append(date_to)
-        if payment_type and payment_type != "all":
-            conditions.append("s.payment_type = ?")
-            params.append(payment_type)
-        where_sql = " AND ".join(conditions)
-
-        conn = get_connection()
-        try:
             rows = conn.execute(
-                f"""
+                f'''
                 SELECT
-                    p.name AS product_name,
-                    p.brand AS brand,
-                    COALESCE(cat.name, 'Uncategorized') AS category,
-                    COALESCE(SUM(si.qty), 0) AS units_sold,
-                    COALESCE(SUM(si.amount), 0) AS total_revenue,
-                    COALESCE(p.stock_quantity, 0) AS current_stock
+                    p.name as product_name,
+                    p.brand,
+                    COALESCE(cat.name, 'Uncategorized') as category,
+                    COALESCE(SUM(si.qty), 0) as units_sold,
+                    COALESCE(SUM(si.amount), 0) as total_revenue,
+                    COALESCE(SUM(si.qty * si.cost_price), 0) as total_cost,
+                    p.stock_quantity as current_stock
                 FROM sale_items si
                 JOIN products p ON p.id = si.product_id
                 LEFT JOIN categories cat ON cat.id = p.category_id
                 JOIN sales s ON s.id = si.sale_id
                 WHERE {where_sql}
                 GROUP BY p.id
-                ORDER BY p.name COLLATE NOCASE
-                """,
+                ORDER BY total_revenue DESC
+                ''',
                 params,
             ).fetchall()
-        finally:
-            conn.close()
-
-        header = ["#", "Product Name", "Brand", "Category", "Units Sold", "Total Revenue", "Current Stock"]
-        csv_rows = []
-        for i, r in enumerate(rows, start=1):
-            csv_rows.append(
-                [
+            header = ["#", "Product Name", "Brand", "Category", "Units Sold", "Total Revenue", "Profit Margin (%)", "Current Stock"]
+            csv_rows = []
+            for i, r in enumerate(rows, start=1):
+                rev = float(r["total_revenue"] or 0)
+                cost = float(r["total_cost"] or 0)
+                margin = f'{((rev - cost) / rev * 100):.2f}' if rev > 0 else '0.00'
+                csv_rows.append([
                     str(i),
                     r["product_name"] or "",
                     r["brand"] or "",
                     r["category"] or "",
                     f'{float(r["units_sold"] or 0):.3f}',
-                    f'{float(r["total_revenue"] or 0):.2f}',
-                    f'{float(r["current_stock"] or 0):.3f}',
-                ]
-            )
-        filename = f"sales_by_product_{year}.csv"
+                    f'{rev:.2f}',
+                    margin,
+                    f'{float(r["current_stock"] or 0):.3f}'
+                ])
+            filename = f"sales_by_product_{year}.csv"
 
-    else:
-        return Response("Invalid export type", status=400)
+        else:
+            return Response("Invalid export type", status=400)
+    finally:
+        conn.close()
 
     csv_bytes = _export_csv_bytes(csv_rows, header)
     resp = Response(csv_bytes, mimetype="text/csv")
     resp.headers["Content-Disposition"] = f'attachment; filename="{filename}"'
     return resp
-
 
 if __name__ == "__main__":
     desired_port = int(os.environ.get("PORT", "5000"))

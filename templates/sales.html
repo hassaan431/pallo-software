@@ -390,6 +390,10 @@
               <div style="color: var(--color-text-muted); font-weight:800;">Grand Total</div>
               <div id="grandTotalAmount" class="grand-total">$0.00</div>
             </div>
+            <div style="display:flex; justify-content:space-between; gap:1rem; align-items:baseline; margin-top: 0.5rem; padding-top: 0.5rem; border-top: 1px dashed var(--color-border);">
+              <div style="color: var(--color-text-muted); font-weight:800;">Profit Margin</div>
+              <div id="profitMarginAmount" style="font-weight: 800; color: var(--color-success);">0.00%</div>
+            </div>
           </div>
         </div>
       </div>
@@ -442,19 +446,21 @@
             </select>
           </div>
         </div>
-        <div style="margin-top:0.9rem; display:flex; justify-content:flex-end;">
+        <div style="margin-top:0.9rem; display:flex; justify-content:flex-end; gap: 8px;">
           <button type="button" class="btn btn-primary" id="filterBtn">Filter</button>
+          <a href="/sales/export" id="exportSalesBtn" class="btn btn-secondary"><i class="fas fa-file-csv"></i> Export CSV</a>
         </div>
       </div>
 
       <div class="table-wrap">
-        <table class="data-table">
+        <table class="data-table" id="salesHistoryTable" style="font-size: 0.85rem;">
           <thead>
             <tr>
               <th>Invoice#</th>
               <th>Date</th>
               <th>Customer</th>
               <th>Grand Total</th>
+              <th>Margin</th>
               <th>Paid</th>
               <th>Remaining</th>
               <th>Type</th>
@@ -463,6 +469,13 @@
           </thead>
           <tbody id="recentSalesTbody"></tbody>
         </table>
+      </div>
+      <div id="salesPagination" style="margin-top: 1rem; display: flex; justify-content: space-between; align-items: center; font-size: 0.9rem;">
+        <span id="salesPageInfo"></span>
+        <div style="display: flex; gap: 8px;">
+          <button type="button" class="btn btn-secondary btn-sm" id="prevSalesPageBtn">Previous</button>
+          <button type="button" class="btn btn-secondary btn-sm" id="nextSalesPageBtn">Next</button>
+        </div>
       </div>
     </details>
   </div>
@@ -637,6 +650,7 @@
   const discountInput = document.getElementById('discountInput');
   const subtotalEl = document.getElementById('subtotalAmount');
   const grandTotalEl = document.getElementById('grandTotalAmount');
+  const profitMarginEl = document.getElementById('profitMarginAmount');
 
   function getRowAmount(row) {
     const amountEl = row.querySelector('.row-amount-cell');
@@ -647,14 +661,39 @@
   function recalcTotals() {
     const rows = Array.from(document.querySelectorAll('tr.line-item-row'));
     let subtotal = 0;
-    rows.forEach((r) => { subtotal += getRowAmount(r); });
+    let totalCost = 0;
+    rows.forEach((r) => { 
+      subtotal += getRowAmount(r);
+      
+      const qtyInput = r.querySelector('.qty-input');
+      const qty = qtyInput ? Number(qtyInput.value || 0) : 0;
+      const cpStr = r.dataset.costPrice || "0";
+      const cp = Number(cpStr);
+      totalCost += (qty * cp);
+    });
 
     subtotal = Math.round(subtotal * 100) / 100;
+    totalCost = Math.round(totalCost * 100) / 100;
 
     const discount = Number(discountInput.value || 0);
     const grand = Math.round((subtotal - (Number.isFinite(discount) ? discount : 0)) * 100) / 100;
+    
+    let profitMargin = 0;
+    if (grand > 0) {
+      profitMargin = ((grand - totalCost) / grand) * 100;
+    }
+
     subtotalEl.textContent = money(subtotal);
     grandTotalEl.textContent = money(grand < 0 ? 0 : grand);
+    
+    if (profitMarginEl) {
+      profitMarginEl.textContent = profitMargin.toFixed(2) + '%';
+      if (profitMargin < 0) {
+        profitMarginEl.style.color = 'var(--color-danger)';
+      } else {
+        profitMarginEl.style.color = 'var(--color-success)';
+      }
+    }
   }
 
   function updateRowAmount(row) {
@@ -690,9 +729,12 @@
   const stockBadge = stockQty !== null
     ? `<span class="stock-badge ${stockQty >= 5 ? 'green' : stockQty > 0 ? 'orange' : 'red'}">In stock: ${stockQty}</span>` 
     : '';
+  const displayCp = isEditItem
+    ? (product.cost_price || 0)
+    : (product ? (product.cost_price || 0) : 0);
 
   return `
-    <tr class="line-item-row" data-row-index="${index}">
+    <tr class="line-item-row" data-row-index="${index}" data-cost-price="${displayCp}">
       <td class="line-no">${index + 1}</td>
       <td>
         <div class="search-wrap" style="position: relative; margin-bottom:0.6rem;">
@@ -733,6 +775,7 @@
     row.dataset.productId = String(product.id);
     row.dataset.stockQuantity = String(product.stock_quantity || 0);
     row.dataset.baseSellingPrice = String(product.selling_price || 0);
+    row.dataset.costPrice = String(product.cost_price || 0);
     searchInput.value = display;
     rateInput.value = Number(product.selling_price || 0);
     if (!qtyInput.value) qtyInput.value = 1;
@@ -921,6 +964,7 @@
     row.dataset.productId = String(productId);
     row.dataset.stockQuantity = product ? String(product.stock_quantity || 0) : '0';
     row.dataset.baseSellingPrice = product ? String(product.rate || product.selling_price || 0) : '0';
+    row.dataset.costPrice = product ? String(product.cost_price || 0) : '0';
     initRowBehaviors(row);
     updateRowAmount(row);
   }
@@ -1053,6 +1097,14 @@
       tdGrand.textContent = money(s.grand_total);
       tr.appendChild(tdGrand);
 
+      // Margin
+      const tdMargin = document.createElement('td');
+      const margin = Number(s.profit_margin || 0);
+      tdMargin.textContent = margin.toFixed(2) + '%';
+      tdMargin.style.color = margin < 0 ? 'var(--color-danger)' : 'var(--color-success)';
+      tdMargin.style.fontWeight = '600';
+      tr.appendChild(tdMargin);
+
       // Paid (green color)
       const tdPaid = document.createElement('td');
       tdPaid.style.color = '#10b981';
@@ -1149,30 +1201,16 @@
       tdActions.appendChild(editLink);
       tdActions.appendChild(delForm);
 
-      // Record Payment Button (after Delete, Credit sales with remaining only)
-      if ((s.payment_type === 'credit' || s.payment_type === 'Credit') && parseFloat(s.remaining_amount) > 0) {
-          const payBtn = document.createElement('button');
-          payBtn.type = 'button';
-          payBtn.textContent = 'Record Payment';
-          payBtn.style.padding = '4px 10px';
-          payBtn.style.fontSize = '12px';
-          payBtn.style.borderRadius = '4px';
-          payBtn.style.background = '#16a34a';
-          payBtn.style.color = 'white';
-          payBtn.style.border = 'none';
-          payBtn.style.cursor = 'pointer';
-          payBtn.style.margin = '0 2px';
-          payBtn.onclick = (e) => {
-              e.stopPropagation();
-              openRecordPaymentModal(s.id, s.invoice_number, s.remaining_amount);
-          };
-          tdActions.appendChild(payBtn);
-      }
+      // Record Payment Button removed from here and moved to viewSale modal
       tr.appendChild(tdActions);
 
       recentSalesTbody.appendChild(tr);
     });
   }
+
+  let allSalesData = [];
+  let currentSalesPage = 1;
+  const salesPerPage = 20;
 
   async function loadSalesData() {
     const params = new URLSearchParams();
@@ -1181,10 +1219,53 @@
     if (filterCustomer && filterCustomer.value) params.append('customer_id', filterCustomer.value);
     if (filterPaymentType && filterPaymentType.value) params.append('payment_type', filterPaymentType.value);
 
+    // Update export link dynamically
+    const exportBtn = document.getElementById('exportSalesBtn');
+    if (exportBtn) {
+      exportBtn.href = '/sales/export?' + params.toString();
+    }
+
     const res = await fetch('/sales/data?' + params.toString(), { credentials: 'same-origin' });
-    const rows = await res.json();
-    renderRecentSales(rows);
+    allSalesData = await res.json();
+    currentSalesPage = 1;
+    renderRecentSalesPage();
   }
+
+  function renderRecentSalesPage() {
+    const startIndex = (currentSalesPage - 1) * salesPerPage;
+    const endIndex = startIndex + salesPerPage;
+    const pageRows = allSalesData.slice(startIndex, endIndex);
+    renderRecentSales(pageRows);
+    updateSalesPagination();
+  }
+
+  function updateSalesPagination() {
+    const pageInfo = document.getElementById('salesPageInfo');
+    const prevBtn = document.getElementById('prevSalesPageBtn');
+    const nextBtn = document.getElementById('nextSalesPageBtn');
+    if (!pageInfo || !prevBtn || !nextBtn) return;
+
+    const totalPages = Math.ceil(allSalesData.length / salesPerPage) || 1;
+    pageInfo.textContent = `Page ${currentSalesPage} of ${totalPages} (${allSalesData.length} total entries)`;
+
+    prevBtn.disabled = (currentSalesPage <= 1);
+    nextBtn.disabled = (currentSalesPage >= totalPages);
+  }
+
+  document.getElementById('prevSalesPageBtn')?.addEventListener('click', () => {
+    if (currentSalesPage > 1) {
+      currentSalesPage--;
+      renderRecentSalesPage();
+    }
+  });
+
+  document.getElementById('nextSalesPageBtn')?.addEventListener('click', () => {
+    const totalPages = Math.ceil(allSalesData.length / salesPerPage);
+    if (currentSalesPage < totalPages) {
+      currentSalesPage++;
+      renderRecentSalesPage();
+    }
+  });
 
   if (filterBtn) {
     filterBtn.addEventListener('click', () => {
@@ -1209,6 +1290,7 @@
       const descInput = row.querySelector('.description-input');
       const qtyEl = row.querySelector('.qty-input');
       const rateEl = row.querySelector('.rate-input');
+      const cpStr = row.dataset.costPrice || '0';
       const desc = safeTrim(descInput && descInput.value);
       const qty = Number(qtyEl && qtyEl.value);
       const rate = Number(rateEl && rateEl.value);
@@ -1221,6 +1303,7 @@
         description: desc,
         qty: qty,
         rate: rate,
+        cost_price: Number(cpStr),
         amount: Math.round((qty * rate) * 100) / 100,
       });
     });
@@ -1477,6 +1560,17 @@
           </td>
         </tr>` : '';
 
+      let recordPaymentHtml = '';
+      if ((data.payment_type === 'credit' || data.payment_type === 'Credit') && parseFloat(data.remaining_amount) > 0) {
+        recordPaymentHtml = `
+          <div style="margin-top: 16px; text-align: right;">
+            <button type="button" class="btn btn-primary" onclick="closeViewSale(); openRecordPaymentModal(${data.id}, '${data.invoice_number}', ${data.remaining_amount});" style="background:#16a34a; border:none; padding:8px 16px; color:white; border-radius:6px; cursor:pointer; font-weight: 600;">
+              Record Payment
+            </button>
+          </div>
+        `;
+      }
+
       document.getElementById(
         'viewSaleContent').innerHTML = `
         <h2 style="margin:0 0 8px; 
@@ -1546,6 +1640,13 @@
                   data.grand_total).toFixed(2)}
               </div>
             </div>
+            <div style="margin-bottom:8px;">
+              <span style="color:#6b7280; 
+                font-size:12px;">PROFIT MARGIN</span>
+              <div style="font-weight:bold; color:${Number(data.profit_margin) < 0 ? '#dc2626' : '#16a34a'}">
+                ${Number(data.profit_margin).toFixed(2)}%
+              </div>
+            </div>
             <div>
               <span style="color:#6b7280; 
                 font-size:12px;">PAID</span>
@@ -1609,6 +1710,7 @@
             </tr>
           </tfoot>
         </table>
+        ${recordPaymentHtml}
       `;
 
       const modal = document.getElementById(

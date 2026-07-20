@@ -68,7 +68,11 @@
         </nav>
       </div>
 
-      <div class="sidebar-logout" style="margin-top:auto; padding:20px; border-top:1px solid var(--color-border);">
+      <div class="sidebar-logout" style="margin-top:auto; padding:20px; border-top:1px solid var(--color-border); display: flex; flex-direction: column; gap: 0.5rem;">
+        <a href="{{ url_for('backup_download') }}" style="display:flex; align-items:center; gap:0.65rem; padding:0.75rem 1.25rem; font-size:0.925rem; font-weight:600; color:var(--color-text-muted); border-left:3px solid transparent; transition:background 0.15s ease, color 0.15s ease, border-color 0.15s ease;">
+          <span class="nav-emoji" aria-hidden="true" style="font-size:1.1rem; line-height:1; width:1.5rem; text-align:center;">💾</span>
+          <span class="nav-label">Download Backup</span>
+        </a>
         <a href="{{ url_for('logout') }}" style="display:flex; align-items:center; gap:0.65rem; padding:0.75rem 1.25rem; font-size:0.925rem; font-weight:600; color:var(--color-text-muted); border-left:3px solid transparent; transition:background 0.15s ease, color 0.15s ease, border-color 0.15s ease;">
           <span class="nav-emoji" aria-hidden="true" style="font-size:1.1rem; line-height:1; width:1.5rem; text-align:center;">🚪</span>
           <span class="nav-label">Logout</span>
