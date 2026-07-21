@@ -178,6 +178,7 @@ def dashboard():
             rev = float(d["grand_total"] or 0)
             cost = float(d["total_cost"] or 0)
             d["profit_margin"] = round(((rev - cost) / rev * 100), 2) if rev > 0 else 0
+            d["profit_amount"] = round(rev - cost, 2)
             recent_sales.append(d)
 
         # Get upcoming/overdue payments (limit 10)
@@ -1014,6 +1015,7 @@ def sales():
             rev = float(d["grand_total"] or 0)
             cost = float(d["total_cost"] or 0)
             d["profit_margin"] = round(((rev - cost) / rev * 100), 2) if rev > 0 else 0
+            d["profit_amount"] = round(rev - cost, 2)
             recent_sales.append(d)
     finally:
         conn.close()
@@ -1157,6 +1159,7 @@ def sales_data():
             rev = float(d["grand_total"] or 0)
             cost = float(d["total_cost"] or 0)
             d["profit_margin"] = round(((rev - cost) / rev * 100), 2) if rev > 0 else 0
+            d["profit_amount"] = round(rev - cost, 2)
             sales_list.append(d)
         return jsonify(sales_list)
     finally:
@@ -1229,9 +1232,9 @@ def sales_export():
     finally:
         conn.close()
 
-    header = [
-        "Invoice Number", "Date", "Customer", "Item Count", 
-        "Subtotal", "Discount", "Grand Total", "Profit Margin (%)", 
+    headers = [
+        "Invoice No", "Date", "Customer", "Items", "Subtotal", "Discount",
+        "Grand Total", "Profit Margin", "Profit Amount",
         "Payment Type", "Status", "Amount Paid", "Remaining Balance"
     ]
     
@@ -1241,6 +1244,7 @@ def sales_export():
         rev = float(d["grand_total"] or 0)
         cost = float(d["total_cost"] or 0)
         margin = round(((rev - cost) / rev * 100), 2) if rev > 0 else 0.0
+        profit_amount = round(rev - cost, 2)
         csv_rows.append([
             d["invoice_number"] or "",
             d["invoice_date"] or "",
@@ -1249,16 +1253,17 @@ def sales_export():
             f'{float(d["subtotal"] or 0):.2f}',
             f'{float(d["discount_amount"] or 0):.2f}',
             f'{rev:.2f}',
-            f'{margin:.2f}',
+            f'{margin:.2f}%',
+            f'{profit_amount:.2f}',
             d["payment_type"] or "",
-            d["status"] or "",
+            str(d["status"]),
             f'{float(d["amount_paid"] or 0):.2f}',
             f'{float(d["remaining_amount"] or 0):.2f}'
         ])
 
     output = io.StringIO()
     writer = csv.writer(output)
-    writer.writerow(header)
+    writer.writerow(headers)
     writer.writerows(csv_rows)
     csv_bytes = output.getvalue().encode("utf-8")
 
@@ -1947,6 +1952,7 @@ def sale_details(sale_id: int):
         rev = float(sale["grand_total"] or 0)
         cost = float(sale["total_cost"] or 0)
         profit_margin = round(((rev - cost) / rev * 100), 2) if rev > 0 else 0
+        profit_amount = round(rev - cost, 2)
 
         return jsonify({
             "id": sale["id"],
@@ -1963,6 +1969,7 @@ def sale_details(sale_id: int):
             "remaining_amount": sale["remaining_amount"],
             "customer_name": sale["customer_name"],
             "profit_margin": profit_margin,
+            "profit_amount": profit_amount,
             "items": [dict(item) for item in items]
         })
     finally:
@@ -2289,7 +2296,7 @@ def reports_by_customer():
             "area": row["area"] or "",
             "invoice_count": int(row["invoice_count"] or 0),
             "total_revenue": revenue,
-            "profit_margin": margin,
+            "profit_margin": margin, "profit_amount": round(revenue - cost, 2) if "revenue" in locals() else (round(rev - cost, 2) if "rev" in locals() else 0),
             "outstanding": float(row["outstanding"] or 0),
             "last_sale_date": row["last_sale_date"] or "",
             "invoices": [],
@@ -2347,7 +2354,7 @@ def reports_by_brand():
             "brand": r["brand"],
             "units_sold": float(r["units_sold"] or 0),
             "total_revenue": revenue,
-            "profit_margin": margin
+            "profit_margin": margin, "profit_amount": round(revenue - cost, 2) if "revenue" in locals() else (round(rev - cost, 2) if "rev" in locals() else 0)
         })
     return jsonify(result)
 
@@ -2399,7 +2406,7 @@ def reports_by_category():
             "category_name": r["category_name"],
             "qty_sold": float(r["qty_sold"] or 0),
             "total_revenue": revenue,
-            "profit_margin": margin,
+            "profit_margin": margin, "profit_amount": round(revenue - cost, 2) if "revenue" in locals() else (round(rev - cost, 2) if "rev" in locals() else 0),
             "current_stock": float(r["current_stock"] or 0)
         })
     return jsonify(result)
@@ -2457,7 +2464,7 @@ def reports_by_product():
             "category": r["category"] or "",
             "units_sold": float(r["units_sold"] or 0),
             "total_revenue": revenue,
-            "profit_margin": margin,
+            "profit_margin": margin, "profit_amount": round(revenue - cost, 2) if "revenue" in locals() else (round(rev - cost, 2) if "rev" in locals() else 0),
             "current_stock": float(r["current_stock"] or 0)
         })
     return jsonify(result)

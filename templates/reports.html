@@ -111,6 +111,7 @@
               <th data-sort="invoice_count">Total Invoices</th>
               <th data-sort="total_revenue">Total Revenue</th>
               <th data-sort="profit_margin">Profit Margin (%)</th>
+              <th data-sort="profit_amount">Profit Amount ($)</th>
               <th data-sort="outstanding">Outstanding</th>
               <th data-sort="last_sale_date">Last Sale Date</th>
             </tr>
@@ -155,6 +156,7 @@
               <th data-sort="units_sold">Units Sold</th>
               <th data-sort="total_revenue">Total Revenue</th>
               <th data-sort="profit_margin">Profit Margin (%)</th>
+              <th data-sort="profit_amount">Profit Amount ($)</th>
             </tr>
           </thead>
           <tbody id="brandTableBody"></tbody>
@@ -204,6 +206,7 @@
               <th data-sort="qty_sold">Total Items Sold (Qty)</th>
               <th data-sort="total_revenue">Total Revenue</th>
               <th data-sort="profit_margin">Profit Margin (%)</th>
+              <th data-sort="profit_amount">Profit Amount ($)</th>
               <th data-sort="current_stock">Current Stock</th>
             </tr>
           </thead>
@@ -257,6 +260,7 @@
               <th data-sort="units_sold">Units Sold</th>
               <th data-sort="total_revenue">Total Revenue</th>
               <th data-sort="profit_margin">Profit Margin (%)</th>
+              <th data-sort="profit_amount">Profit Amount ($)</th>
               <th data-sort="current_stock">Current Stock</th>
             </tr>
           </thead>
@@ -384,7 +388,7 @@
       let av = a[key];
       let bv = b[key];
 
-      if (['invoice_count', 'total_revenue', 'outstanding', 'profit_margin', 'units_sold', 'qty_sold', 'current_stock'].includes(key)) {
+      if (['invoice_count', 'total_revenue', 'outstanding', 'profit_margin', 'profit_amount', 'units_sold', 'qty_sold', 'current_stock'].includes(key)) {
         av = Number(av || 0);
         bv = Number(bv || 0);
         return (av - bv) * dir;
@@ -427,6 +431,7 @@
 
       const outColor = (r.outstanding > 0) ? '#dc2626' : '#6b7280';
       const margin = (r.profit_margin !== undefined && r.profit_margin !== null) ? r.profit_margin.toFixed(2) + '%' : '-';
+        const profitAmt = (r.profit_amount !== undefined && r.profit_amount !== null) ? money(r.profit_amount) : '-';
 
       tr.innerHTML = `
         <td>${r.area || ''}</td>
@@ -478,6 +483,7 @@
       sorted.forEach((r) => {
         const tr = document.createElement('tr');
         const margin = (r.profit_margin !== undefined && r.profit_margin !== null) ? r.profit_margin.toFixed(2) + '%' : '-';
+        const profitAmt = (r.profit_amount !== undefined && r.profit_amount !== null) ? money(r.profit_amount) : '-';
         tr.innerHTML = `
           <td>${r.brand || 'Unbranded'}</td>
           <td>${qty(r.units_sold)}</td>
@@ -514,6 +520,7 @@
       sorted.forEach((r) => {
         const tr = document.createElement('tr');
         const margin = (r.profit_margin !== undefined && r.profit_margin !== null) ? r.profit_margin.toFixed(2) + '%' : '-';
+        const profitAmt = (r.profit_amount !== undefined && r.profit_amount !== null) ? money(r.profit_amount) : '-';
         tr.innerHTML = `
           <td>${r.category_name || ''}</td>
           <td>${qty(r.qty_sold)}</td>
@@ -555,6 +562,7 @@
       const tr = document.createElement('tr');
       const stock = Number(r.current_stock || 0);
       const margin = (r.profit_margin !== undefined && r.profit_margin !== null) ? r.profit_margin.toFixed(2) + '%' : '-';
+        const profitAmt = (r.profit_amount !== undefined && r.profit_amount !== null) ? money(r.profit_amount) : '-';
       
       let stockC = 'stock-ok';
       if (stock === 0) stockC = 'stock-zero';

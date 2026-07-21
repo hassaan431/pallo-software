@@ -394,6 +394,10 @@
               <div style="color: var(--color-text-muted); font-weight:800;">Profit Margin</div>
               <div id="profitMarginAmount" style="font-weight: 800; color: var(--color-success);">0.00%</div>
             </div>
+            <div style="display:flex; justify-content:space-between; gap:1rem; align-items:baseline;">
+              <div style="color: var(--color-text-muted); font-weight:800;">Profit Amount</div>
+              <div id="profitAmount" style="font-weight: 800; color: var(--color-success);">$0.00</div>
+            </div>
           </div>
         </div>
       </div>
@@ -460,7 +464,8 @@
               <th>Date</th>
               <th>Customer</th>
               <th>Grand Total</th>
-              <th>Margin</th>
+              <th>Profit Margin</th>
+              <th>Profit Amount</th>
               <th>Paid</th>
               <th>Remaining</th>
               <th>Type</th>
@@ -651,6 +656,7 @@
   const subtotalEl = document.getElementById('subtotalAmount');
   const grandTotalEl = document.getElementById('grandTotalAmount');
   const profitMarginEl = document.getElementById('profitMarginAmount');
+  const profitAmountEl = document.getElementById('profitAmount');
 
   function getRowAmount(row) {
     const amountEl = row.querySelector('.row-amount-cell');
@@ -688,11 +694,13 @@
     
     if (profitMarginEl) {
       profitMarginEl.textContent = profitMargin.toFixed(2) + '%';
-      if (profitMargin < 0) {
-        profitMarginEl.style.color = 'var(--color-danger)';
-      } else {
-        profitMarginEl.style.color = 'var(--color-success)';
-      }
+      profitMarginEl.style.color = profitMargin < 0 ? 'var(--color-danger)' : 'var(--color-success)';
+    }
+    
+    if (profitAmountEl) {
+      const profitAmt = grand - totalCost;
+      profitAmountEl.textContent = money(profitAmt);
+      profitAmountEl.style.color = profitAmt < 0 ? 'var(--color-danger)' : 'var(--color-success)';
     }
   }
 
@@ -759,9 +767,8 @@
   `;
 }
 
-  function hideProductSuggestions(row) {
-    const sugg = row.querySelector('.product-suggestions');
-    if (sugg) hideEl(sugg);
+  function hideProductSuggestions() {
+    document.querySelectorAll('.product-suggestions').forEach(el => hideEl(el));
   }
 
   function selectProduct(row, product) {
@@ -778,6 +785,10 @@
     row.dataset.costPrice = String(product.cost_price || 0);
     searchInput.value = display;
     rateInput.value = Number(product.selling_price || 0);
+    
+    hideProductSuggestions();
+    qtyInput.focus();
+
     if (!qtyInput.value) qtyInput.value = 1;
     
     // Update stock badge
@@ -868,8 +879,14 @@
     }
 
     document.addEventListener('click', (e) => {
-      if (!row.contains(e.target)) {
-        hideProductSuggestions(row);
+      if (!row.contains(e.target) && (!productSuggestions || !productSuggestions.contains(e.target))) {
+        hideProductSuggestions();
+      }
+    });
+
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') {
+        hideProductSuggestions();
       }
     });
   }
@@ -927,9 +944,9 @@
     
     if (searchInput) {
       const inputRect = searchInput.getBoundingClientRect();
-      suggestionsEl.style.position = 'fixed';
-      suggestionsEl.style.top = (inputRect.bottom + 2) + 'px';
-      suggestionsEl.style.left = inputRect.left + 'px';
+      suggestionsEl.style.position = 'absolute';
+      suggestionsEl.style.top = (inputRect.bottom + window.scrollY + 2) + 'px';
+      suggestionsEl.style.left = (inputRect.left + window.scrollX) + 'px';
       suggestionsEl.style.width = inputRect.width + 'px';
       suggestionsEl.style.zIndex = '999999';
       suggestionsEl.style.maxHeight = '300px';
@@ -1104,6 +1121,14 @@
       tdMargin.style.color = margin < 0 ? 'var(--color-danger)' : 'var(--color-success)';
       tdMargin.style.fontWeight = '600';
       tr.appendChild(tdMargin);
+
+      // Profit Amount
+      const tdProfitAmt = document.createElement('td');
+      const profitAmt = Number(s.profit_amount || 0);
+      tdProfitAmt.textContent = money(profitAmt);
+      tdProfitAmt.style.color = profitAmt < 0 ? 'var(--color-danger)' : 'var(--color-success)';
+      tdProfitAmt.style.fontWeight = '600';
+      tr.appendChild(tdProfitAmt);
 
       // Paid (green color)
       const tdPaid = document.createElement('td');
@@ -1614,6 +1639,20 @@
             <div style="margin-bottom:8px;">
               <span style="color:#6b7280; 
                 font-size:12px;">STATUS</span>
+              <div class="mt-2 d-flex gap-2">
+                <span class="badge rounded-pill" id="viewProfitMargin" style="
+                background:rgba(22, 163, 74, 0.1); 
+                color:#16a34a; 
+                padding:8px 16px; 
+                font-weight:700; 
+                font-size:12px;">PROFIT MARGIN</span>
+                <span class="badge rounded-pill" id="viewProfitAmount" style="
+                background:rgba(22, 163, 74, 0.1); 
+                color:#16a34a; 
+                padding:8px 16px; 
+                font-weight:700; 
+                font-size:12px;">PROFIT AMOUNT</span>
+              </div>
               <div>
                 <span style="
                   background:${statusColor};
