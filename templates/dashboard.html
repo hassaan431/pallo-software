@@ -13,7 +13,7 @@
   </article>
   <article class="stat-card">
     <h3>Daily Profit Amount</h3>
-    <p class="stat-value" style="color: {% if daily_profit < 0 %}var(--color-danger){% else %}var(--color-success){% endif %};">${{ "%.2f"|format(daily_profit) }}</p>
+    <p class="stat-value" style="color: {% if daily_profit < 0 %}var(--color-danger){% else %}var(--color-success){% endif %};">${{ "%.0f"|format(daily_profit) }}</p>
     <p class="stat-note">Profit amount for today</p>
   </article>
   <article class="stat-card">
@@ -23,7 +23,7 @@
   </article>
   <article class="stat-card">
     <h3>Monthly Profit Amount</h3>
-    <p class="stat-value" style="color: {% if monthly_profit < 0 %}var(--color-danger){% else %}var(--color-success){% endif %};">${{ "%.2f"|format(monthly_profit) }}</p>
+    <p class="stat-value" style="color: {% if monthly_profit < 0 %}var(--color-danger){% else %}var(--color-success){% endif %};">${{ "%.0f"|format(monthly_profit) }}</p>
     <p class="stat-note">Current month to date</p>
   </article>
 </div>
@@ -64,7 +64,7 @@
               <td>{{ sale.customer_name }}</td>
               <td>{{ sale.invoice_date }}</td>
               <td>${{ "%.2f"|format(sale.grand_total) }}</td>
-              <td style="color: {{ '#dc2626' if sale.profit_margin < 0 else '#16a34a' }}; font-weight: 600;">{{ "%.2f"|format(sale.profit_margin) }}%</td>
+              <td style="color: {{ '#dc2626' if sale.profit_margin < 0 else '#16a34a' }}; font-weight: 600;">{{ "%.0f"|format(sale.profit_margin) }}%</td>
               <td style="color: {{ '#dc2626' if sale.profit_amount < 0 else '#16a34a' }}; font-weight: 600;">${{ "%.2f"|format(sale.profit_amount) }}</td>
               <td style="text-transform: capitalize;">{{ sale.payment_type }}</td>
               <td>

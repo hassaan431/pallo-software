@@ -323,7 +323,7 @@
         </article>
         <article class="stat-card">
           <h3>Overall Profit Margin</h3>
-          <p class="stat-value" id="summaryProfitMargin">0.00%</p>
+          <p class="stat-value" id="summaryProfitMargin">0%</p>
           <p class="stat-note">For selected filters</p>
         </article>
         <article class="stat-card">
@@ -358,7 +358,12 @@
 <script>
   function money(n) {
     const v = Number(n || 0);
-    return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(v);
+    return new Intl.NumberFormat('en-US', { 
+      style: 'currency', 
+      currency: 'USD',
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 0
+    }).format(v);
   }
 
   function qty(n) {
@@ -519,7 +524,7 @@
       tdName.appendChild(link);
 
       const outColor = (r.outstanding > 0) ? '#dc2626' : '#6b7280';
-      const margin = (r.profit_margin !== undefined && r.profit_margin !== null) ? r.profit_margin.toFixed(2) + '%' : '-';
+      const margin = (r.profit_margin !== undefined && r.profit_margin !== null) ? r.profit_margin.toFixed(0) + '%' : '-';
         const profitAmt = (r.profit_amount !== undefined && r.profit_amount !== null) ? money(r.profit_amount) : '-';
 
       tr.innerHTML = `
@@ -571,7 +576,7 @@
     } else {
       sorted.forEach((r) => {
         const tr = document.createElement('tr');
-        const margin = (r.profit_margin !== undefined && r.profit_margin !== null) ? r.profit_margin.toFixed(2) + '%' : '-';
+        const margin = (r.profit_margin !== undefined && r.profit_margin !== null) ? r.profit_margin.toFixed(0) + '%' : '-';
         const profitAmt = (r.profit_amount !== undefined && r.profit_amount !== null) ? money(r.profit_amount) : '-';
         tr.innerHTML = `
           <td>${r.brand || 'Unbranded'}</td>
@@ -608,7 +613,7 @@
     } else {
       sorted.forEach((r) => {
         const tr = document.createElement('tr');
-        const margin = (r.profit_margin !== undefined && r.profit_margin !== null) ? r.profit_margin.toFixed(2) + '%' : '-';
+        const margin = (r.profit_margin !== undefined && r.profit_margin !== null) ? r.profit_margin.toFixed(0) + '%' : '-';
         const profitAmt = (r.profit_amount !== undefined && r.profit_amount !== null) ? money(r.profit_amount) : '-';
         tr.innerHTML = `
           <td>${r.category_name || ''}</td>
@@ -650,7 +655,7 @@
     sorted.forEach((r, idx) => {
       const tr = document.createElement('tr');
       const stock = Number(r.current_stock || 0);
-      const margin = (r.profit_margin !== undefined && r.profit_margin !== null) ? r.profit_margin.toFixed(2) + '%' : '-';
+      const margin = (r.profit_margin !== undefined && r.profit_margin !== null) ? r.profit_margin.toFixed(0) + '%' : '-';
         const profitAmt = (r.profit_amount !== undefined && r.profit_amount !== null) ? money(r.profit_amount) : '-';
       
       let stockC = 'stock-ok';
@@ -665,6 +670,7 @@
         <td>${qty(r.units_sold)}</td>
         <td>${money(r.total_revenue)}</td>
         <td>${margin}</td>
+        <td style="font-weight: 700;">${profitAmt}</td>
         <td><span class="stock-pill ${stockC}">${qty(stock)}</span></td>
       `;
       tbody.appendChild(tr);
@@ -704,7 +710,7 @@
     // Reset summary cards
     document.getElementById('summarySalesCount').innerText = '0';
     document.getElementById('summaryTotalSales').innerText = '$0.00';
-    document.getElementById('summaryProfitMargin').innerText = '0.00%';
+    document.getElementById('summaryProfitMargin').innerText = '0%';
     document.getElementById('summaryTotalProfit').innerText = '$0.00';
     document.getElementById('summaryProfitMargin').style.color = 'var(--color-text)';
     document.getElementById('summaryTotalProfit').style.color = 'var(--color-text)';
@@ -731,15 +737,15 @@
       tr.innerHTML = `
         <td>${r.date}</td>
         <td>${r.invoice_count}</td>
-        <td>$${money(r.total_revenue)}</td>
-        <td><span class="stock-pill ${r.profit_margin > 0 ? 'stock-ok' : (r.profit_margin < 0 ? 'stock-zero' : 'stock-low')}">${r.profit_margin}%</span></td>
-        <td style="font-weight: 700;">$${money(r.profit_amount)}</td>
+        <td>${money(r.total_revenue)}</td>
+        <td><span class="stock-pill ${r.profit_margin > 0 ? 'stock-ok' : (r.profit_margin < 0 ? 'stock-zero' : 'stock-low')}">${Math.round(r.profit_margin)}%</span></td>
+        <td style="font-weight: 700;">${money(r.profit_amount)}</td>
       `;
       tbody.appendChild(tr);
     });
 
     // Update summary cards
-    let overallMargin = totalSales > 0 ? ((totalSales - totalCost) / totalSales * 100).toFixed(2) : 0;
+    let overallMargin = totalSales > 0 ? ((totalSales - totalCost) / totalSales * 100).toFixed(0) : 0;
     
     document.getElementById('summarySalesCount').innerText = totalSalesCount;
     document.getElementById('summaryTotalSales').innerText = money(totalSales);
