@@ -2,11 +2,19 @@
 {% block title %}Dashboard — AK Distributors{% endblock %}
 {% block page_heading %}Dashboard{% endblock %}
 {% block content %}
+<div style="display: flex; justify-content: flex-end; margin-bottom: 20px;">
+  <a href="{{ url_for('sales') }}" class="btn btn-primary" style="font-size: 14px; padding: 8px 20px; font-weight: 600;">Record Sale</a>
+</div>
 <div class="card-grid">
   <article class="stat-card">
-    <h3>Today's Sales</h3>
-    <p class="stat-value">{{ todays_sales }}</p>
-    <p class="stat-note">Orders placed today</p>
+    <h3>Daily Sale Amount</h3>
+    <p class="stat-value">${{ "%.2f"|format(daily_revenue) }}</p>
+    <p class="stat-note">Sales amount for today</p>
+  </article>
+  <article class="stat-card">
+    <h3>Daily Profit Amount</h3>
+    <p class="stat-value" style="color: {% if daily_profit < 0 %}var(--color-danger){% else %}var(--color-success){% endif %};">${{ "%.2f"|format(daily_profit) }}</p>
+    <p class="stat-note">Profit amount for today</p>
   </article>
   <article class="stat-card">
     <h3>Monthly Sales</h3>
@@ -14,13 +22,8 @@
     <p class="stat-note">Current month to date</p>
   </article>
   <article class="stat-card">
-    <h3>Monthly Profit Earned</h3>
-    <p class="stat-value">${{ "%.2f"|format(monthly_profit) }}</p>
-    <p class="stat-note">Current month to date</p>
-  </article>
-  <article class="stat-card">
-    <h3>Profit Margin</h3>
-    <p class="stat-value" style="color: {% if monthly_margin < 0 %}var(--color-danger){% else %}var(--color-success){% endif %};">{{ monthly_margin }}%</p>
+    <h3>Monthly Profit Amount</h3>
+    <p class="stat-value" style="color: {% if monthly_profit < 0 %}var(--color-danger){% else %}var(--color-success){% endif %};">${{ "%.2f"|format(monthly_profit) }}</p>
     <p class="stat-note">Current month to date</p>
   </article>
 </div>

@@ -128,10 +128,21 @@ def dashboard():
     try:
         # Get today's sales
         today = date.today().isoformat()
-        todays_sales = conn.execute(
-            "SELECT COUNT(*) as count FROM sales WHERE invoice_date = ?", 
+        todays_data = conn.execute(
+            '''
+            SELECT 
+                COALESCE(SUM(s.grand_total), 0) as total_revenue,
+                COALESCE(SUM(si.qty * si.cost_price), 0) as total_cost
+            FROM sales s
+            LEFT JOIN sale_items si ON si.sale_id = s.id
+            WHERE s.invoice_date = ?
+            ''', 
             (today,)
-        ).fetchone()["count"]
+        ).fetchone()
+        
+        daily_revenue = float(todays_data["total_revenue"] or 0)
+        daily_cost = float(todays_data["total_cost"] or 0)
+        daily_profit = daily_revenue - daily_cost
         
         # Get monthly revenue and cost
         now = date.today()
@@ -226,7 +237,8 @@ def dashboard():
         "dashboard.html",
         monthly_profit=monthly_profit,
         monthly_margin=monthly_margin,
-        todays_sales=todays_sales,
+        daily_revenue=daily_revenue,
+        daily_profit=daily_profit,
         monthly_revenue=monthly_revenue,
         recent_sales=recent_sales,
         upcoming_payments=upcoming_payments,
@@ -2479,6 +2491,68 @@ def _export_csv_bytes(rows, header):
     writer.writerows(rows)
     return output.getvalue().encode("utf-8")
 
+
+@app.route("/reports/profit")
+@login_required
+def reports_profit():
+    from_date = request.args.get("from_date", "")
+    to_date = request.args.get("to_date", "")
+    brand = request.args.get("brand", "")
+    customer = request.args.get("customer", "")
+    product = request.args.get("product", "")
+    
+    conn = get_connection()
+    try:
+        query = '''
+            SELECT 
+                s.invoice_date,
+                COUNT(DISTINCT s.id) as invoice_count,
+                COALESCE(SUM(si.qty * si.rate), 0) as total_revenue,
+                COALESCE(SUM(si.qty * si.cost_price), 0) as total_cost
+            FROM sales s
+            JOIN sale_items si ON si.sale_id = s.id
+            JOIN products p ON si.product_id = p.id
+            WHERE 1=1
+        '''
+        params = []
+        if from_date:
+            query += " AND s.invoice_date >= ?"
+            params.append(from_date)
+        if to_date:
+            query += " AND s.invoice_date <= ?"
+            params.append(to_date)
+        if customer:
+            query += " AND s.customer_id = ?"
+            params.append(customer)
+        if brand:
+            query += " AND p.brand = ?"
+            params.append(brand)
+        if product:
+            query += " AND p.id = ?"
+            params.append(product)
+            
+        query += " GROUP BY s.invoice_date ORDER BY s.invoice_date ASC"
+        
+        rows = conn.execute(query, params).fetchall()
+        
+        result = []
+        for r in rows:
+            rev = float(r["total_revenue"] or 0)
+            cost = float(r["total_cost"] or 0)
+            margin = round(((rev - cost) / rev * 100), 2) if rev > 0 else 0
+            profit_amt = round(rev - cost, 2)
+            result.append({
+                "date": r["invoice_date"],
+                "invoice_count": r["invoice_count"],
+                "total_revenue": rev,
+                "total_cost": cost,
+                "profit_margin": margin,
+                "profit_amount": profit_amt
+            })
+            
+        return jsonify(result)
+    finally:
+        conn.close()
 
 @app.route("/reports/export/<type>", methods=["GET"])
 @login_required

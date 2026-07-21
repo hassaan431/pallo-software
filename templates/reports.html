@@ -62,14 +62,15 @@
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
 <div class="tab-buttons" style="margin-top:1.15rem;">
-  <button type="button" class="tab-btn is-active" data-tab="customer">👤 By Customer</button>
+  <button type="button" class="tab-btn is-active" data-tab="profit">📈 Profit Analysis</button>
+  <button type="button" class="tab-btn" data-tab="customer">👤 By Customer</button>
   <button type="button" class="tab-btn" data-tab="brand">🏷️ By Brand</button>
   <button type="button" class="tab-btn" data-tab="category">🗂️ By Category</button>
   <button type="button" class="tab-btn" data-tab="product">📦 By Product</button>
 </div>
 
 <!-- CUSTOMER TAB -->
-<div id="tab-customer" class="tab-content">
+<div id="tab-customer" class="tab-content" style="display:none;">
   <div class="panel" style="margin-bottom: 1rem;">
     <div class="panel-body" style="padding: 1rem;">
       <div style="display:flex; gap:0.9rem; align-items:end; flex-wrap:wrap;">
@@ -271,6 +272,89 @@
   </section>
 </div>
 
+<div id="tab-profit" class="tab-content">
+  <section class="panel">
+    <div class="panel-header">
+      <h2>Profit Analysis</h2>
+    </div>
+    <div class="panel-body">
+      <div class="filter-bar" style="display: flex; gap: 1rem; align-items: flex-end; margin-bottom: 1rem; flex-wrap: wrap;">
+        <div><label class="field-label">Date From</label><input type="date" class="form-control" id="profit_date_from"></div>
+        <div><label class="field-label">Date To</label><input type="date" class="form-control" id="profit_date_to"></div>
+        <div>
+          <label class="field-label">Brand</label>
+          <select id="profitFilterBrand" class="form-control" style="width: 150px;">
+            <option value="">All Brands</option>
+            {% for b in brands %}
+            <option value="{{ b }}">{{ b }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div>
+          <label class="field-label">Customer</label>
+          <select id="profitFilterCustomer" class="form-control" style="width: 150px;">
+            <option value="">All Customers</option>
+            {% for c in customers %}
+            <option value="{{ c.id }}">{{ c.name }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div>
+          <label class="field-label">Product</label>
+          <select id="profitFilterProduct" class="form-control" style="width: 150px;">
+            <option value="">All Products</option>
+            {% for p in products %}
+            <option value="{{ p.id }}">{{ p.name }}</option>
+            {% endfor %}
+          </select>
+        </div>
+      </div>
+
+      <div class="card-grid" style="margin-bottom: 2rem;">
+        <article class="stat-card">
+          <h3>Total Sales Amount</h3>
+          <p class="stat-value" id="summaryTotalSales">$0.00</p>
+          <p class="stat-note">For selected filters</p>
+        </article>
+        <article class="stat-card">
+          <h3>Total Profit Amount</h3>
+          <p class="stat-value" id="summaryTotalProfit">$0.00</p>
+          <p class="stat-note">For selected filters</p>
+        </article>
+        <article class="stat-card">
+          <h3>Overall Profit Margin</h3>
+          <p class="stat-value" id="summaryProfitMargin">0.00%</p>
+          <p class="stat-note">For selected filters</p>
+        </article>
+        <article class="stat-card">
+          <h3>Number of Sales</h3>
+          <p class="stat-value" id="summarySalesCount">0</p>
+          <p class="stat-note">For selected filters</p>
+        </article>
+      </div>
+      
+      <div style="padding: 1rem; border-bottom: 1px solid var(--color-border); margin-bottom: 1rem;">
+        <canvas id="profitChart" height="250"></canvas>
+      </div>
+      
+      <div class="table-wrap">
+        <table class="data-table" id="profitTable">
+          <thead>
+            <tr>
+              <th data-sort="date">Date</th>
+              <th data-sort="invoice_count">Sales Count</th>
+              <th data-sort="total_revenue">Total Sales</th>
+              <th data-sort="profit_margin">Profit Margin (%)</th>
+              <th data-sort="profit_amount">Total Profit ($)</th>
+            </tr>
+          </thead>
+          <tbody id="profitTableBody"></tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+</div>
+
 <script>
   function money(n) {
     const v = Number(n || 0);
@@ -291,14 +375,16 @@
     customer: [],
     brand: [],
     category: [],
-    product: []
+    product: [],
+    profit: []
   };
 
   let sortState = {
     customer: { key: 'total_revenue', dir: -1 },
     brand: { key: 'total_revenue', dir: -1 },
     category: { key: 'total_revenue', dir: -1 },
-    product: { key: 'total_revenue', dir: -1 }
+    product: { key: 'total_revenue', dir: -1 },
+    profit: { key: 'date', dir: 1 }
   };
 
   function getFiltersParams(type) {
@@ -320,6 +406,9 @@
       if (document.getElementById('p_date_from').value) params.append('date_from', document.getElementById('p_date_from').value);
       if (document.getElementById('p_date_to').value) params.append('date_to', document.getElementById('p_date_to').value);
       if (document.getElementById('p_customer').value) params.append('customer_id', document.getElementById('p_customer').value);
+    } else if (type === 'profit') {
+      if (document.getElementById('profit_date_from').value) params.append('from_date', document.getElementById('profit_date_from').value);
+      if (document.getElementById('profit_date_to').value) params.append('to_date', document.getElementById('profit_date_to').value);
     }
     return params;
   }
@@ -333,11 +422,10 @@
   const tabButtons = Array.from(document.querySelectorAll('.tab-btn'));
   function setActiveTab(tabKey) {
     tabButtons.forEach((b) => b.classList.toggle('is-active', b.getAttribute('data-tab') === tabKey));
-    const tabs = ['customer', 'brand', 'category', 'product'];
+    const tabs = ['customer', 'brand', 'category', 'product', 'profit'];
     tabs.forEach((k) => {
       const el = document.getElementById('tab-' + k);
-      if (!el) return;
-      el.style.display = (k === tabKey) ? 'block' : 'none';
+      if (el) { el.style.display = (k === tabKey) ? 'block' : 'none'; }
     });
     
     // Load data if empty
@@ -346,6 +434,7 @@
         if (tabKey === 'brand') loadBrandReport();
         if (tabKey === 'category') loadCategoryReport();
         if (tabKey === 'product') loadProductReport();
+        if (tabKey === 'profit') { loadProfitReport(); }
     }
   }
   tabButtons.forEach((b) => {
@@ -582,6 +671,145 @@
     });
   }
 
+  document.getElementById('profit_date_from')?.addEventListener('change', () => { cache.profit = []; loadProfitReport(); });
+  document.getElementById('profit_date_to')?.addEventListener('change', () => { cache.profit = []; loadProfitReport(); });
+  document.getElementById('profitFilterBrand')?.addEventListener('change', () => { cache.profit = []; loadProfitReport(); });
+  document.getElementById('profitFilterCustomer')?.addEventListener('change', () => { cache.profit = []; loadProfitReport(); });
+  document.getElementById('profitFilterProduct')?.addEventListener('change', () => { cache.profit = []; loadProfitReport(); });
+
+  async function loadProfitReport() {
+    let params = getFiltersParams('profit');
+    
+    const brand = document.getElementById('profitFilterBrand')?.value;
+    if (brand) params.append('brand', brand);
+    
+    const customer = document.getElementById('profitFilterCustomer')?.value;
+    if (customer) params.append('customer', customer);
+    
+    const product = document.getElementById('profitFilterProduct')?.value;
+    if (product) params.append('product', product);
+    
+    const rows = await fetch('/reports/profit?' + params.toString(), { credentials: 'same-origin' }).then(r => r.json());
+    cache.profit = rows || [];
+    renderProfit();
+  }
+  
+  let profitChartInstance = null;
+
+  function renderProfit() {
+    const tbody = document.getElementById('profitTableBody');
+    if (!tbody) return;
+    tbody.innerHTML = '';
+    
+    // Reset summary cards
+    document.getElementById('summarySalesCount').innerText = '0';
+    document.getElementById('summaryTotalSales').innerText = '$0.00';
+    document.getElementById('summaryProfitMargin').innerText = '0.00%';
+    document.getElementById('summaryTotalProfit').innerText = '$0.00';
+    document.getElementById('summaryProfitMargin').style.color = 'var(--color-text)';
+    document.getElementById('summaryTotalProfit').style.color = 'var(--color-text)';
+
+    const data = sortData('profit');
+    if (data.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="5" class="empty-state">No profit data available for this range/filters.</td></tr>';
+      if (profitChartInstance) profitChartInstance.destroy();
+      return;
+    }
+    
+    let totalSalesCount = 0;
+    let totalSales = 0;
+    let totalCost = 0;
+    let totalProfit = 0;
+
+    data.forEach(r => {
+      totalSalesCount += r.invoice_count;
+      totalSales += r.total_revenue;
+      totalCost += r.total_cost;
+      totalProfit += r.profit_amount;
+
+      const tr = document.createElement('tr');
+      tr.innerHTML = `
+        <td>${r.date}</td>
+        <td>${r.invoice_count}</td>
+        <td>$${money(r.total_revenue)}</td>
+        <td><span class="stock-pill ${r.profit_margin > 0 ? 'stock-ok' : (r.profit_margin < 0 ? 'stock-zero' : 'stock-low')}">${r.profit_margin}%</span></td>
+        <td style="font-weight: 700;">$${money(r.profit_amount)}</td>
+      `;
+      tbody.appendChild(tr);
+    });
+
+    // Update summary cards
+    let overallMargin = totalSales > 0 ? ((totalSales - totalCost) / totalSales * 100).toFixed(2) : 0;
+    
+    document.getElementById('summarySalesCount').innerText = totalSalesCount;
+    document.getElementById('summaryTotalSales').innerText = money(totalSales);
+    
+    const marginEl = document.getElementById('summaryProfitMargin');
+    marginEl.innerText = overallMargin + '%';
+    if (overallMargin > 0) marginEl.style.color = 'var(--color-success)';
+    else if (overallMargin < 0) marginEl.style.color = 'var(--color-danger)';
+    else marginEl.style.color = 'var(--color-text)';
+    
+    const profitEl = document.getElementById('summaryTotalProfit');
+    profitEl.innerText = money(totalProfit);
+    if (totalProfit > 0) profitEl.style.color = 'var(--color-success)';
+    else if (totalProfit < 0) profitEl.style.color = 'var(--color-danger)';
+    else profitEl.style.color = 'var(--color-text)';
+
+    const ctx = document.getElementById('profitChart');
+    if (!ctx) return;
+    
+    if (profitChartInstance) {
+        profitChartInstance.destroy();
+    }
+    
+    const labels = data.map(r => r.date);
+    const revenueData = data.map(r => r.total_revenue);
+    const profitData = data.map(r => r.profit_amount);
+    
+    profitChartInstance = new Chart(ctx, {
+        type: 'bar',
+        data: {
+            labels: labels,
+            datasets: [
+                {
+                    label: 'Total Sales ($)',
+                    data: revenueData,
+                    backgroundColor: 'rgba(59, 130, 246, 0.5)',
+                    borderColor: 'rgb(59, 130, 246)',
+                    borderWidth: 1,
+                    yAxisID: 'y'
+                },
+                {
+                    label: 'Profit Amount ($)',
+                    data: profitData,
+                    type: 'line',
+                    fill: false,
+                    borderColor: 'rgb(22, 163, 74)',
+                    tension: 0.1,
+                    yAxisID: 'y'
+                }
+            ]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            interaction: {
+              mode: 'index',
+              intersect: false,
+            },
+            scales: {
+              y: {
+                type: 'linear',
+                display: true,
+                position: 'left',
+                beginAtZero: true
+              }
+            }
+        }
+    });
+  }
+
   // Bind sorting to all tables
   document.querySelectorAll('th[data-sort]').forEach((th) => {
     th.addEventListener('click', () => {
@@ -599,10 +827,30 @@
       if (table === 'brand') renderBrand();
       if (table === 'category') renderCategory();
       if (table === 'product') renderProducts();
+      if (table === 'profit') renderProfit();
     });
   });
 
-  // Initial load of the first active tab
-  loadCustomerReport();
+  // Initialize default dates to this month for profit tab
+  const today = new Date();
+  const firstDay = new Date(today.getFullYear(), today.getMonth(), 1);
+  const lastDay = new Date(today.getFullYear(), today.getMonth() + 1, 0);
+  
+  const formatDate = (d) => {
+    const yyyy = d.getFullYear();
+    const mm = String(d.getMonth() + 1).padStart(2, '0');
+    const dd = String(d.getDate()).padStart(2, '0');
+    return `${yyyy}-${mm}-${dd}`;
+  };
+  
+  const profitFrom = document.getElementById('profit_date_from');
+  const profitTo = document.getElementById('profit_date_to');
+  if (profitFrom && profitTo) {
+    profitFrom.value = formatDate(firstDay);
+    profitTo.value = formatDate(lastDay);
+  }
+
+  // Init profit on load
+  loadProfitReport();
 </script>
 {% endblock %}
