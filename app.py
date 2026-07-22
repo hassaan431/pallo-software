@@ -361,24 +361,39 @@ def inventory_download_csv():
     # Write header
     writer.writerow([
         "ID", "Product Name", "Brand", "Category", 
-        "Unit", "Cost Price", "Selling Price", "Stock Quantity"
+        "Cost Price", "Selling Price", "Stock Quantity", "Stock Value"
     ])
     
     # Write rows
+    total_qty = 0
+    total_value = 0.0
+
     for p in products:
+        stock_qty = p["stock_quantity"] if p["stock_quantity"] is not None else 0
+        stock_val = float(stock_qty) * float(p["cost_price"] or 0)
+        total_qty += stock_qty
+        total_value += stock_val
+        
         writer.writerow([
             p["id"],
             p["name"],
             p["brand"] or "",
             p["category_name"] or "",
-            p["unit"] or "Each",
             f"{p['cost_price']:.2f}" if p['cost_price'] is not None else "0.00",
             f"{p['selling_price']:.2f}" if p['selling_price'] is not None else "0.00",
-            p["stock_quantity"] if p["stock_quantity"] is not None else 0
+            stock_qty,
+            f"{stock_val:.2f}"
         ])
     
+    # Write totals row
+    writer.writerow([
+        "", "TOTALS", "", "", "", "", total_qty, f"{total_value:.2f}"
+    ])
+    
+    from datetime import date
+    today_str = date.today().strftime("%Y-%m-%d")
+    filename = f"inventory_{brand}_{today_str}.csv" if brand else f"inventory_all_{today_str}.csv"
     response = Response(output.getvalue(), mimetype="text/csv")
-    filename = f"inventory_{brand}.csv" if brand else "inventory_all.csv"
     response.headers["Content-Disposition"] = f"attachment; filename={filename}"
     return response
 

@@ -203,6 +203,7 @@
             <th>Selling Price</th>
             <th>MARGIN</th>
             <th>Stock Qty</th>
+            <th>Stock Value</th>
             <th>Actions</th>
           </tr>
         </thead>
@@ -243,6 +244,7 @@
               {% endif %}
             </td>
             <td>{{ qty_int }}</td>
+            <td style="font-weight: 600; color: #1e293b;">${{ '%.2f' % ((p.stock_quantity|default(0)|float) * (p.cost_price|default(0)|float)) }}</td>
             <td>
 
               <button type="button" class="btn btn-edit" data-action="edit-product"
