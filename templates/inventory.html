@@ -1189,7 +1189,12 @@
         updateUnitQuantityDisplay('editUnitSelect', 'editUnitQuantity', 'editUnitDisplay');
         
         // Calculate and display profit margin
-        calcEditMargin();
+        calcProfitMargin(
+          document.getElementById('editCostPrice'),
+          document.getElementById('editSellingPrice'),
+          document.getElementById('editProfitMarginDisplay'),
+          document.getElementById('editProfitAmountDisplay')
+        );
 
         resetEditModalCategoryInline();
         const chosenCat = editCategorySelect.value;
