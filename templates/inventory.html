@@ -172,10 +172,9 @@
 <section class="panel">
   <div class="panel-header" style="display: flex; justify-content: space-between; align-items: center;">
     <h2 style="margin: 0;">Products</h2>
-    <form action="/inventory/download_csv" method="GET" style="display: flex; gap: 0.5rem;">
-      <select name="brand" class="form-control" style="width: auto; padding: 0.25rem 0.5rem; height: auto;">
+    <form action="/inventory" method="GET" style="display: flex; gap: 0.5rem;">
+      <select name="brand" class="form-control" style="width: auto; padding: 0.25rem 0.5rem; height: auto;" onchange="this.form.submit()">
         <option value="">All Brands</option>
-        <!-- Use unique brands from products or categories, since brands dropdown might not be passed, we can extract from products -->
         {% set unique_brands = [] %}
         {% for p in products %}
           {% if p.brand and p.brand not in unique_brands %}
@@ -183,10 +182,10 @@
           {% endif %}
         {% endfor %}
         {% for b in unique_brands|sort %}
-          <option value="{{ b }}">{{ b }}</option>
+          <option value="{{ b }}" {% if request.args.get('brand') == b %}selected{% endif %}>{{ b }}</option>
         {% endfor %}
       </select>
-      <button type="submit" class="btn btn-secondary" style="padding: 0.25rem 0.75rem;">Download CSV</button>
+      <button type="submit" formaction="/inventory/download_csv" class="btn btn-secondary" style="padding: 0.25rem 0.75rem;">Download CSV</button>
     </form>
   </div>
   <div class="panel-body">
@@ -273,6 +272,22 @@
           {% endfor %}
           {% endif %}
         </tbody>
+        <tfoot>
+          {% set total_qty = namespace(value=0) %}
+          {% set total_val = namespace(value=0.0) %}
+          {% for p in products %}
+              {% set qty = p.stock_quantity|default(0)|int %}
+              {% set val = qty * (p.cost_price|default(0)|float) %}
+              {% set total_qty.value = total_qty.value + qty %}
+              {% set total_val.value = total_val.value + val %}
+          {% endfor %}
+          <tr style="background-color: #f1f5f9; font-weight: 700;">
+            <td colspan="6" style="text-align: right; padding-right: 1rem;">TOTALS</td>
+            <td>{{ total_qty.value }}</td>
+            <td style="color: #1e293b;">${{ '%.2f' % total_val.value }}</td>
+            <td></td>
+          </tr>
+        </tfoot>
       </table>
     </div>
   </div>
@@ -933,6 +948,7 @@
     const unitVal = (p.unit || 'Each').toString();
     const costVal = p.cost_price ?? '';
     const sellingVal = p.selling_price ?? '';
+    const stockVal = p.stock_quantity ?? '';
 
     if (mode === 'add') {
       hideInline(addNewBrandInline);
@@ -945,6 +961,7 @@
       document.getElementById('addUnitSelect').value = unitVal;
       document.getElementById('addCostPrice').value = costVal;
       document.getElementById('addSellingPrice').value = sellingVal;
+      document.getElementById('addStockQuantity').value = stockVal;
       
       calcProfitMargin(document.getElementById('addCostPrice'), document.getElementById('addSellingPrice'), document.getElementById('profitMarginDisplay'), document.getElementById('profitAmountDisplay'));
 
@@ -959,6 +976,7 @@
       document.getElementById('editUnitSelect').value = unitVal;
       document.getElementById('editCostPrice').value = costVal;
       document.getElementById('editSellingPrice').value = sellingVal;
+      document.getElementById('editStockQuantity').value = stockVal;
       
       calcProfitMargin(document.getElementById('editCostPrice'), document.getElementById('editSellingPrice'), document.getElementById('editProfitMarginDisplay'), document.getElementById('editProfitAmountDisplay'));
 

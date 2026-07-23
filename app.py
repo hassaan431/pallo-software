@@ -250,25 +250,48 @@ def dashboard():
 @app.route("/inventory")
 @login_required
 def inventory():
+    brand_filter = request.args.get("brand", "").strip()
+
     conn = get_connection()
     try:
-        cur = conn.execute(
-            """
-            SELECT
-                p.id,
-                p.name,
-                p.brand,
-                p.unit,
-                p.cost_price,
-                p.selling_price,
-                p.stock_quantity,
-                p.category_id,
-                c.name AS category_name
-            FROM products p
-            LEFT JOIN categories c ON p.category_id = c.id
-            ORDER BY p.name COLLATE NOCASE
-            """
-        )
+        if brand_filter:
+            cur = conn.execute(
+                """
+                SELECT
+                    p.id,
+                    p.name,
+                    p.brand,
+                    p.unit,
+                    p.cost_price,
+                    p.selling_price,
+                    p.stock_quantity,
+                    p.category_id,
+                    c.name AS category_name
+                FROM products p
+                LEFT JOIN categories c ON p.category_id = c.id
+                WHERE p.brand = ?
+                ORDER BY p.name COLLATE NOCASE
+                """,
+                (brand_filter,)
+            )
+        else:
+            cur = conn.execute(
+                """
+                SELECT
+                    p.id,
+                    p.name,
+                    p.brand,
+                    p.unit,
+                    p.cost_price,
+                    p.selling_price,
+                    p.stock_quantity,
+                    p.category_id,
+                    c.name AS category_name
+                FROM products p
+                LEFT JOIN categories c ON p.category_id = c.id
+                ORDER BY p.name COLLATE NOCASE
+                """
+            )
         products = [dict(row) for row in cur.fetchall()]
 
         cur = conn.execute("SELECT COUNT(*) AS total_products FROM products")
@@ -424,16 +447,32 @@ def inventory_add():
     conn = get_connection()
     try:
         conn.execute("BEGIN")
-        cur = conn.execute(
-            """
-            INSERT INTO products
-                (name, category_id, brand, unit, cost_price, selling_price, stock_quantity)
-            VALUES
-                (?, ?, ?, ?, ?, ?, ?)
-            """,
-            (product_name, category_id, brand or None, unit, cost_price, selling_price, stock_quantity),
-        )
-        product_id = int(cur.lastrowid)
+        
+        # Check if product already exists
+        cur = conn.execute("SELECT id FROM products WHERE LOWER(name) = LOWER(?)", (product_name,))
+        existing = cur.fetchone()
+        
+        if existing:
+            conn.execute(
+                """
+                UPDATE products
+                SET category_id = ?, brand = ?, unit = ?, cost_price = ?, selling_price = ?, stock_quantity = ?
+                WHERE id = ?
+                """,
+                (category_id, brand or None, unit, cost_price, selling_price, stock_quantity, existing["id"])
+            )
+            product_id = existing["id"]
+        else:
+            cur = conn.execute(
+                """
+                INSERT INTO products
+                    (name, category_id, brand, unit, cost_price, selling_price, stock_quantity)
+                VALUES
+                    (?, ?, ?, ?, ?, ?, ?)
+                """,
+                (product_name, category_id, brand or None, unit, cost_price, selling_price, stock_quantity),
+            )
+            product_id = int(cur.lastrowid)
 
         # Keep brands table in sync for the Brand dropdown.
         if brand:
@@ -719,7 +758,8 @@ def products_list():
                 p.category_id AS category_id,
                 p.unit AS unit,
                 p.cost_price AS cost_price,
-                p.selling_price AS selling_price
+                p.selling_price AS selling_price,
+                p.stock_quantity AS stock_quantity
             FROM products p
             LEFT JOIN brands b
                 ON LOWER(b.name) = LOWER(p.brand)
@@ -738,6 +778,7 @@ def products_list():
                     "unit": r["unit"] or "Each",
                     "cost_price": float(r["cost_price"] or 0),
                     "selling_price": float(r["selling_price"] or 0),
+                    "stock_quantity": int(r["stock_quantity"] or 0),
                 }
                 for r in rows
             ]
