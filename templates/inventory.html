@@ -194,6 +194,7 @@
         <thead>
           <tr>
             <th>#</th>
+            <th>Image</th>
             <th>Product Name</th>
             <th>Brand</th>
             <th>Category</th>
@@ -223,6 +224,13 @@
 
           <tr id="product-row-{{ p.id }}" class="{{ row_class }}">
             <td>{{ loop.index }}</td>
+            <td>
+              {% if p.image_url %}
+                <img src="{{ p.image_url }}" alt="Product" style="width: 40px; height: 40px; object-fit: cover; border-radius: 4px;">
+              {% else %}
+                <div style="width: 40px; height: 40px; background: #eee; border-radius: 4px; display: flex; align-items: center; justify-content: center; color: #999; font-size: 0.8rem;">None</div>
+              {% endif %}
+            </td>
             <td>{{ p.name }}</td>
             <td>{{ p.brand or '' }}</td>
             <td>{{ p.category_name or '' }}</td>
@@ -301,7 +309,11 @@
       <button type="button" class="modal-close" data-close-modal="addProductModal" aria-label="Close">&times;</button>
     </div>
     <div class="modal-body">
-      <form id="addProductForm" method="post" action="{{ url_for('inventory_add') }}">
+      <form id="addProductForm" method="post" action="{{ url_for('inventory_add') }}" enctype="multipart/form-data">
+        <div class="modal-field">
+          <label for="addProductImage">Product Image</label>
+          <input type="file" class="form-control" id="addProductImage" name="product_image" accept="image/*">
+        </div>
         <div class="modal-field">
           <label for="addProductNameSelect">Product Name</label>
           <select class="form-control" id="addProductNameSelect">
@@ -403,7 +415,11 @@
       <button type="button" class="modal-close" data-close-modal="editProductModal" aria-label="Close">&times;</button>
     </div>
     <div class="modal-body">
-      <form id="editProductForm" method="post" action="">
+      <form id="editProductForm" method="post" action="" enctype="multipart/form-data">
+        <div class="modal-field">
+          <label for="editProductImage">Update Image (optional)</label>
+          <input type="file" class="form-control" id="editProductImage" name="product_image" accept="image/*">
+        </div>
         <div class="modal-field">
           <label for="editProductNameSelect">Product Name</label>
           <select class="form-control" id="editProductNameSelect">

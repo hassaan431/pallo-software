@@ -1,0 +1,735 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AK Distributors POS</title>
+  <link rel="icon" type="image/jpeg" href="/static/logos/AK Distributors Logo.jpeg">
+  <style>
+    :root {
+      --bg: #f8fafc;
+      --card-bg: #ffffff;
+      --primary: #10b981;
+      --success: #10b981;
+      --danger: #ef4444;
+      --text: #0f172a;
+      --text-muted: #475569;
+      --border: #e2e8f0;
+    }
+    body {
+      margin: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      display: flex;
+      height: 100vh;
+      overflow: hidden;
+    }
+    /* Main Layout */
+    .app-container {
+      display: flex;
+      width: 100%;
+      height: 100%;
+    }
+    
+    /* Left: Catalogue Area */
+    .catalogue-area {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      border-right: 1px solid var(--border);
+      background: var(--bg);
+    }
+    .header {
+      padding: 1rem 1.5rem;
+      background: var(--card-bg);
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .header h1 { margin: 0; font-size: 1.25rem; font-weight: 700; color: var(--primary); display: flex; align-items: center; gap: 10px; }
+    .header-actions { display: flex; align-items: center; gap: 1rem; }
+    .search-bar {
+      padding: 0.6rem 1rem;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      width: 250px;
+      outline: none;
+      font-size: 1rem;
+    }
+    
+    .categories {
+      display: flex;
+      gap: 0.5rem;
+      padding: 1rem 1.5rem;
+      background: var(--card-bg);
+      border-bottom: 1px solid var(--border);
+      overflow-x: auto;
+    }
+    .category-btn {
+      padding: 0.5rem 1.25rem;
+      border: 1px solid var(--border);
+      background: var(--bg);
+      border-radius: 20px;
+      font-weight: 600;
+      cursor: pointer;
+      white-space: nowrap;
+      transition: all 0.2s;
+    }
+    .category-btn.active {
+      background: var(--primary);
+      color: white;
+      border-color: var(--primary);
+    }
+    
+    .product-grid {
+      flex: 1;
+      padding: 1.5rem;
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+      grid-auto-rows: max-content;
+      gap: 1.5rem;
+      overflow-y: auto;
+    }
+    .product-card {
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      cursor: pointer;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+      transition: transform 0.1s;
+    }
+    .product-card:active {
+      transform: scale(0.97);
+    }
+    .product-image {
+      width: 100%;
+      height: 200px;
+      background: #ffffff;
+      object-fit: contain;
+      padding: 0.5rem;
+      box-sizing: border-box;
+    }
+    .product-info {
+      padding: 1rem;
+      display: flex;
+      flex-direction: column;
+      gap: 0.4rem;
+    }
+    .product-card h3 { margin: 0; font-size: 1.1rem; }
+    .product-card .brand { font-size: 0.8rem; color: var(--text-muted); }
+    .product-card .price { font-size: 1.3rem; font-weight: 700; color: var(--success); }
+    .product-card .stock { font-size: 0.85rem; padding: 2px 6px; border-radius: 4px; display: inline-block; width: fit-content; }
+    .stock-ok { background: #dcfce7; color: #166534; }
+    .stock-out { background: #fee2e2; color: #991b1b; }
+    
+    /* Right: Cart Area */
+    .cart-area {
+      width: 360px;
+      background: var(--card-bg);
+      display: flex;
+      flex-direction: column;
+    }
+    .cart-header {
+      padding: 1.25rem;
+      border-bottom: 1px solid var(--border);
+      font-weight: 700;
+      font-size: 1.2rem;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .clear-cart { color: var(--danger); font-size: 0.9rem; cursor: pointer; border: none; background: none; font-weight: bold; }
+    
+    .cart-items {
+      flex: 1;
+      overflow-y: auto;
+      padding: 1rem;
+      display: flex;
+      flex-direction: column;
+      gap: 1rem;
+    }
+    .cart-item {
+      display: flex;
+      flex-direction: column;
+      gap: 0.5rem;
+      padding-bottom: 1rem;
+      border-bottom: 1px dashed var(--border);
+    }
+    .cart-item-title { font-weight: 600; font-size: 1rem; }
+    .cart-item-controls {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .qty-btn {
+      width: 32px;
+      height: 32px;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+      background: #f1f5f9;
+      font-weight: bold;
+      font-size: 1.2rem;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .qty-btn:active { background: #e2e8f0; }
+    
+    .cart-footer {
+      padding: 1.25rem;
+      border-top: 1px solid var(--border);
+      background: var(--bg);
+    }
+    .summary-row {
+      display: flex;
+      justify-content: space-between;
+      margin-bottom: 0.5rem;
+      font-size: 1rem;
+      color: var(--text-muted);
+    }
+    .summary-row.total {
+      font-size: 1.5rem;
+      font-weight: 700;
+      color: var(--text);
+      margin-top: 1rem;
+      margin-bottom: 1rem;
+    }
+    .checkout-btn {
+      width: 100%;
+      padding: 1.25rem;
+      background: var(--success);
+      color: white;
+      border: none;
+      border-radius: 8px;
+      font-size: 1.2rem;
+      font-weight: 700;
+      cursor: pointer;
+    }
+    .checkout-btn:disabled { background: #94a3b8; cursor: not-allowed; }
+    
+    /* Modal */
+    .modal-backdrop {
+      display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+      background: rgba(0,0,0,0.5); justify-content: center; align-items: center; z-index: 1000;
+    }
+    .modal {
+      background: var(--card-bg); width: 600px; max-width: 95%; max-height: 90vh; border-radius: 12px;
+      display: flex; flex-direction: column; overflow: hidden; box-shadow: 0 10px 15px -3px rgba(0,0,0,0.1);
+    }
+    .modal-header { padding: 1.25rem; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; }
+    .modal-header h2 { margin: 0; font-size: 1.25rem; }
+    .modal-close { background: none; border: none; font-size: 1.5rem; cursor: pointer; color: var(--text-muted); }
+    .modal-body { padding: 1.5rem; display: flex; flex-direction: column; gap: 1rem; overflow-y: auto; }
+    .form-group { display: flex; flex-direction: column; gap: 0.4rem; position: relative; }
+    .form-group label { font-weight: 600; font-size: 0.9rem; }
+    .form-control { padding: 0.75rem; border: 1px solid var(--border); border-radius: 8px; font-size: 1rem; outline: none; }
+    .form-control:focus { border-color: var(--primary); }
+    .btn { padding: 0.75rem 1.5rem; border-radius: 8px; font-weight: 600; cursor: pointer; border: none; font-size: 1rem; }
+    .btn-primary { background: var(--primary); color: white; }
+    .btn-secondary { background: #e2e8f0; color: var(--text); }
+    .hidden { display: none !important; }
+    
+    /* Grid for form */
+    .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
+    .form-grid.full { grid-template-columns: 1fr; }
+
+    /* Custom Autocomplete */
+    .autocomplete-dropdown {
+      position: absolute;
+      top: 100%;
+      left: 0;
+      right: 0;
+      background: #fff;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      max-height: 200px;
+      overflow-y: auto;
+      z-index: 10;
+      box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+      margin-top: 4px;
+    }
+    .autocomplete-item {
+      padding: 0.75rem 1rem;
+      cursor: pointer;
+      border-bottom: 1px solid #f1f5f9;
+    }
+    .autocomplete-item:last-child { border-bottom: none; }
+    .autocomplete-item:hover { background: #f8fafc; }
+    .autocomplete-item.add-new { color: var(--primary); font-weight: 600; text-align: center; }
+  </style>
+</head>
+<body>
+  <div class="app-container">
+    <!-- Left side -->
+    <div class="catalogue-area">
+      <div class="header">
+        <h1>
+          <img src="/static/logos/AK Distributors Logo.jpeg" style="height:40px; border-radius:50%;">
+          AK Distributors POS
+        </h1>
+        <div class="header-actions">
+          <input type="text" id="searchInput" class="search-bar" placeholder="Search products...">
+          <a href="/logout" style="color:var(--text-muted); text-decoration:none; font-weight:600;">[Logout]</a>
+        </div>
+      </div>
+      <div class="categories" id="categoryTabs">
+        <button class="category-btn active" data-id="all">All Products</button>
+      </div>
+      <div class="product-grid" id="productGrid">
+        <!-- Products generated here -->
+      </div>
+    </div>
+    
+    <!-- Right side (Cart) -->
+    <div class="cart-area">
+      <div class="cart-header">
+        <span>Current Order</span>
+        <button class="clear-cart" id="clearCartBtn">Clear</button>
+      </div>
+      <div class="cart-items" id="cartItems">
+        <!-- Cart Items -->
+      </div>
+      <div class="cart-footer">
+        <div class="summary-row total">
+          <span>Total</span>
+          <span id="cartTotal">$0.00</span>
+        </div>
+        <button class="checkout-btn" id="checkoutBtn" disabled>Checkout</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Checkout Modal -->
+  <div class="modal-backdrop" id="checkoutModal">
+    <div class="modal">
+      <div class="modal-header">
+        <h2>Checkout</h2>
+        <button class="modal-close" id="closeCheckout">&times;</button>
+      </div>
+      <div class="modal-body">
+        
+        <!-- Search Input -->
+        <div class="form-group" id="customerSearchContainer">
+          <label>Select Customer</label>
+          <input type="text" id="customerSearchInput" class="form-control" placeholder="Search by name..." autocomplete="off">
+          <div id="customerDropdown" class="autocomplete-dropdown hidden"></div>
+        </div>
+
+        <!-- Selected Customer Info -->
+        <div id="selectedCustomerContainer" style="display:none; align-items:center; justify-content:space-between; padding:1rem; background:#f1f5f9; border-radius:8px; border:1px solid var(--border);">
+          <div>
+            <div style="font-size:0.8rem; color:var(--text-muted); margin-bottom:0.2rem;">Selected Customer</div>
+            <div id="selectedCustomerName" style="font-weight:700; font-size:1.1rem; color:var(--text);"></div>
+          </div>
+          <button class="btn btn-secondary" style="padding:0.4rem 0.8rem; font-size:0.9rem;" id="changeCustomerBtn">Change</button>
+        </div>
+        
+        <!-- New Customer Fields -->
+        <div id="newCustomerFields" style="display:none; flex-direction:column; gap:1rem; padding: 1.25rem; background: var(--bg); border-radius: 8px; border: 1px dashed var(--primary);">
+          <div style="font-weight:bold; color:var(--primary); font-size:1rem; border-bottom:1px solid #e2e8f0; padding-bottom:0.5rem;">Adding New Customer</div>
+          
+          <div class="form-group">
+            <label>Full Name *</label>
+            <input type="text" id="custName" class="form-control" placeholder="Customer Name">
+          </div>
+          
+          <div class="form-grid">
+            <div class="form-group">
+              <label>Phone *</label>
+              <input type="text" id="custPhone" class="form-control" placeholder="Phone Number">
+            </div>
+            <div class="form-group">
+              <label>Email</label>
+              <input type="email" id="custEmail" class="form-control" placeholder="Email Address">
+            </div>
+          </div>
+          
+          <div class="form-group">
+            <label>Billing Address *</label>
+            <input type="text" id="custBillAddress" class="form-control" placeholder="Billing Address">
+          </div>
+          <div class="form-group">
+            <label>Shipping Address</label>
+            <input type="text" id="custShipAddress" class="form-control" placeholder="Shipping Address (Optional)">
+          </div>
+
+          <div class="form-grid">
+            <div class="form-group">
+              <label>Area</label>
+              <input type="text" id="custArea" class="form-control" placeholder="Area">
+            </div>
+            <div class="form-group">
+              <label>State</label>
+              <input type="text" id="custState" class="form-control" placeholder="State">
+            </div>
+          </div>
+          
+          <div class="form-group">
+            <label>Terms</label>
+            <input type="text" id="custTerms" class="form-control" placeholder="e.g. Net 30">
+          </div>
+        </div>
+
+        <div class="form-group" style="margin-top:1rem;">
+          <label>Payment Type</label>
+          <select id="paymentType" class="form-control">
+            <option value="cash">Cash</option>
+            <option value="cheque">Cheque</option>
+            <option value="credit">Credit</option>
+          </select>
+        </div>
+
+        <div class="form-group hidden" id="amountPaidGroup">
+          <label>Amount Paid Upfront</label>
+          <input type="number" id="amountPaid" class="form-control" min="0" step="0.01" placeholder="0.00">
+        </div>
+        
+        <div class="form-group hidden" id="dueDateGroup" style="margin-top:1rem;">
+          <label>Due Date</label>
+          <input type="date" id="custDueDate" class="form-control">
+        </div>
+        
+        <div id="checkoutError" style="color:var(--danger); font-weight:600; display:none;"></div>
+
+        <div style="display:flex; justify-content:flex-end; gap:1rem; margin-top: 1rem;">
+          <button class="btn btn-secondary" id="cancelCheckout">Cancel</button>
+          <button class="btn btn-primary" id="submitOrderBtn">Place Order</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    let products = [];
+    let brands = new Set();
+    let cart = {}; // product_id -> qty
+    let customers = [];
+    let selectedCustomerId = null;
+
+    const productGrid = document.getElementById('productGrid');
+    const categoryTabs = document.getElementById('categoryTabs');
+    const searchInput = document.getElementById('searchInput');
+    const cartItemsDiv = document.getElementById('cartItems');
+    const cartTotalSpan = document.getElementById('cartTotal');
+    const checkoutBtn = document.getElementById('checkoutBtn');
+    
+    // Format money
+    const money = (val) => '$' + Number(val).toFixed(2);
+
+    // Initialize
+    async function init() {
+      try {
+        const [prodRes, custRes] = await Promise.all([
+          fetch('/products/list').then(r => r.json()),
+          fetch('/customers/list').then(r => r.json())
+        ]);
+        products = prodRes;
+        if(custRes) {
+          customers = custRes;
+        }
+        
+        products.forEach(p => {
+          if(p.brand_name) brands.add(p.brand_name);
+        });
+        
+        renderBrands();
+        renderProducts();
+      } catch (e) {
+        console.error("Failed to load POS data", e);
+      }
+    }
+
+    function renderBrands() {
+      categoryTabs.innerHTML = '<button class="category-btn active" data-id="all">All Products</button>';
+      Array.from(brands).sort().forEach(brand => {
+        const btn = document.createElement('button');
+        btn.className = 'category-btn';
+        btn.dataset.id = brand;
+        btn.textContent = brand;
+        btn.onclick = () => {
+          document.querySelectorAll('.category-btn').forEach(b => b.classList.remove('active'));
+          btn.classList.add('active');
+          renderProducts(brand, searchInput.value);
+        };
+        categoryTabs.appendChild(btn);
+      });
+      categoryTabs.querySelector('[data-id="all"]').onclick = (e) => {
+        document.querySelectorAll('.category-btn').forEach(b => b.classList.remove('active'));
+        e.target.classList.add('active');
+        renderProducts('all', searchInput.value);
+      };
+    }
+
+    function renderProducts(brandFilter = 'all', searchFilter = '') {
+      productGrid.innerHTML = '';
+      let filtered = products;
+      if(brandFilter !== 'all') {
+        filtered = filtered.filter(p => p.brand_name === brandFilter);
+      }
+      if(searchFilter) {
+        const lower = searchFilter.toLowerCase();
+        filtered = filtered.filter(p => p.name.toLowerCase().includes(lower) || (p.brand_name && p.brand_name.toLowerCase().includes(lower)));
+      }
+
+      filtered.forEach(p => {
+        const card = document.createElement('div');
+        card.className = 'product-card';
+        card.onclick = () => addToCart(p.id);
+        const imgSrc = p.image_url ? p.image_url : 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="100%" height="100%" viewBox="0 0 200 140"><rect width="100%" height="100%" fill="%23eee"/><text x="50%" y="50%" fill="%23999" dominant-baseline="middle" text-anchor="middle">No Image</text></svg>';
+        let stockClass = p.stock_quantity > 0 ? 'stock-ok' : 'stock-out';
+        let stockText = p.stock_quantity > 0 ? `${p.stock_quantity} in stock` : 'Out of Stock (Warn)';
+        card.innerHTML = `
+          <img src="${imgSrc}" class="product-image" alt="Img">
+          <div class="product-info">
+            <h3 title="${p.name}">${p.name}</h3>
+            <div class="brand">${p.brand_name || 'Generic'}</div>
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-top: 0.5rem;">
+              <div class="price">${money(p.selling_price)}</div>
+              <div class="stock ${stockClass}">${stockText}</div>
+            </div>
+          </div>
+        `;
+        productGrid.appendChild(card);
+      });
+    }
+
+    searchInput.addEventListener('input', (e) => {
+      const activeCat = document.querySelector('.category-btn.active').dataset.id;
+      renderProducts(activeCat, e.target.value);
+    });
+
+    // Cart Logic
+    function addToCart(productId) {
+      if(!cart[productId]) cart[productId] = 0;
+      cart[productId]++;
+      renderCart();
+    }
+    function updateQty(productId, delta) {
+      if(cart[productId]) {
+        cart[productId] += delta;
+        if(cart[productId] <= 0) delete cart[productId];
+      }
+      renderCart();
+    }
+    document.getElementById('clearCartBtn').onclick = () => {
+      cart = {};
+      renderCart();
+    };
+
+    function renderCart() {
+      cartItemsDiv.innerHTML = '';
+      let total = 0;
+      let count = 0;
+      for(const [pid, qty] of Object.entries(cart)) {
+        const p = products.find(x => x.id == pid);
+        if(!p) continue;
+        const lineTotal = p.selling_price * qty;
+        total += lineTotal;
+        count += qty;
+        const item = document.createElement('div');
+        item.className = 'cart-item';
+        item.innerHTML = `
+          <div class="cart-item-title">${p.name}</div>
+          <div class="cart-item-controls">
+            <span style="font-weight:600; color:var(--primary);">${money(lineTotal)}</span>
+            <div style="display:flex; align-items:center; gap:0.5rem;">
+              <button class="qty-btn" onclick="updateQty(${p.id}, -1)">-</button>
+              <span style="font-weight:bold; width:24px; text-align:center;">${qty}</span>
+              <button class="qty-btn" onclick="updateQty(${p.id}, 1)">+</button>
+            </div>
+          </div>
+        `;
+        cartItemsDiv.appendChild(item);
+      }
+      cartTotalSpan.textContent = money(total);
+      if(count > 0) {
+        checkoutBtn.disabled = false;
+        checkoutBtn.textContent = `Checkout (${count} items)`;
+      } else {
+        checkoutBtn.disabled = true;
+        checkoutBtn.textContent = 'Checkout';
+        cartItemsDiv.innerHTML = '<div style="color:var(--text-muted); text-align:center; padding-top:2rem;">Cart is empty</div>';
+      }
+    }
+
+    // Checkout Modal Logic
+    const checkoutModal = document.getElementById('checkoutModal');
+    const customerSearchContainer = document.getElementById('customerSearchContainer');
+    const customerSearchInput = document.getElementById('customerSearchInput');
+    const customerDropdown = document.getElementById('customerDropdown');
+    const selectedCustomerContainer = document.getElementById('selectedCustomerContainer');
+    const selectedCustomerName = document.getElementById('selectedCustomerName');
+    
+    const newCustFields = document.getElementById('newCustomerFields');
+    const paymentType = document.getElementById('paymentType');
+    const amountPaidGroup = document.getElementById('amountPaidGroup');
+    const errorDiv = document.getElementById('checkoutError');
+
+    checkoutBtn.onclick = () => {
+      errorDiv.style.display = 'none';
+      checkoutModal.style.display = 'flex';
+      paymentType.value = 'cash';
+      amountPaidGroup.classList.add('hidden');
+      if (document.getElementById('dueDateGroup')) {
+        document.getElementById('dueDateGroup').classList.add('hidden');
+      }
+      resetCustomerSelection();
+    };
+
+    document.getElementById('closeCheckout').onclick = () => checkoutModal.style.display = 'none';
+    document.getElementById('cancelCheckout').onclick = () => checkoutModal.style.display = 'none';
+
+    function resetCustomerSelection() {
+      selectedCustomerId = null;
+      customerSearchInput.value = '';
+      customerSearchContainer.style.display = 'flex';
+      selectedCustomerContainer.style.display = 'none';
+      newCustFields.style.display = 'none';
+      customerDropdown.classList.add('hidden');
+    }
+
+    document.getElementById('changeCustomerBtn').onclick = resetCustomerSelection;
+
+    // Autocomplete Logic
+    function showCustomerDropdown(filter = '') {
+      customerDropdown.innerHTML = '';
+      customerDropdown.classList.remove('hidden');
+      
+      const filtered = customers.filter(c => c.name.toLowerCase().includes(filter.toLowerCase()));
+      
+      filtered.forEach(c => {
+        const div = document.createElement('div');
+        div.className = 'autocomplete-item';
+        div.textContent = c.name;
+        div.onmousedown = (e) => { // mousedown fires before blur
+          e.preventDefault();
+          selectCustomer(c.id, c.name);
+        };
+        customerDropdown.appendChild(div);
+      });
+      
+      const addNew = document.createElement('div');
+      addNew.className = 'autocomplete-item add-new';
+      addNew.textContent = "+ Add New Customer";
+      addNew.onmousedown = (e) => {
+        e.preventDefault();
+        selectNewCustomer(customerSearchInput.value);
+      };
+      customerDropdown.appendChild(addNew);
+    }
+
+    customerSearchInput.addEventListener('focus', () => showCustomerDropdown(customerSearchInput.value));
+    customerSearchInput.addEventListener('input', (e) => showCustomerDropdown(e.target.value));
+    customerSearchInput.addEventListener('blur', () => {
+      setTimeout(() => customerDropdown.classList.add('hidden'), 150);
+    });
+
+    function selectCustomer(id, name) {
+      selectedCustomerId = id;
+      customerSearchContainer.style.display = 'none';
+      selectedCustomerContainer.style.display = 'flex';
+      selectedCustomerName.textContent = name;
+      newCustFields.style.display = 'none';
+      customerDropdown.classList.add('hidden');
+    }
+
+    function selectNewCustomer(typedName) {
+      selectedCustomerId = null;
+      customerSearchContainer.style.display = 'none';
+      selectedCustomerContainer.style.display = 'flex';
+      selectedCustomerName.textContent = "New Customer";
+      newCustFields.style.display = 'flex';
+      customerDropdown.classList.add('hidden');
+      
+      // Auto fill the name field with what they typed in search
+      document.getElementById('custName').value = typedName;
+      document.getElementById('custName').focus();
+    }
+
+    paymentType.onchange = (e) => {
+      if(e.target.value === 'credit') {
+        amountPaidGroup.classList.remove('hidden');
+        document.getElementById('dueDateGroup').classList.remove('hidden');
+      } else {
+        amountPaidGroup.classList.add('hidden');
+        document.getElementById('dueDateGroup').classList.add('hidden');
+        if (e.target.value === 'cash') {
+          document.getElementById('custTerms').value = '';
+        }
+      }
+    };
+
+    document.getElementById('submitOrderBtn').onclick = async () => {
+      errorDiv.style.display = 'none';
+      
+      const payload = {
+        customer_id: selectedCustomerId,
+        customer_name: document.getElementById('custName').value,
+        customer_phone: document.getElementById('custPhone').value,
+        customer_area: document.getElementById('custArea').value,
+        customer_bill: document.getElementById('custBillAddress').value,
+        customer_ship: document.getElementById('custShipAddress').value,
+        customer_state: document.getElementById('custState').value,
+        customer_email: document.getElementById('custEmail').value,
+        customer_terms: (paymentType.value === 'cash') ? '' : document.getElementById('custTerms').value,
+        payment_type: paymentType.value,
+        amount_paid: document.getElementById('amountPaid').value || 0,
+        due_date: document.getElementById('custDueDate').value,
+        items: Object.entries(cart).map(([id, qty]) => ({ id, qty }))
+      };
+      
+      if(selectedCustomerContainer.style.display === 'none') {
+        errorDiv.textContent = 'Please select or add a customer.';
+        errorDiv.style.display = 'block';
+        return;
+      }
+
+      if(!payload.customer_id) {
+         if (!payload.customer_name || !document.getElementById('custPhone').value || !document.getElementById('custBillAddress').value) {
+            errorDiv.textContent = 'For new customers, Full Name, Phone, and Billing Address are mandatory.';
+            errorDiv.style.display = 'block';
+            return;
+         }
+      }
+      
+      document.getElementById('submitOrderBtn').disabled = true;
+      document.getElementById('submitOrderBtn').textContent = 'Processing...';
+
+      try {
+        const res = await fetch('/pos/submit_order', {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify(payload)
+        });
+        const data = await res.json();
+        
+        if(res.ok && data.ok) {
+          alert(`Order Placed Successfully! Invoice: ${data.invoice_number}`);
+          cart = {};
+          renderCart();
+          init(); // Refresh products to update stock
+          checkoutModal.style.display = 'none';
+        } else {
+          errorDiv.textContent = data.error || 'Failed to submit order.';
+          errorDiv.style.display = 'block';
+        }
+      } catch (err) {
+        errorDiv.textContent = 'Network error occurred.';
+        errorDiv.style.display = 'block';
+      }
+      
+      document.getElementById('submitOrderBtn').disabled = false;
+      document.getElementById('submitOrderBtn').textContent = 'Place Order';
+    };
+
+    // Run
+    init();
+  </script>
+</body>
+</html>

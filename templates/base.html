@@ -65,6 +65,14 @@
             <span class="nav-emoji" aria-hidden="true">📈</span>
             <span class="nav-label">Reports</span>
           </a>
+          <a href="{{ url_for('users_list') }}" class="{{ 'is-active' if request.endpoint == 'users_list' else '' }}">
+            <span class="nav-emoji" aria-hidden="true">👤</span>
+            <span class="nav-label">Users</span>
+          </a>
+          <a href="{{ url_for('pos') }}" target="_blank">
+            <span class="nav-emoji" aria-hidden="true">📱</span>
+            <span class="nav-label">POS Catalogue</span>
+          </a>
         </nav>
       </div>
 

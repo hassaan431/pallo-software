@@ -257,6 +257,16 @@
             <label class="field-label" for="dueDate">Due Date</label>
             <input class="form-control" type="date" id="dueDate" name="due_date" value="{% if edit_mode %}{{ edit_sale.due_date or '' }}{% endif %}">
           </div>
+          
+          <div class="form-group">
+            <label class="field-label" for="salesmanId">Salesman</label>
+            <select class="form-control" id="salesmanId" name="salesman_id">
+              <option value="">-- None --</option>
+              {% for u in all_users %}
+              <option value="{{ u.id }}" {% if edit_mode and edit_sale.salesman_id == u.id %}selected{% endif %}>{{ u.username }}</option>
+              {% endfor %}
+            </select>
+          </div>
 
           <div class="form-group">
             <label class="field-label" for="termsInput">Terms</label>
@@ -454,28 +464,26 @@
           <button type="button" class="btn btn-primary" id="filterBtn">Filter</button>
           <a href="/sales/export" id="exportSalesBtn" class="btn btn-secondary"><i class="fas fa-file-csv"></i> Export CSV</a>
         </div>
-      </div>
 
       <div class="table-wrap">
         <table class="data-table" id="salesHistoryTable" style="font-size: 0.85rem;">
           <thead>
             <tr>
-              <th>Invoice#</th>
-              <th>Date</th>
-              <th>Customer</th>
-              <th>Grand Total</th>
-              <th>Profit Margin</th>
-              <th>Profit Amount</th>
-              <th>Paid</th>
-              <th>Remaining</th>
-              <th>Type</th>
+              <th style="white-space: nowrap;">Invoice#</th>
+              <th style="white-space: nowrap;">Date</th>
+              <th style="white-space: nowrap; min-width: 140px;">Customer</th>
+              <th style="white-space: nowrap;">Grand Total</th>
+              <th style="white-space: nowrap;">Profit Margin</th>
+              <th style="white-space: nowrap;">Profit Amount</th>
+              <th style="white-space: nowrap;">Remaining</th>
+              <th style="white-space: nowrap;">Salesman</th>
               <th style="width: 200px;">Actions</th>
             </tr>
           </thead>
           <tbody id="recentSalesTbody"></tbody>
         </table>
       </div>
-      <div id="salesPagination" style="margin-top: 1rem; display: flex; justify-content: space-between; align-items: center; font-size: 0.9rem;">
+      <div id="salesPagination" style="margin-top: 12px; display: flex; justify-content: space-between; align-items: center; font-size: 0.9rem;">
         <span id="salesPageInfo"></span>
         <div style="display: flex; gap: 8px;">
           <button type="button" class="btn btn-secondary btn-sm" id="prevSalesPageBtn">Previous</button>
@@ -1130,13 +1138,6 @@
       tdProfitAmt.style.fontWeight = '600';
       tr.appendChild(tdProfitAmt);
 
-      // Paid (green color)
-      const tdPaid = document.createElement('td');
-      tdPaid.style.color = '#10b981';
-      tdPaid.style.fontWeight = '600';
-      tdPaid.textContent = money(s.amount_paid || 0);
-      tr.appendChild(tdPaid);
-
       // Remaining (red if > 0, grey if 0)
       const tdRemaining = document.createElement('td');
       const remaining = parseFloat(s.remaining_amount || 0);
@@ -1149,25 +1150,9 @@
       tdRemaining.textContent = money(remaining);
       tr.appendChild(tdRemaining);
 
-      // Payment Type Badge
-      const tdType = document.createElement('td');
-      const typeBadge = document.createElement('span');
-      typeBadge.className = 'status-badge';
-      if (s.payment_type === 'cash') {
-        typeBadge.style.background = '#6b7280';
-        typeBadge.textContent = 'Cash';
-      } else if (s.payment_type === 'cheque') {
-        typeBadge.style.background = '#2563eb';
-        typeBadge.textContent = 'Cheque';
-      } else if (s.payment_type === 'credit') {
-        typeBadge.style.background = '#f59e0b';
-        typeBadge.textContent = 'Credit';
-      } else {
-        typeBadge.textContent = s.payment_type || '';
-      }
-      tdType.appendChild(typeBadge);
-      tr.appendChild(tdType);
-
+      const tdSalesman = document.createElement('td');
+      tdSalesman.textContent = s.salesman_name || 'Admin';
+      tr.appendChild(tdSalesman);
       
       const tdActions = document.createElement('td');
       tdActions.style.display = 'flex';
@@ -1627,6 +1612,11 @@
                 font-size:12px;">TERMS</span>
               <div>${data.terms || '-'}</div>
             </div>
+            <div style="margin-bottom:8px;">
+              <span style="color:#6b7280; 
+                font-size:12px;">SALESMAN</span>
+              <div>${data.salesman_name || 'Admin'}</div>
+            </div>
             <div>
               <span style="color:#6b7280; 
                 font-size:12px;">DUE DATE</span>
@@ -1639,20 +1629,6 @@
             <div style="margin-bottom:8px;">
               <span style="color:#6b7280; 
                 font-size:12px;">STATUS</span>
-              <div class="mt-2 d-flex gap-2">
-                <span class="badge rounded-pill" id="viewProfitMargin" style="
-                background:rgba(22, 163, 74, 0.1); 
-                color:#16a34a; 
-                padding:8px 16px; 
-                font-weight:700; 
-                font-size:12px;">PROFIT MARGIN</span>
-                <span class="badge rounded-pill" id="viewProfitAmount" style="
-                background:rgba(22, 163, 74, 0.1); 
-                color:#16a34a; 
-                padding:8px 16px; 
-                font-weight:700; 
-                font-size:12px;">PROFIT AMOUNT</span>
-              </div>
               <div>
                 <span style="
                   background:${statusColor};

@@ -57,6 +57,7 @@ fix_existing_sales_data()
 from flask import Flask, Response, flash, jsonify, redirect, render_template, request, url_for
 from flask_login import LoginManager, UserMixin, current_user, login_required, login_user, logout_user
 from werkzeug.security import check_password_hash
+from functools import wraps
 
 from invoice_generator import generate_invoice_pdf
 
@@ -70,9 +71,10 @@ login_manager.login_message = None
 
 
 class User(UserMixin):
-    def __init__(self, db_id: int, username: str):
+    def __init__(self, db_id: int, username: str, role: str = 'admin'):
         self.id = db_id
         self.username = username
+        self.role = role
 
 
 @login_manager.user_loader
@@ -86,7 +88,18 @@ def load_user(user_id):
     row = get_user_by_id(pk)
     if row is None:
         return None
-    return User(row["id"], row["username"])
+    role = row["role"] if "role" in row.keys() else "admin"
+    return User(row["id"], row["username"], role)
+
+def admin_required(f):
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        if not current_user.is_authenticated:
+            return redirect(url_for('login'))
+        if current_user.role != 'admin':
+            return redirect(url_for('pos'))
+        return f(*args, **kwargs)
+    return decorated_function
 
 
 @app.route("/")
@@ -97,16 +110,22 @@ def index():
 @app.route("/login", methods=["GET", "POST"])
 def login():
     if current_user.is_authenticated:
+        if current_user.role == 'salesman':
+            return redirect(url_for("pos"))
         return redirect(url_for("dashboard"))
     if request.method == "POST":
         username = (request.form.get("username") or "").strip()
         password = request.form.get("password") or ""
         row = get_user_by_username(username)
         if row is not None and check_password_hash(row["password_hash"], password):
-            login_user(User(row["id"], row["username"]), remember=True)
+            role = row["role"] if "role" in row.keys() else "admin"
+            user_obj = User(row["id"], row["username"], role)
+            login_user(user_obj, remember=True)
             next_url = request.args.get("next")
             if next_url and next_url.startswith("/"):
                 return redirect(next_url)
+            if user_obj.role == 'salesman':
+                return redirect(url_for("pos"))
             return redirect(url_for("dashboard"))
         return render_template(
             "login.html",
@@ -122,7 +141,7 @@ def logout():
 
 
 @app.route("/dashboard")
-@login_required
+@admin_required
 def dashboard():
     conn = get_connection()
     try:
@@ -248,7 +267,7 @@ def dashboard():
 
 
 @app.route("/inventory")
-@login_required
+@admin_required
 def inventory():
     brand_filter = request.args.get("brand", "").strip()
 
@@ -265,6 +284,7 @@ def inventory():
                     p.cost_price,
                     p.selling_price,
                     p.stock_quantity,
+                    p.image_url,
                     p.category_id,
                     c.name AS category_name
                 FROM products p
@@ -285,6 +305,7 @@ def inventory():
                     p.cost_price,
                     p.selling_price,
                     p.stock_quantity,
+                    p.image_url,
                     p.category_id,
                     c.name AS category_name
                 FROM products p
@@ -330,7 +351,7 @@ def inventory():
 
 
 @app.route("/inventory/download_csv")
-@login_required
+@admin_required
 def inventory_download_csv():
     brand = request.args.get("brand", "").strip()
     conn = get_connection()
@@ -424,7 +445,7 @@ def inventory_download_csv():
 
 
 @app.route("/inventory/add", methods=["POST"])
-@login_required
+@admin_required
 def inventory_add():
     product_name = (request.form.get("product_name") or "").strip()
     brand = (request.form.get("brand") or "").strip()
@@ -444,6 +465,33 @@ def inventory_add():
     if not product_name or not category_id:
         return redirect(url_for("inventory"))
 
+    import os
+    from werkzeug.utils import secure_filename
+    image_file = request.files.get("product_image")
+    image_url = None
+    if image_file and image_file.filename:
+        filename = secure_filename(image_file.filename)
+        base, _ = os.path.splitext(filename)
+        filename = f"{base}.webp"
+        
+        upload_folder = os.path.join(app.root_path, "static", "uploads", "products")
+        os.makedirs(upload_folder, exist_ok=True)
+        filepath = os.path.join(upload_folder, filename)
+        
+        try:
+            from PIL import Image
+            img = Image.open(image_file)
+            if img.mode != 'RGB':
+                img = img.convert('RGB')
+            img.thumbnail((800, 800))
+            img.save(filepath, format="WEBP", optimize=True, quality=70)
+        except Exception:
+            # Fallback if Pillow fails
+            image_file.seek(0)
+            image_file.save(filepath)
+            
+        image_url = f"/static/uploads/products/{filename}"
+
     conn = get_connection()
     try:
         conn.execute("BEGIN")
@@ -453,24 +501,28 @@ def inventory_add():
         existing = cur.fetchone()
         
         if existing:
-            conn.execute(
-                """
+            update_query = """
                 UPDATE products
                 SET category_id = ?, brand = ?, unit = ?, cost_price = ?, selling_price = ?, stock_quantity = ?
-                WHERE id = ?
-                """,
-                (category_id, brand or None, unit, cost_price, selling_price, stock_quantity, existing["id"])
-            )
+            """
+            params = [category_id, brand or None, unit, cost_price, selling_price, stock_quantity]
+            if image_url:
+                update_query += ", image_url = ?"
+                params.append(image_url)
+            update_query += " WHERE id = ?"
+            params.append(existing["id"])
+            
+            conn.execute(update_query, params)
             product_id = existing["id"]
         else:
             cur = conn.execute(
                 """
                 INSERT INTO products
-                    (name, category_id, brand, unit, cost_price, selling_price, stock_quantity)
+                    (name, category_id, brand, unit, cost_price, selling_price, stock_quantity, image_url)
                 VALUES
-                    (?, ?, ?, ?, ?, ?, ?)
+                    (?, ?, ?, ?, ?, ?, ?, ?)
                 """,
-                (product_name, category_id, brand or None, unit, cost_price, selling_price, stock_quantity),
+                (product_name, category_id, brand or None, unit, cost_price, selling_price, stock_quantity, image_url),
             )
             product_id = int(cur.lastrowid)
 
@@ -486,7 +538,7 @@ def inventory_add():
 
 
 @app.route("/inventory/edit/<int:product_id>", methods=["POST"])
-@login_required
+@admin_required
 def inventory_edit(product_id: int):
     product_name = (request.form.get("product_name") or "").strip()
     brand = (request.form.get("brand") or "").strip()
@@ -506,11 +558,38 @@ def inventory_edit(product_id: int):
     if not product_name or not category_id:
         return redirect(url_for("inventory"))
 
+    import os
+    from werkzeug.utils import secure_filename
+    image_file = request.files.get("product_image")
+    image_url = None
+    if image_file and image_file.filename:
+        filename = secure_filename(image_file.filename)
+        base, _ = os.path.splitext(filename)
+        filename = f"{base}.webp"
+        
+        upload_folder = os.path.join(app.root_path, "static", "uploads", "products")
+        os.makedirs(upload_folder, exist_ok=True)
+        filepath = os.path.join(upload_folder, filename)
+        
+        try:
+            from PIL import Image
+            img = Image.open(image_file)
+            if img.mode != 'RGB':
+                img = img.convert('RGB')
+            img.thumbnail((800, 800))
+            img.save(filepath, format="WEBP", optimize=True, quality=70)
+        except Exception:
+            # Fallback if Pillow fails
+            image_file.seek(0)
+            image_file.save(filepath)
+            
+        image_url = f"/static/uploads/products/{filename}"
+
     conn = get_connection()
     try:
         conn.execute("BEGIN")
-        conn.execute(
-            """
+        
+        update_query = """
             UPDATE products
             SET
                 name = ?,
@@ -520,19 +599,25 @@ def inventory_edit(product_id: int):
                 cost_price = ?,
                 selling_price = ?,
                 stock_quantity = ?
-            WHERE id = ?
-            """,
-            (
-                product_name,
-                brand or None,
-                category_id,
-                unit,
-                cost_price,
-                selling_price,
-                stock_quantity,
-                product_id,
-            ),
-        )
+        """
+        params = [
+            product_name,
+            brand or None,
+            category_id,
+            unit,
+            cost_price,
+            selling_price,
+            stock_quantity
+        ]
+        
+        if image_url:
+            update_query += ", image_url = ?"
+            params.append(image_url)
+            
+        update_query += " WHERE id = ?"
+        params.append(product_id)
+        
+        conn.execute(update_query, params)
 
         # Keep brands table in sync for the Brand dropdown.
         if brand:
@@ -546,7 +631,7 @@ def inventory_edit(product_id: int):
 
 
 @app.route("/inventory/delete/<int:product_id>", methods=["POST"])
-@login_required
+@admin_required
 def inventory_delete(product_id: int):
     is_ajax = request.headers.get("X-Requested-With") == "fetch"
 
@@ -576,7 +661,7 @@ def inventory_delete(product_id: int):
 
 
 @app.route("/categories/add", methods=["POST"])
-@login_required
+@admin_required
 def categories_add():
     is_ajax = request.headers.get("X-Requested-With") == "fetch"
 
@@ -621,7 +706,7 @@ def categories_list():
 
 
 @app.route("/categories/delete/<int:category_id>", methods=["POST"])
-@login_required
+@admin_required
 def categories_delete(category_id: int):
     is_ajax = request.headers.get("X-Requested-With") == "fetch"
     conn = get_connection()
@@ -650,7 +735,7 @@ def categories_delete(category_id: int):
 
 
 @app.route("/categories/edit/<int:category_id>", methods=["POST"])
-@login_required
+@admin_required
 def categories_edit(category_id: int):
     is_ajax = request.headers.get("X-Requested-With") == "fetch"
     data = request.get_json(silent=True) or {}
@@ -717,7 +802,7 @@ def brands_list():
 
 
 @app.route("/brands/add", methods=["POST"])
-@login_required
+@admin_required
 def brands_add():
     is_json = request.is_json
     data = request.get_json(silent=True) if is_json else {}
@@ -759,7 +844,8 @@ def products_list():
                 p.unit AS unit,
                 p.cost_price AS cost_price,
                 p.selling_price AS selling_price,
-                p.stock_quantity AS stock_quantity
+                p.stock_quantity AS stock_quantity,
+                p.image_url AS image_url
             FROM products p
             LEFT JOIN brands b
                 ON LOWER(b.name) = LOWER(p.brand)
@@ -779,6 +865,7 @@ def products_list():
                     "cost_price": float(r["cost_price"] or 0),
                     "selling_price": float(r["selling_price"] or 0),
                     "stock_quantity": int(r["stock_quantity"] or 0),
+                    "image_url": r["image_url"],
                 }
                 for r in rows
             ]
@@ -813,7 +900,7 @@ def brands_search():
 
 
 @app.route("/backup/download")
-@login_required
+@admin_required
 def backup_download():
     import io
     import csv
@@ -853,7 +940,7 @@ def backup_download():
 
 
 @app.route("/customers")
-@login_required
+@admin_required
 def customers():
     conn = get_connection()
     try:
@@ -900,7 +987,7 @@ def customers():
 
 
 @app.route("/customers/add", methods=["POST"])
-@login_required
+@admin_required
 def customers_add():
     full_name = (request.form.get("full_name") or "").strip()
     bill_address = (request.form.get("bill_address") or "").strip()
@@ -944,7 +1031,7 @@ def customers_add():
 
 
 @app.route("/customers/edit/<int:customer_id>", methods=["POST"])
-@login_required
+@admin_required
 def customers_edit(customer_id: int):
     full_name = (request.form.get("full_name") or "").strip()
     bill_address = (request.form.get("bill_address") or "").strip()
@@ -995,7 +1082,7 @@ def customers_edit(customer_id: int):
 
 
 @app.route("/customers/delete/<int:customer_id>", methods=["POST"])
-@login_required
+@admin_required
 def customers_delete(customer_id: int):
     conn = get_connection()
     try:
@@ -1008,9 +1095,20 @@ def customers_delete(customer_id: int):
 
     return redirect(url_for("customers"))
 
+@app.route("/customers/list", methods=["GET"])
+@login_required
+def customers_list():
+    conn = get_connection()
+    try:
+        cur = conn.execute("SELECT * FROM customers ORDER BY name")
+        cust_list = [dict(r) for r in cur.fetchall()]
+        return jsonify(cust_list)
+    finally:
+        conn.close()
+
 
 @app.route("/customers/<int:customer_id>/history", methods=["GET"])
-@login_required
+@admin_required
 def customers_history(customer_id: int):
     conn = get_connection()
     try:
@@ -1040,7 +1138,7 @@ def customers_history(customer_id: int):
 
 
 @app.route("/sales")
-@login_required
+@admin_required
 def sales():
     conn = get_connection()
     try:
@@ -1052,6 +1150,9 @@ def sales():
             """
         ).fetchall()
         customers_list = [dict(r) for r in customers]
+        
+        users_rows = conn.execute("SELECT id, username, role FROM users ORDER BY username").fetchall()
+        users_list = [dict(r) for r in users_rows]
 
         recent_sales_rows = conn.execute(
             """
@@ -1068,10 +1169,12 @@ def sales():
                 s.status,
                 COALESCE(s.amount_paid, 0) AS amount_paid,
                 COALESCE(s.remaining_amount, 0) AS remaining_amount,
-                COALESCE(SUM(si.qty * si.cost_price), 0) AS total_cost
+                COALESCE(SUM(si.qty * si.cost_price), 0) AS total_cost,
+                u.username AS salesman_name
             FROM sales s
             LEFT JOIN customers c ON c.id = s.customer_id
             LEFT JOIN sale_items si ON si.sale_id = s.id
+            LEFT JOIN users u ON u.id = s.salesman_id
             GROUP BY s.id
             ORDER BY s.invoice_date DESC, s.id DESC
             LIMIT 10
@@ -1094,6 +1197,7 @@ def sales():
         recent_sales=recent_sales,
         next_invoice_number=get_next_invoice_number(),
         today=date.today().isoformat(),
+        all_users=users_list,
     )
 
 
@@ -1171,6 +1275,8 @@ def sales_data():
     date_to = (request.args.get("date_to") or "").strip()
     customer_id = (request.args.get("customer_id") or "").strip()
     payment_type = (request.args.get("payment_type") or "").strip()
+    salesman_id = (request.args.get("salesman_id") or "").strip()
+    salesman_name_filter = (request.args.get("salesman_name") or "").strip()
 
     conditions = []
     params = []
@@ -1188,6 +1294,21 @@ def sales_data():
             params.append(customer_id_int)
         except ValueError:
             pass
+            
+    if salesman_name_filter:
+        conditions.append("LOWER(COALESCE(u.username, 'admin')) = ?")
+        params.append(salesman_name_filter.lower())
+    else:
+        if salesman_id and salesman_id not in ("all", "0"):
+            try:
+                salesman_id_int = int(salesman_id)
+                conditions.append("s.salesman_id = ?")
+                params.append(salesman_id_int)
+            except ValueError:
+                pass
+        elif salesman_id == "0":
+            conditions.append("s.salesman_id IS NULL")
+        
     if payment_type and payment_type not in ("all", ""):
         conditions.append("s.payment_type = ?")
         params.append(payment_type)
@@ -1214,9 +1335,12 @@ def sales_data():
                 s.amount_paid,
                 s.remaining_amount,
                 c.name as customer_name,
+                c.terms as customer_terms,
+                u.username as salesman_name,
                 (SELECT COALESCE(SUM(si.qty * si.cost_price), 0) FROM sale_items si WHERE si.sale_id = s.id) as total_cost
             FROM sales s
             LEFT JOIN customers c ON c.id = s.customer_id
+            LEFT JOIN users u ON u.id = s.salesman_id
             {where_sql}
             ORDER BY s.id DESC
             """
@@ -1235,7 +1359,7 @@ def sales_data():
 
 
 @app.route("/sales/export", methods=["GET"])
-@login_required
+@admin_required
 def sales_export():
     import csv
     import io
@@ -1342,7 +1466,7 @@ def sales_export():
 
 
 @app.route("/sales/new", methods=["POST"])
-@login_required
+@admin_required
 def sales_new():
     customer_id_raw = (request.form.get("customer_id") or "").strip()
     invoice_date = (request.form.get("invoice_date") or "").strip()
@@ -1353,6 +1477,7 @@ def sales_new():
     payment_type = request.form.get('payment_type', 'cash')
     amount_paid = float(request.form.get('amount_paid', 0) or 0)
     remaining_amount = float(request.form.get('remaining_amount', 0) or 0)
+    salesman_id_raw = (request.form.get("salesman_id") or "").strip()
     discount_amount_raw = (request.form.get("discount_amount") or "").strip()
     items_json = request.form.get("items_json") or "[]"
     generate_invoice = "generate_invoice" in request.form
@@ -1470,6 +1595,8 @@ def sales_new():
                 status = 'unpaid'
         else:
             status = 'unpaid'
+            
+        print(f"DEBUG sales_new: grand_total={grand_total}, amount_paid={amount_paid}, payment_type={payment_type}, remaining={remaining_amount}, status={status}")
 
         conn = get_connection()
         try:
@@ -1493,14 +1620,18 @@ def sales_new():
                 if stock_quantity + 1e-9 < qty_total:
                     raise ValueError(f"Insufficient stock for {product_name} (requested {qty_total}, available {stock_quantity}).")
 
+            try:
+                salesman_id = int(salesman_id_raw) if salesman_id_raw else current_user.id
+            except ValueError:
+                salesman_id = current_user.id
+                
             cur = conn.execute(
                 """
                 INSERT INTO sales
                     (invoice_number, customer_id, invoice_date, due_date, terms, payment_type,
-                     discount_amount, subtotal, grand_total, notes, status, amount_paid, remaining_amount)
+                     discount_amount, subtotal, grand_total, notes, status, amount_paid, remaining_amount, salesman_id)
                 VALUES
-                    (?, ?, ?, ?, ?, ?,
-                     ?, ?, ?, ?, ?, ?, ?)
+                    (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     invoice_number,
@@ -1516,6 +1647,7 @@ def sales_new():
                     status,
                     amount_paid,
                     remaining_amount,
+                    salesman_id,
                 ),
             )
             sale_id = int(cur.lastrowid)
@@ -1578,7 +1710,7 @@ def sales_new():
 
 
 @app.route("/sales/check-invoice", methods=["GET"])
-@login_required
+@admin_required
 def sales_check_invoice():
     invoice_number = request.args.get("n", "").strip()
     if not invoice_number:
@@ -1596,7 +1728,7 @@ def sales_check_invoice():
 
 
 @app.route("/sales/edit/<int:sale_id>", methods=["GET"])
-@login_required
+@admin_required
 def sales_edit(sale_id: int):
     conn = get_connection()
     try:
@@ -1617,8 +1749,11 @@ def sales_edit(sale_id: int):
                 s.amount_paid,
                 s.remaining_amount,
                 s.notes,
-                s.status
+                s.status,
+                s.salesman_id,
+                u.username AS salesman_name
             FROM sales s
+            LEFT JOIN users u ON u.id = s.salesman_id
             WHERE s.id = ?
             """,
             (sale_id,),
@@ -1676,8 +1811,10 @@ def sales_edit(sale_id: int):
                 COALESCE(s.amount_paid, 0) AS amount_paid,
                 COALESCE(s.remaining_amount, 0) AS remaining_amount,
                 s.payment_type,
-                s.status
+                s.status,
+                u.username AS salesman_name
             FROM sales s
+            LEFT JOIN users u ON u.id = s.salesman_id
             LEFT JOIN customers c ON c.id = s.customer_id
             LEFT JOIN sale_items si ON si.sale_id = s.id
             GROUP BY s.id
@@ -1686,6 +1823,10 @@ def sales_edit(sale_id: int):
             """
         ).fetchall()
         
+        # Get users for dropdown
+        users_rows = conn.execute("SELECT id, username, role FROM users ORDER BY username").fetchall()
+        users_list = [dict(r) for r in users_rows]
+        
     finally:
         conn.close()
     
@@ -1693,6 +1834,7 @@ def sales_edit(sale_id: int):
         "sales.html",
         customers=[dict(c) for c in customers],
         recent_sales=[dict(r) for r in recent_sales],
+        all_users=users_list,
         next_invoice_number=get_next_invoice_number(),
         today=date.today().isoformat(),
         edit_mode=True,
@@ -1701,7 +1843,7 @@ def sales_edit(sale_id: int):
 
 
 @app.route("/sales/update/<int:sale_id>", methods=["POST"])
-@login_required
+@admin_required
 def sales_update(sale_id: int):
     customer_id_raw = (request.form.get("customer_id") or "").strip()
     invoice_date = (request.form.get("invoice_date") or "").strip()
@@ -1715,6 +1857,7 @@ def sales_update(sale_id: int):
     generate_invoice = "generate_invoice" in request.form
     amount_paid = float(request.form.get("amount_paid") or 0)
     remaining_amount = 0
+    salesman_id_raw = (request.form.get("salesman_id") or "").strip()
 
     error = None
 
@@ -1872,23 +2015,17 @@ def sales_update(sale_id: int):
                     raise ValueError(f"Insufficient stock for {product_name} (requested {qty_total}, available {stock_quantity}).")
 
             # Update sale record
+            try:
+                salesman_id = int(salesman_id_raw) if salesman_id_raw else current_user.id
+            except ValueError:
+                salesman_id = current_user.id
+                
             conn.execute(
                 """
                 UPDATE sales
-                SET
-                    invoice_number = ?,
-                    customer_id = ?,
-                    invoice_date = ?,
-                    due_date = ?,
-                    terms = ?,
-                    payment_type = ?,
-                    discount_amount = ?,
-                    subtotal = ?,
-                    grand_total = ?,
-                    notes = ?,
-                    status = ?,
-                    amount_paid = ?,
-                    remaining_amount = ?
+                SET invoice_number = ?, customer_id = ?, invoice_date = ?, due_date = ?,
+                    terms = ?, payment_type = ?, discount_amount = ?, subtotal = ?,
+                    grand_total = ?, notes = ?, status = ?, amount_paid = ?, remaining_amount = ?, salesman_id = ?
                 WHERE id = ?
                 """,
                 (
@@ -1905,6 +2042,7 @@ def sales_update(sale_id: int):
                     status,
                     amount_paid,
                     remaining_amount,
+                    salesman_id,
                     sale_id,
                 ),
             )
@@ -1991,9 +2129,11 @@ def sale_details(sale_id: int):
                 s.amount_paid,
                 s.remaining_amount,
                 c.name as customer_name,
+                u.username as salesman_name,
                 (SELECT COALESCE(SUM(si.qty * si.cost_price), 0) FROM sale_items si WHERE si.sale_id = s.id) as total_cost
             FROM sales s
             LEFT JOIN customers c ON c.id = s.customer_id
+            LEFT JOIN users u ON u.id = s.salesman_id
             WHERE s.id = ?
             """,
             (sale_id,),
@@ -2036,6 +2176,7 @@ def sale_details(sale_id: int):
             "amount_paid": sale["amount_paid"],
             "remaining_amount": sale["remaining_amount"],
             "customer_name": sale["customer_name"],
+            "salesman_name": sale["salesman_name"],
             "profit_margin": profit_margin,
             "profit_amount": profit_amount,
             "items": [dict(item) for item in items]
@@ -2045,7 +2186,7 @@ def sale_details(sale_id: int):
 
 
 @app.route("/sales/by-invoice/<invoice_number>", methods=["GET"])
-@login_required
+@admin_required
 def sale_by_invoice(invoice_number: str):
     conn = get_connection()
     try:
@@ -2112,7 +2253,7 @@ def sale_by_invoice(invoice_number: str):
 
 
 @app.route("/sales/<int:id>/invoice/pdf", methods=["GET"])
-@login_required
+@admin_required
 def sales_invoice_pdf(id: int):
     conn = get_connection()
     try:
@@ -2169,7 +2310,7 @@ def sales_invoice_pdf(id: int):
 
 
 @app.route("/sales/delete/<int:id>", methods=["POST"])
-@login_required
+@admin_required
 def sales_delete(id: int):
     conn = get_connection()
     try:
@@ -2210,7 +2351,7 @@ def sales_delete(id: int):
 
 
 @app.route('/sales/<int:sale_id>/record_payment', methods=['POST'])
-@login_required
+@admin_required
 def record_payment(sale_id):
     try:
         data = request.get_json()
@@ -2244,7 +2385,7 @@ def record_payment(sale_id):
 
 
 @app.route("/reports")
-@login_required
+@admin_required
 def reports():
     conn = get_connection()
     try:
@@ -2280,7 +2421,7 @@ def parse_date_filters(conditions, params):
 
 
 @app.route("/reports/by-customer", methods=["GET"])
-@login_required
+@admin_required
 def reports_by_customer():
     conditions = ["s.customer_id IS NOT NULL"]
     params = []
@@ -2340,8 +2481,10 @@ def reports_by_customer():
                 s.invoice_date,
                 COALESCE(s.grand_total, 0) AS grand_total,
                 s.payment_type,
-                s.status
+                s.status,
+                u.username AS salesman_name
             FROM sales s
+            LEFT JOIN users u ON u.id = s.salesman_id
             JOIN sale_items si ON si.sale_id = s.id
             JOIN products p ON p.id = si.product_id
             WHERE {where_sql}
@@ -2379,7 +2522,7 @@ def reports_by_customer():
 
 
 @app.route("/reports/by-brand", methods=["GET"])
-@login_required
+@admin_required
 def reports_by_brand():
     conditions = ["s.customer_id IS NOT NULL", "p.brand IS NOT NULL", "p.brand != ''"]
     params = []
@@ -2428,7 +2571,7 @@ def reports_by_brand():
 
 
 @app.route("/reports/by-category", methods=["GET"])
-@login_required
+@admin_required
 def reports_by_category():
     conditions = ["s.customer_id IS NOT NULL"]
     params = []
@@ -2479,9 +2622,61 @@ def reports_by_category():
         })
     return jsonify(result)
 
+@app.route("/reports/by-salesman", methods=["GET"])
+@admin_required
+def reports_by_salesman():
+    conditions = ["s.customer_id IS NOT NULL"]
+    params = []
+    parse_date_filters(conditions, params)
+
+    where_sql = " AND ".join(conditions)
+
+    conn = get_connection()
+    try:
+        rows = conn.execute(
+            f'''
+            SELECT 
+              MAX(s.salesman_id) as salesman_id,
+              LOWER(COALESCE(u.username, 'admin')) as salesman_name,
+              COUNT(DISTINCT s.id) as invoice_count,
+              COALESCE(SUM(si.amount), 0) as total_revenue,
+              COALESCE(SUM(si.qty * si.cost_price), 0) as total_cost,
+              (SELECT COALESCE(SUM(remaining_amount), 0) FROM sales s2 
+               LEFT JOIN users u2 ON u2.id = s2.salesman_id 
+               WHERE LOWER(COALESCE(u2.username, 'admin')) = LOWER(COALESCE(u.username, 'admin'))) as outstanding
+            FROM sales s
+            LEFT JOIN users u ON u.id = s.salesman_id
+            JOIN sale_items si ON si.sale_id = s.id
+            JOIN products p ON p.id = si.product_id
+            WHERE {where_sql}
+            GROUP BY LOWER(COALESCE(u.username, 'admin'))
+            ORDER BY total_revenue DESC
+            '''
+            ,
+            params,
+        ).fetchall()
+    finally:
+        conn.close()
+
+    result = []
+    for r in rows:
+        revenue = float(r["total_revenue"] or 0)
+        cost = float(r["total_cost"] or 0)
+        margin = ((revenue - cost) / revenue * 100) if revenue > 0 else 0
+        
+        result.append({
+            "salesman_id": r["salesman_id"] or 0,
+            "salesman_name": r["salesman_name"],
+            "invoice_count": int(r["invoice_count"] or 0),
+            "total_revenue": revenue,
+            "profit_margin": margin, 
+            "profit_amount": round(revenue - cost, 2),
+            "outstanding": float(r["outstanding"] or 0)
+        })
+    return jsonify(result)
 
 @app.route("/reports/by-product", methods=["GET"])
-@login_required
+@admin_required
 def reports_by_product():
     conditions = ["s.customer_id IS NOT NULL"]
     params = []
@@ -2549,7 +2744,7 @@ def _export_csv_bytes(rows, header):
 
 
 @app.route("/reports/profit")
-@login_required
+@admin_required
 def reports_profit():
     from_date = request.args.get("from_date", "")
     to_date = request.args.get("to_date", "")
@@ -2611,7 +2806,7 @@ def reports_profit():
         conn.close()
 
 @app.route("/reports/export/<type>", methods=["GET"])
-@login_required
+@admin_required
 def reports_export(type: str):
     import datetime
     year = datetime.datetime.now().year
@@ -2803,6 +2998,205 @@ def reports_export(type: str):
     resp = Response(csv_bytes, mimetype="text/csv")
     resp.headers["Content-Disposition"] = f'attachment; filename="{filename}"'
     return resp
+
+@app.route("/users")
+@admin_required
+def users_list():
+    conn = get_connection()
+    try:
+        users = conn.execute("SELECT id, username, role FROM users").fetchall()
+        return render_template("users.html", users=[dict(u) for u in users])
+    finally:
+        conn.close()
+
+@app.route("/users/add", methods=["POST"])
+@admin_required
+def users_add():
+    username = (request.form.get("username") or "").strip()
+    password = (request.form.get("password") or "").strip()
+    role = (request.form.get("role") or "salesman").strip()
+    if not username or not password:
+        return jsonify({"ok": False, "error": "Username and password are required."}), 400
+    
+    conn = get_connection()
+    try:
+        conn.execute(
+            "INSERT INTO users (username, password_hash, role) VALUES (?, ?, ?)",
+            (username, generate_password_hash(password, method="pbkdf2:sha256"), role)
+        )
+        conn.commit()
+        return jsonify({"ok": True})
+    except sqlite3.IntegrityError:
+        return jsonify({"ok": False, "error": "Username already exists."}), 409
+    finally:
+        conn.close()
+@app.route("/users/reset_password", methods=["POST"])
+@admin_required
+def users_reset_password():
+    user_id = request.form.get("user_id")
+    new_password = request.form.get("new_password")
+    if not user_id or not new_password:
+        return jsonify({"ok": False, "error": "User ID and new password are required."}), 400
+    
+    conn = get_connection()
+    try:
+        conn.execute(
+            "UPDATE users SET password_hash = ? WHERE id = ?",
+            (generate_password_hash(new_password, method="pbkdf2:sha256"), user_id)
+        )
+        conn.commit()
+        return jsonify({"ok": True})
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)}), 500
+    finally:
+        conn.close()
+
+@app.route("/pos")
+@login_required
+def pos():
+    # Only salesmen or admin can access
+    return render_template("catalogue.html")
+
+@app.route("/pos/submit_order", methods=["POST"])
+@login_required
+def pos_submit_order():
+    data = request.json
+    if not data:
+        return jsonify({"ok": False, "error": "Invalid request format."}), 400
+
+    customer_id = data.get("customer_id")
+    customer_name = (data.get("customer_name") or "").strip()
+    customer_phone = (data.get("customer_phone") or "").strip()
+    customer_area = (data.get("customer_area") or "").strip()
+    customer_bill = (data.get("customer_bill") or "").strip()
+    customer_ship = (data.get("customer_ship") or "").strip()
+    customer_state = (data.get("customer_state") or "").strip()
+    customer_email = (data.get("customer_email") or "").strip()
+    customer_terms = (data.get("customer_terms") or "").strip()
+    
+    items = data.get("items", [])
+    payment_type = data.get("payment_type", "cash")
+    amount_paid = float(data.get("amount_paid") or 0)
+    
+    if not items:
+        return jsonify({"ok": False, "error": "Cart is empty."}), 400
+
+    invoice_date = date.today().isoformat()
+    invoice_number = get_next_invoice_number()
+    
+    conn = get_connection()
+    try:
+        conn.execute("BEGIN")
+
+        # Create customer if id not provided
+        if not customer_id:
+            if not customer_name:
+                raise ValueError("Customer name is required.")
+            cur = conn.execute(
+                "INSERT INTO customers (name, bill_address, ship_address, area, state, phone, email, terms) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                (customer_name, customer_bill, customer_ship, customer_area, customer_state, customer_phone, customer_email, customer_terms)
+            )
+            customer_id = int(cur.lastrowid)
+        else:
+            customer_id = int(customer_id)
+
+        # Parse items and calculate totals
+        subtotal = 0
+        parsed_items = []
+        for it in items:
+            product_id = int(it["id"])
+            qty = float(it["qty"])
+            if qty <= 0:
+                continue
+            
+            cur = conn.execute("SELECT name, selling_price, cost_price FROM products WHERE id = ?", (product_id,))
+            row = cur.fetchone()
+            if not row:
+                raise ValueError(f"Invalid product ID {product_id}")
+            
+            rate = float(row["selling_price"] or 0)
+            amount = round(qty * rate, 2)
+            subtotal += amount
+            
+            parsed_items.append({
+                "product_id": product_id,
+                "description": row["name"],
+                "qty": qty,
+                "rate": rate,
+                "amount": amount
+            })
+
+        if not parsed_items:
+            raise ValueError("Cart has no valid items.")
+
+        grand_total = round(subtotal, 2)
+
+        # Payment status
+        if payment_type in ['cash', 'cheque']:
+            amount_paid = grand_total
+            remaining_amount = 0
+            status = 'paid'
+        else:
+            if amount_paid > grand_total:
+                amount_paid = grand_total
+            remaining_amount = grand_total - amount_paid
+            if remaining_amount <= 0:
+                remaining_amount = 0
+                status = 'paid'
+            elif amount_paid > 0:
+                status = 'partial'
+            else:
+                status = 'unpaid'
+        
+        print(f"DEBUG pos_submit_order: grand_total={grand_total}, amount_paid={amount_paid}, payment_type={payment_type}, remaining={remaining_amount}, status={status}")
+
+        # Insert sale
+        cur = conn.execute(
+            """
+            INSERT INTO sales
+                (invoice_number, customer_id, invoice_date, due_date, terms, payment_type,
+                 subtotal, grand_total, status, amount_paid, remaining_amount, salesman_id)
+            VALUES
+                (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                invoice_number, customer_id, invoice_date, data.get("due_date"), data.get("customer_terms"), payment_type,
+                subtotal, grand_total, status, amount_paid, remaining_amount, current_user.id
+            )
+        )
+        sale_id = int(cur.lastrowid)
+
+        # Insert items and deduct stock
+        for li in parsed_items:
+            conn.execute(
+                """
+                INSERT INTO sale_items (sale_id, product_id, description, qty, rate, amount, cost_price)
+                VALUES (?, ?, ?, ?, ?, ?, COALESCE((SELECT cost_price FROM products WHERE id = ?), 0))
+                """,
+                (sale_id, li["product_id"], li["description"], li["qty"], li["rate"], li["amount"], li["product_id"])
+            )
+            
+            conn.execute(
+                """
+                UPDATE products
+                SET stock_quantity = COALESCE(stock_quantity, 0) - ?
+                WHERE id = ?
+                """,
+                (li["qty"], li["product_id"])
+            )
+
+        conn.commit()
+        return jsonify({"ok": True, "sale_id": sale_id, "invoice_number": invoice_number})
+
+    except ValueError as e:
+        conn.rollback()
+        return jsonify({"ok": False, "error": str(e)}), 400
+    except Exception as e:
+        conn.rollback()
+        return jsonify({"ok": False, "error": str(e)}), 500
+    finally:
+        conn.close()
+
 
 if __name__ == "__main__":
     desired_port = int(os.environ.get("PORT", "5000"))

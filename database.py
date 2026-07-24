@@ -113,6 +113,30 @@ def init_db():
         except sqlite3.OperationalError:
             pass
 
+        # Safely add role column to users table
+        try:
+            conn.execute(
+                "ALTER TABLE users ADD COLUMN role TEXT DEFAULT 'admin'"
+            )
+        except sqlite3.OperationalError:
+            pass
+            
+        # Safely add image_url column to products table
+        try:
+            conn.execute(
+                "ALTER TABLE products ADD COLUMN image_url TEXT"
+            )
+        except sqlite3.OperationalError:
+            pass
+            
+        # Safely add salesman_id column to sales table
+        try:
+            conn.execute(
+                "ALTER TABLE sales ADD COLUMN salesman_id INTEGER REFERENCES users(id)"
+            )
+        except sqlite3.OperationalError:
+            pass
+
         # Safely add cost_price column to sale_items table if it doesn't exist
         try:
             conn.execute(
@@ -206,9 +230,19 @@ def _seed_default_data(conn):
     cur.execute("SELECT 1 FROM users WHERE username = ?", ("admin",))
     if cur.fetchone() is None:
         cur.execute(
-            "INSERT INTO users (username, password_hash) VALUES (?, ?)",
-            ("admin", generate_password_hash("admin123")),
+            "INSERT INTO users (username, password_hash, role) VALUES (?, ?, ?)",
+            ("admin", generate_password_hash("admin123", method="pbkdf2:sha256"), "admin"),
         )
+        print("Inserted default admin user")
+
+    # Seed default salesman if not exists
+    cur.execute("SELECT id FROM users WHERE username = 'salesman'")
+    if cur.fetchone() is None:
+        cur.execute(
+            "INSERT INTO users (username, password_hash, role) VALUES (?, ?, ?)",
+            ("salesman", generate_password_hash("password", method="pbkdf2:sha256"), "salesman"),
+        )
+        
     for name in _DEFAULT_CATEGORY_NAMES:
         cur.execute("INSERT OR IGNORE INTO categories (name) VALUES (?)", (name,))
     conn.commit()
@@ -252,7 +286,7 @@ def get_user_by_id(user_id: int):
     conn = get_connection()
     try:
         cur = conn.execute(
-            "SELECT id, username, password_hash FROM users WHERE id = ?",
+            "SELECT id, username, password_hash, role FROM users WHERE id = ?",
             (user_id,),
         )
         return cur.fetchone()
@@ -264,7 +298,7 @@ def get_user_by_username(username: str):
     conn = get_connection()
     try:
         cur = conn.execute(
-            "SELECT id, username, password_hash FROM users WHERE username = ?",
+            "SELECT id, username, password_hash, role FROM users WHERE username = ?",
             (username,),
         )
         return cur.fetchone()

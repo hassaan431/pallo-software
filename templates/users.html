@@ -1,0 +1,214 @@
+{% extends "base.html" %}
+
+{% block title %}Manage Users | AK Distributors{% endblock %}
+{% block page_heading %}Manage Users{% endblock %}
+
+{% block content %}
+<section class="panel">
+  <div class="panel-header">
+    <h2>User Accounts</h2>
+    <div style="display: flex; gap: 0.5rem; align-items: center;">
+      <button class="btn btn-primary" data-open-modal="addUserModal">+ Add User</button>
+    </div>
+  </div>
+  <div class="panel-body">
+    <div class="table-wrap">
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th>ID</th>
+            <th>Username</th>
+            <th>Role</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for u in users %}
+          <tr>
+            <td>{{ u.id }}</td>
+            <td style="font-weight: 500;">{{ u.username }}</td>
+            <td>
+              {% if u.role == 'admin' %}
+                <span class="status-badge status-paid">Admin</span>
+              {% else %}
+                <span class="status-badge status-partial">Salesman</span>
+              {% endif %}
+            </td>
+            <td>
+              <button class="btn btn-secondary btn-sm" onclick="openResetPassword({{ u.id }}, '{{ u.username }}')">Change Password</button>
+            </td>
+          </tr>
+          {% else %}
+          <tr>
+            <td colspan="4" class="text-center">No users found.</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</section>
+
+<!-- Add User Modal -->
+<div id="addUserModal" class="modal-backdrop" aria-hidden="true">
+  <div class="modal" role="dialog" aria-modal="true" aria-label="Add User">
+    <div class="modal-header">
+      <h3>Add New User</h3>
+      <button type="button" class="modal-close" data-close-modal="addUserModal" aria-label="Close">&times;</button>
+    </div>
+    <div class="modal-body">
+      <form id="addUserForm">
+        <div class="modal-field">
+          <label for="newUsername">Username</label>
+          <input type="text" class="form-control" id="newUsername" name="username" required>
+        </div>
+        <div class="modal-field">
+          <label for="newPassword">Password</label>
+          <input type="password" class="form-control" id="newPassword" name="password" required>
+        </div>
+        <div class="modal-field">
+          <label for="newRole">Role</label>
+          <select class="form-control" id="newRole" name="role" required>
+            <option value="salesman">Salesman (POS Only)</option>
+            <option value="admin">Admin (Full Access)</option>
+          </select>
+        </div>
+        
+        <div class="error-banner" id="addUserError" style="display:none; margin-top: 1rem;"></div>
+        
+        <div class="modal-actions" style="margin-top: 1.5rem; display: flex; justify-content: flex-end; gap: 0.75rem;">
+          <button type="button" class="btn btn-secondary" data-close-modal="addUserModal">Cancel</button>
+          <button type="submit" class="btn btn-primary">Create User</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<!-- Reset Password Modal -->
+<div id="resetPasswordModal" class="modal-backdrop" aria-hidden="true">
+  <div class="modal" role="dialog" aria-modal="true" aria-label="Reset Password">
+    <div class="modal-header">
+      <h3>Change Password for <span id="resetPasswordUsername"></span></h3>
+      <button type="button" class="modal-close" data-close-modal="resetPasswordModal" aria-label="Close">&times;</button>
+    </div>
+    <div class="modal-body">
+      <form id="resetPasswordForm">
+        <input type="hidden" id="resetUserId" name="user_id">
+        <div class="modal-field">
+          <label for="resetNewPassword">New Password</label>
+          <input type="password" class="form-control" id="resetNewPassword" name="new_password" required>
+        </div>
+        
+        <div class="error-banner" id="resetPasswordError" style="display:none; margin-top: 1rem;"></div>
+        
+        <div class="modal-actions" style="margin-top: 1.5rem; display: flex; justify-content: flex-end; gap: 0.75rem;">
+          <button type="button" class="btn btn-secondary" data-close-modal="resetPasswordModal">Cancel</button>
+          <button type="submit" class="btn btn-primary">Update Password</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<script>
+function openResetPassword(userId, username) {
+  document.getElementById('resetUserId').value = userId;
+  document.getElementById('resetPasswordUsername').textContent = username;
+  document.getElementById('resetNewPassword').value = '';
+  document.getElementById('resetPasswordError').style.display = 'none';
+  
+  const m = document.getElementById('resetPasswordModal');
+  m.setAttribute('aria-hidden', 'false');
+  m.classList.add('is-open');
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+  // Modal toggles
+  document.querySelectorAll('[data-open-modal]').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.preventDefault();
+      const modalId = btn.getAttribute('data-open-modal');
+      const m = document.getElementById(modalId);
+      if(m) {
+        m.setAttribute('aria-hidden', 'false');
+        m.classList.add('is-open');
+      }
+    });
+  });
+
+  document.querySelectorAll('[data-close-modal]').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.preventDefault();
+      const modalId = btn.getAttribute('data-close-modal');
+      const m = document.getElementById(modalId);
+      if(m) {
+        m.setAttribute('aria-hidden', 'true');
+        m.classList.remove('is-open');
+      }
+    });
+  });
+
+  // Handle User creation
+  const addUserForm = document.getElementById('addUserForm');
+  if(addUserForm) {
+    addUserForm.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const errorBanner = document.getElementById('addUserError');
+      errorBanner.style.display = 'none';
+      errorBanner.textContent = '';
+      
+      const formData = new FormData(addUserForm);
+      try {
+        const res = await fetch('{{ url_for("users_add") }}', {
+          method: 'POST',
+          body: formData
+        });
+        const data = await res.json();
+        if(res.ok && data.ok) {
+          window.location.reload();
+        } else {
+          errorBanner.textContent = data.error || 'Failed to add user.';
+          errorBanner.style.display = 'block';
+        }
+      } catch (err) {
+        console.error(err);
+        errorBanner.textContent = 'A network error occurred.';
+        errorBanner.style.display = 'block';
+      }
+    });
+  }
+  
+  // Handle Password Reset
+  const resetPasswordForm = document.getElementById('resetPasswordForm');
+  if(resetPasswordForm) {
+    resetPasswordForm.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const errorBanner = document.getElementById('resetPasswordError');
+      errorBanner.style.display = 'none';
+      errorBanner.textContent = '';
+      
+      const formData = new FormData(resetPasswordForm);
+      try {
+        const res = await fetch('{{ url_for("users_reset_password") }}', {
+          method: 'POST',
+          body: formData
+        });
+        const data = await res.json();
+        if(res.ok && data.ok) {
+          alert('Password successfully updated!');
+          document.getElementById('resetPasswordModal').classList.remove('is-open');
+        } else {
+          errorBanner.textContent = data.error || 'Failed to update password.';
+          errorBanner.style.display = 'block';
+        }
+      } catch (err) {
+        console.error(err);
+        errorBanner.textContent = 'A network error occurred.';
+        errorBanner.style.display = 'block';
+      }
+    });
+  }
+});
+</script>
+{% endblock %}
