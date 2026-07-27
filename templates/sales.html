@@ -257,21 +257,7 @@
             <label class="field-label" for="dueDate">Due Date</label>
             <input class="form-control" type="date" id="dueDate" name="due_date" value="{% if edit_mode %}{{ edit_sale.due_date or '' }}{% endif %}">
           </div>
-          
-          <div class="form-group">
-            <label class="field-label" for="salesmanId">Salesman</label>
-            <select class="form-control" id="salesmanId" name="salesman_id">
-              <option value="">-- None --</option>
-              {% for u in all_users %}
-              <option value="{{ u.id }}" {% if edit_mode and edit_sale.salesman_id == u.id %}selected{% endif %}>{{ u.username }}</option>
-              {% endfor %}
-            </select>
-          </div>
 
-          <div class="form-group">
-            <label class="field-label" for="termsInput">Terms</label>
-            <input class="form-control" type="text" id="termsInput" name="terms" value="{% if edit_mode %}{{ edit_sale.terms or '' }}{% endif %}">
-          </div>
 
           <div class="form-group">
             <label class="field-label" for="notesInput">Notes (optional)</label>
@@ -285,6 +271,21 @@
             <input class="form-control" type="text" id="invoiceNumber" name="invoice_number" value="{% if edit_mode %}{{ edit_sale.invoice_number }}{% else %}{{ next_invoice_number }}{% endif %}">
             <div class="invoice-hint">Auto-generated. You can override if needed.</div>
             <div id="invoiceWarning" class="invoice-warning" style="display: none;"></div>
+          </div>
+
+          <div class="form-group">
+            <label class="field-label" for="salesmanId">Salesman</label>
+            <select class="form-control" id="salesmanId" name="salesman_id">
+              <option value="">-- None --</option>
+              {% for u in all_users %}
+              <option value="{{ u.id }}" {% if edit_mode and edit_sale.salesman_id == u.id %}selected{% endif %}>{{ u.username }}</option>
+              {% endfor %}
+            </select>
+          </div>
+
+          <div class="form-group">
+            <label class="field-label" for="termsInput">Terms</label>
+            <input class="form-control" type="text" id="termsInput" name="terms" value="{% if edit_mode %}{{ edit_sale.terms or '' }}{% endif %}">
           </div>
 
           <div class="form-group">
