@@ -56,7 +56,7 @@ fix_existing_sales_data()
 
 from flask import Flask, Response, flash, jsonify, redirect, render_template, request, url_for
 from flask_login import LoginManager, UserMixin, current_user, login_required, login_user, logout_user
-from werkzeug.security import check_password_hash
+from werkzeug.security import check_password_hash, generate_password_hash
 from functools import wraps
 
 from invoice_generator import generate_invoice_pdf
@@ -3128,6 +3128,20 @@ def pos_submit_order():
 
         if not parsed_items:
             raise ValueError("Cart has no valid items.")
+
+        # Validate stock quantity
+        qty_total_by_product = defaultdict(float)
+        for li in parsed_items:
+            qty_total_by_product[li["product_id"]] += li["qty"]
+            
+        for product_id, qty_total in qty_total_by_product.items():
+            cur = conn.execute("SELECT name, stock_quantity FROM products WHERE id = ?", (product_id,))
+            row = cur.fetchone()
+            if not row:
+                raise ValueError("One or more selected products are invalid.")
+            stock_quantity = float(row["stock_quantity"] or 0)
+            if stock_quantity + 1e-9 < qty_total:
+                raise ValueError(f"Insufficient stock for {row['name']} (requested {qty_total}, available {stock_quantity}).")
 
         grand_total = round(subtotal, 2)
 

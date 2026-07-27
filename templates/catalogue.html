@@ -506,12 +506,26 @@
 
     // Cart Logic
     function addToCart(productId) {
+      const p = products.find(x => x.id == productId);
+      if(!p) return;
       if(!cart[productId]) cart[productId] = 0;
+      
+      if(cart[productId] >= p.stock_quantity) {
+        alert(`Cannot add more. Only ${p.stock_quantity} available in stock.`);
+        return;
+      }
+      
       cart[productId]++;
       renderCart();
     }
     function updateQty(productId, delta) {
       if(cart[productId]) {
+        const p = products.find(x => x.id == productId);
+        if(delta > 0 && p && cart[productId] + delta > p.stock_quantity) {
+          alert(`Cannot add more. Only ${p.stock_quantity} available in stock.`);
+          return;
+        }
+        
         cart[productId] += delta;
         if(cart[productId] <= 0) delete cart[productId];
       }

@@ -717,7 +717,16 @@
     const rateEl = row.querySelector('.rate-input');
     const amountEl = row.querySelector('.row-amount-cell');
 
-    const qty = Number(qtyEl.value || 0);
+    let qty = Number(qtyEl.value || 0);
+    const stockVal = row.dataset.stockQuantity;
+    const availableStock = stockVal && stockVal !== "" ? Number(stockVal) : null;
+
+    if (!editMode && availableStock !== null && qty > availableStock) {
+      alert(`Cannot exceed available stock (${availableStock}).`);
+      qty = availableStock;
+      qtyEl.value = qty;
+    }
+
     const rate = Number(rateEl.value || 0);
     const amount = Math.round((qty * rate) * 100) / 100;
 
@@ -987,9 +996,9 @@
     // Handle both new products (have .id) and edit items (have .product_id)
     const productId = product ? (product.id || product.product_id || '') : '';
     row.dataset.productId = String(productId);
-    row.dataset.stockQuantity = product ? String(product.stock_quantity || 0) : '0';
-    row.dataset.baseSellingPrice = product ? String(product.rate || product.selling_price || 0) : '0';
-    row.dataset.costPrice = product ? String(product.cost_price || 0) : '0';
+    row.dataset.stockQuantity = product ? String(product.stock_quantity || 0) : '';
+    row.dataset.baseSellingPrice = product ? String(product.rate || product.selling_price || 0) : '';
+    row.dataset.costPrice = product ? String(product.cost_price || 0) : '';
     initRowBehaviors(row);
     updateRowAmount(row);
   }
