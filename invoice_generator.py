@@ -228,17 +228,17 @@ def generate_invoice_pdf(sale_id: int) -> bytes:
     x_rate_right = x_qty_right + col_rate
     x_amt_right = x_rate_right + col_amt
 
-    row_padding_y = 8  # Increased from 6 for 4pt padding
-    row_leading_item = 12
-    row_leading_brand = 10
-    min_row_height = 20  # Minimum row height in points
+    row_padding_y = 5  # Reduced padding to save space
+    row_leading_item = 10
+    row_leading_brand = 9
+    min_row_height = 15  # Minimum row height in points
 
     # Prepare rows with wrapping & computed heights
     dark_text = colors.black
     brand_font = "Helvetica-Oblique"
     item_font = "Helvetica"
-    brand_font_size = 8
-    item_font_size = 10
+    brand_font_size = 7
+    item_font_size = 8
     max_item_width = col_item - 10  # left+right padding for cell
 
     row_models = []
@@ -559,7 +559,7 @@ def generate_invoice_pdf(sale_id: int) -> bytes:
             tx = x0 + 6
             ty = row_bottom + rh - row_padding_y - row_leading_item
             cnv.setFillColor(colors.black)
-            cnv.setFont("Helvetica", 10)
+            cnv.setFont("Helvetica", item_font_size)
             cnv.drawString(tx, ty, str(idx + 1))
 
             # Item text: draw item name lines and brand lines
@@ -567,7 +567,7 @@ def generate_invoice_pdf(sale_id: int) -> bytes:
             current_y = row_bottom + rh - row_padding_y - row_leading_item
             for line in row["item_lines"]:
                 cnv.setFillColor(colors.black)
-                cnv.setFont("Helvetica", 10)
+                cnv.setFont("Helvetica", item_font_size)
                 cnv.drawString(item_cell_x, current_y, line)
                 current_y -= row_leading_item
 
@@ -579,7 +579,7 @@ def generate_invoice_pdf(sale_id: int) -> bytes:
 
             # Qty/Rate/Amount right aligned
             cnv.setFillColor(colors.black)
-            cnv.setFont("Helvetica", 10)
+            cnv.setFont("Helvetica", item_font_size)
             qty_str = f"{float(qty):g}" if qty is not None else "0"
             # Align right with padding
             qty_x_right = x_qty_right - 6
