@@ -917,6 +917,15 @@ def backup_download():
             # Add database.db
             zf.write(DB_PATH, arcname='database.db')
             
+            # Add all uploaded product images
+            upload_folder = os.path.join(app.root_path, "static", "uploads", "products")
+            if os.path.exists(upload_folder):
+                for root, _, files in os.walk(upload_folder):
+                    for file in files:
+                        full_path = os.path.join(root, file)
+                        rel_path = os.path.relpath(full_path, app.root_path)
+                        zf.write(full_path, arcname=rel_path)
+            
             # Export each table to CSV
             for table in tables:
                 rows = conn.execute(f"SELECT * FROM {table}").fetchall()
