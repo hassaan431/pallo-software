@@ -121,6 +121,13 @@ def init_db():
         except sqlite3.OperationalError:
             pass
             
+        try:
+            conn.execute(
+                "ALTER TABLE users ADD COLUMN is_active INTEGER DEFAULT 1"
+            )
+        except sqlite3.OperationalError:
+            pass
+            
         # Safely add image_url column to products table
         try:
             conn.execute(
@@ -286,8 +293,7 @@ def get_user_by_id(user_id: int):
     conn = get_connection()
     try:
         cur = conn.execute(
-            "SELECT id, username, password_hash, role FROM users WHERE id = ?",
-            (user_id,),
+            "SELECT id, username, role, is_active FROM users WHERE id = ?", (user_id,)
         )
         return cur.fetchone()
     finally:
@@ -298,7 +304,7 @@ def get_user_by_username(username: str):
     conn = get_connection()
     try:
         cur = conn.execute(
-            "SELECT id, username, password_hash, role FROM users WHERE username = ?",
+            "SELECT id, username, password_hash, role, is_active FROM users WHERE username = ?",
             (username,),
         )
         return cur.fetchone()

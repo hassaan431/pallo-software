@@ -229,8 +229,9 @@
 </section>
 
 <section class="panel">
-  <div class="panel-header">
+  <div class="panel-header" style="display: flex; align-items: center; justify-content: space-between;">
     <h2>Products</h2>
+    <input type="text" id="productSearchInput" class="form-control" placeholder="Search products..." style="width: 250px;" oninput="filterProductsTable()">
   </div>
   <div class="panel-body">
     <div class="table-wrap">
@@ -238,6 +239,7 @@
         <thead>
           <tr>
             <th>#</th>
+            <th>Image</th>
             <th>Product Name</th>
             <th>Brand</th>
             <th>Category</th>
@@ -266,8 +268,15 @@
 
           <tr id="product-row-{{ p.id }}" class="{{ row_class }}">
             <td>{{ loop.index }}</td>
-            <td>{{ p.name }}</td>
-            <td>{{ p.brand or '' }}</td>
+            <td>
+              {% if p.image_url %}
+              <img src="{{ p.image_url }}" alt="Img" style="width: 32px; height: 32px; object-fit: cover; border-radius: 4px; cursor: pointer; border: 1px solid var(--border);" onclick="openImagePreview('{{ p.image_url }}')">
+              {% else %}
+              <div style="width: 32px; height: 32px; background: var(--bg); border-radius: 4px; border: 1px solid var(--border); display: flex; align-items: center; justify-content: center; font-size: 10px; color: var(--text-muted);">No Img</div>
+              {% endif %}
+            </td>
+            <td class="searchable-name">{{ p.name }}</td>
+            <td class="searchable-brand">{{ p.brand or '' }}</td>
             <td>{{ p.category_name or '' }}</td>
 
             <td>${{ '%.2f' % (p.selling_price|default(0)|float) }}</td>
@@ -429,16 +438,8 @@
     <div class="modal-body">
       <form id="editProductForm" method="post" action="">
         <div class="modal-field">
-          <label for="editProductNameSelect">Product Name</label>
-          <select class="form-control" id="editProductNameSelect">
-            <option value="" selected disabled>-- Select Product --</option>
-            <option value="__add_new__">+ Add New Product Name</option>
-          </select>
-          <input type="hidden" id="editProductNameHidden" name="product_name" value="">
-          <div id="editNewProductNameInline" class="inline-add" style="display:none; margin-top:0.65rem;">
-            <input class="form-control" type="text" id="editNewProductNameInput" placeholder="Product name">
-            <button type="button" class="btn btn-primary" id="editNewProductNameCreateBtn">Create</button>
-          </div>
+          <label for="editProductNameInput">Product Name</label>
+          <input type="text" class="form-control" id="editProductNameInput" name="product_name" required>
         </div>
 
         <div class="modal-field">
@@ -506,6 +507,16 @@
         </div>
 
         <div class="modal-field">
+          <label for="editProductImage">Replace Image</label>
+          <input type="file" class="form-control" id="editProductImage" name="product_image" accept="image/*">
+        </div>
+        
+        <div class="modal-field" style="display: flex; align-items: center; gap: 8px;">
+          <input type="checkbox" id="editRemoveImage" name="remove_image" value="1">
+          <label for="editRemoveImage" style="margin: 0;">Remove current image</label>
+        </div>
+
+        <div class="modal-field">
           <label for="editStockQuantity">Stock Quantity</label>
           <input class="form-control" type="number" step="1" min="0" id="editStockQuantity" name="stock_quantity" required>
         </div>
@@ -556,7 +567,34 @@
   </div>
 </section>
 
+<!-- Image Preview Modal -->
+<div id="imagePreviewModal" class="modal-backdrop" aria-hidden="true" style="display: none; z-index: 10000; justify-content: center; align-items: center; padding: 2rem;">
+  <div style="background: white; padding: 1rem; border-radius: 12px; position: relative; max-width: 90%; max-height: 90%; display: flex; flex-direction: column;">
+    <button type="button" class="modal-close" onclick="document.getElementById('imagePreviewModal').style.display='none'" style="position: absolute; top: 10px; right: 10px;">&times;</button>
+    <img id="imagePreviewImg" src="" style="max-width: 100%; max-height: 80vh; object-fit: contain; border-radius: 8px;">
+  </div>
+</div>
+
 <script>
+  function openImagePreview(url) {
+    document.getElementById('imagePreviewImg').src = url;
+    document.getElementById('imagePreviewModal').style.display = 'flex';
+  }
+  
+  function filterProductsTable() {
+    const q = document.getElementById('productSearchInput').value.toLowerCase();
+    const rows = document.querySelectorAll('#productsTbody tr');
+    rows.forEach(row => {
+      if(row.querySelector('.empty-state')) return;
+      const name = row.querySelector('.searchable-name')?.textContent.toLowerCase() || '';
+      const brand = row.querySelector('.searchable-brand')?.textContent.toLowerCase() || '';
+      if(name.includes(q) || brand.includes(q)) {
+        row.style.display = '';
+      } else {
+        row.style.display = 'none';
+      }
+    });
+  }
 
 
   const addProductModal = document.getElementById('addProductModal');
@@ -910,11 +948,7 @@
 
   // -------- Products (Name Dropdown + Inline Create) --------
   const addProductNameSelect = document.getElementById('addProductNameSelect');
-  const editProductNameSelect = document.getElementById('editProductNameSelect');
-  const addProductNameHidden = document.getElementById('addProductNameHidden');
-  const editProductNameHidden = document.getElementById('editProductNameHidden');
-
-  const addNewProductNameInline = document.getElementById('addNewProductNameInline');
+  const editProductNameInput = document.getElementById('editProductNameInput');
   const addNewProductNameInput = document.getElementById('addNewProductNameInput');
   const addNewProductNameCreateBtn = document.getElementById('addNewProductNameCreateBtn');
 
@@ -970,7 +1004,6 @@
     });
 
     populateProductSelect(addProductNameSelect);
-    populateProductSelect(editProductNameSelect);
     return data;
   }
 
@@ -1006,7 +1039,6 @@
       document.getElementById('editUnitSelect').value = unitVal;
       document.getElementById('editCostPrice').value = costVal;
       document.getElementById('editSellingPrice').value = sellingVal;
-      if (editNewProductNameInline) hideProductInline(editNewProductNameInline);
     }
   }
 
@@ -1043,8 +1075,6 @@
       if (costEl) costEl.value = '';
       if (sellEl) sellEl.value = '';
       if (stockEl) stockEl.value = '';
-
-      if (editNewProductNameInline) hideProductInline(editNewProductNameInline);
     }
   }
 
@@ -1063,34 +1093,10 @@
 
       const opt = addProductNameSelect.selectedOptions[0];
       const productName = (opt?.textContent || '').trim();
-      setHiddenProductName(addProductNameHidden, productName);
       hideProductInline(addNewProductNameInline);
 
       const p = productsById[selectedVal];
       if (p) autofillFromProduct(p, 'add');
-    });
-  }
-
-  if (editProductNameSelect) {
-    editProductNameSelect.addEventListener('change', async () => {
-      if (!editProductNameSelect) return;
-      const selectedVal = editProductNameSelect.value;
-
-      if (selectedVal === '__add_new__') {
-        if (editNewProductNameInline) {
-          editNewProductNameInline.style.display = 'flex';
-          editNewProductNameInput?.focus();
-        }
-        return;
-      }
-
-      const opt = editProductNameSelect.selectedOptions[0];
-      const productName = (opt?.textContent || '').trim();
-      setHiddenProductName(editProductNameHidden, productName);
-      hideProductInline(editNewProductNameInline);
-
-      const p = productsById[selectedVal];
-      if (p) autofillFromProduct(p, 'edit');
     });
   }
 
@@ -1107,7 +1113,6 @@
       const ref = addProductNameSelect.querySelector('option[value="__add_new__"]');
       addProductNameSelect.insertBefore(opt, ref);
       addProductNameSelect.value = customValue;
-      setHiddenProductName(addProductNameHidden, name);
 
       addNewProductNameInput.value = '';
       hideProductInline(addNewProductNameInline);
@@ -1122,15 +1127,7 @@
       const name = (editNewProductNameInput?.value || '').trim();
       if (!name) return;
 
-      const customValue = 'custom:' + name + ':' + Date.now();
-      const opt = document.createElement('option');
-      opt.value = customValue;
-      opt.textContent = name;
-
-      const ref = editProductNameSelect.querySelector('option[value="__add_new__"]');
-      editProductNameSelect.insertBefore(opt, ref);
-      editProductNameSelect.value = customValue;
-      setHiddenProductName(editProductNameHidden, name);
+      editProductNameInput.value = name;
 
       editNewProductNameInput.value = '';
       hideProductInline(editNewProductNameInline);
@@ -1208,8 +1205,7 @@
         try {
           await productsLoadPromise;
         } catch (err) {}
-        if (editProductNameSelect) editProductNameSelect.value = String(productId);
-        setHiddenProductName(editProductNameHidden, editBtn.getAttribute('data-name') || '');
+        if (editProductNameInput) editProductNameInput.value = editBtn.getAttribute('data-name') || '';
         hideProductInline(editNewProductNameInline);
         if (editNewProductNameInput) editNewProductNameInput.value = '';
         const brandName = editBtn.getAttribute('data-brand') || '';

@@ -443,6 +443,10 @@
             <input class="form-control" type="date" id="filterDateTo" style="padding: 8px 12px; border-radius: 6px;">
           </div>
           <div>
+            <label class="field-label" for="filterSearch" style="margin-bottom: 6px; display: block;">Search</label>
+            <input class="form-control" type="text" id="filterSearch" placeholder="Invoice # or Customer..." style="padding: 8px 12px; border-radius: 6px;">
+          </div>
+          <div>
             <label class="field-label" for="filterCustomer" style="margin-bottom: 6px; display: block;">Customer</label>
             <select class="form-control" id="filterCustomer" style="padding: 8px 12px; border-radius: 6px;">
               <option value="all" selected>All Customers</option>
@@ -1238,6 +1242,9 @@
     if (filterDateTo && filterDateTo.value) params.append('date_to', filterDateTo.value);
     if (filterCustomer && filterCustomer.value) params.append('customer_id', filterCustomer.value);
     if (filterPaymentType && filterPaymentType.value) params.append('payment_type', filterPaymentType.value);
+    
+    const filterSearch = document.getElementById('filterSearch');
+    if (filterSearch && filterSearch.value) params.append('search', filterSearch.value);
 
     // Update export link dynamically
     const exportBtn = document.getElementById('exportSalesBtn');
@@ -1290,6 +1297,24 @@
   if (filterBtn) {
     filterBtn.addEventListener('click', () => {
       loadSalesData();
+    });
+  }
+
+  const filterSearch = document.getElementById('filterSearch');
+  let searchTimeout;
+  if (filterSearch) {
+    filterSearch.addEventListener('input', (e) => {
+      clearTimeout(searchTimeout);
+      searchTimeout = setTimeout(() => {
+        loadSalesData();
+      }, 400);
+    });
+    filterSearch.addEventListener('keypress', (e) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        clearTimeout(searchTimeout);
+        loadSalesData();
+      }
     });
   }
 

@@ -88,6 +88,9 @@ def load_user(user_id):
     row = get_user_by_id(pk)
     if row is None:
         return None
+    is_active = row["is_active"] if "is_active" in row.keys() else 1
+    if is_active == 0:
+        return None
     role = row["role"] if "role" in row.keys() else "admin"
     return User(row["id"], row["username"], role)
 
@@ -118,6 +121,12 @@ def login():
         password = request.form.get("password") or ""
         row = get_user_by_username(username)
         if row is not None and check_password_hash(row["password_hash"], password):
+            is_active = row["is_active"] if "is_active" in row.keys() else 1
+            if is_active == 0:
+                return render_template(
+                    "login.html",
+                    error="Account is disabled. Please contact the administrator.",
+                )
             role = row["role"] if "role" in row.keys() else "admin"
             user_obj = User(row["id"], row["username"], role)
             login_user(user_obj, remember=True)
@@ -558,6 +567,8 @@ def inventory_edit(product_id: int):
     if not product_name or not category_id:
         return redirect(url_for("inventory"))
 
+    remove_image = request.form.get("remove_image") == "1"
+
     import os
     from werkzeug.utils import secure_filename
     image_file = request.files.get("product_image")
@@ -589,35 +600,55 @@ def inventory_edit(product_id: int):
     try:
         conn.execute("BEGIN")
         
-        update_query = """
-            UPDATE products
-            SET
-                name = ?,
-                brand = ?,
-                category_id = ?,
-                unit = ?,
-                cost_price = ?,
-                selling_price = ?,
-                stock_quantity = ?
-        """
-        params = [
-            product_name,
-            brand or None,
-            category_id,
-            unit,
-            cost_price,
-            selling_price,
-            stock_quantity
-        ]
-        
+        # If user uploaded a new image, use it. Else if they clicked remove, set it to NULL.
+        # Otherwise, keep existing image_url.
         if image_url:
-            update_query += ", image_url = ?"
-            params.append(image_url)
+            update_query = """
+                UPDATE products
+                SET
+                    name = ?,
+                    brand = ?,
+                    category_id = ?,
+                    unit = ?,
+                    cost_price = ?,
+                    selling_price = ?,
+                    stock_quantity = ?,
+                    image_url = ?
+                WHERE id = ?
+            """
+            params = (product_name, brand, category_id, unit, cost_price, selling_price, stock_quantity, image_url, product_id)
+        elif remove_image:
+            update_query = """
+                UPDATE products
+                SET
+                    name = ?,
+                    brand = ?,
+                    category_id = ?,
+                    unit = ?,
+                    cost_price = ?,
+                    selling_price = ?,
+                    stock_quantity = ?,
+                    image_url = NULL
+                WHERE id = ?
+            """
+            params = (product_name, brand, category_id, unit, cost_price, selling_price, stock_quantity, product_id)
+        else:
+            update_query = """
+                UPDATE products
+                SET
+                    name = ?,
+                    brand = ?,
+                    category_id = ?,
+                    unit = ?,
+                    cost_price = ?,
+                    selling_price = ?,
+                    stock_quantity = ?
+                WHERE id = ?
+            """
+            params = (product_name, brand, category_id, unit, cost_price, selling_price, stock_quantity, product_id)
             
-        update_query += " WHERE id = ?"
-        params.append(product_id)
-        
         conn.execute(update_query, params)
+
 
         # Keep brands table in sync for the Brand dropdown.
         if brand:
@@ -849,6 +880,7 @@ def products_list():
             FROM products p
             LEFT JOIN brands b
                 ON LOWER(b.name) = LOWER(p.brand)
+            GROUP BY p.id
             ORDER BY p.name COLLATE NOCASE, p.id ASC
             """
         )
@@ -1286,6 +1318,7 @@ def sales_data():
     payment_type = (request.args.get("payment_type") or "").strip()
     salesman_id = (request.args.get("salesman_id") or "").strip()
     salesman_name_filter = (request.args.get("salesman_name") or "").strip()
+    search = (request.args.get("search") or "").strip()
 
     conditions = []
     params = []
@@ -1321,6 +1354,11 @@ def sales_data():
     if payment_type and payment_type not in ("all", ""):
         conditions.append("s.payment_type = ?")
         params.append(payment_type)
+
+    if search:
+        search_term = f"%{search.lower()}%"
+        conditions.append("(LOWER(s.invoice_number) LIKE ? OR LOWER(c.name) LIKE ?)")
+        params.extend([search_term, search_term])
 
     where_sql = ""
     if conditions:
@@ -1378,6 +1416,7 @@ def sales_export():
     date_to = (request.args.get("date_to") or "").strip()
     customer_id = (request.args.get("customer_id") or "").strip()
     payment_type = (request.args.get("payment_type") or "").strip()
+    search = (request.args.get("search") or "").strip()
 
     conditions = []
     params = []
@@ -1398,6 +1437,11 @@ def sales_export():
     if payment_type and payment_type not in ("all", ""):
         conditions.append("s.payment_type = ?")
         params.append(payment_type)
+
+    if search:
+        search_term = f"%{search.lower()}%"
+        conditions.append("(LOWER(s.invoice_number) LIKE ? OR LOWER(c.name) LIKE ?)")
+        params.extend([search_term, search_term])
 
     where_sql = ""
     if conditions:
@@ -3013,7 +3057,7 @@ def reports_export(type: str):
 def users_list():
     conn = get_connection()
     try:
-        users = conn.execute("SELECT id, username, role FROM users").fetchall()
+        users = conn.execute("SELECT id, username, role, is_active FROM users").fetchall()
         return render_template("users.html", users=[dict(u) for u in users])
     finally:
         conn.close()
@@ -3039,6 +3083,21 @@ def users_add():
         return jsonify({"ok": False, "error": "Username already exists."}), 409
     finally:
         conn.close()
+@app.route("/users/toggle_active/<int:user_id>", methods=["POST"])
+@admin_required
+def users_toggle_active(user_id):
+    conn = get_connection()
+    try:
+        cur = conn.execute("SELECT is_active FROM users WHERE id = ?", (user_id,))
+        row = cur.fetchone()
+        if row:
+            new_active = 0 if row["is_active"] == 1 else 1
+            conn.execute("UPDATE users SET is_active = ? WHERE id = ?", (new_active, user_id))
+            conn.commit()
+    finally:
+        conn.close()
+    return redirect(url_for("users_list"))
+
 @app.route("/users/reset_password", methods=["POST"])
 @admin_required
 def users_reset_password():

@@ -87,7 +87,7 @@
       flex: 1;
       padding: 1.5rem;
       display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+      grid-template-columns: repeat(3, 1fr);
       grid-auto-rows: max-content;
       gap: 1.5rem;
       overflow-y: auto;
@@ -129,7 +129,7 @@
     
     /* Right: Cart Area */
     .cart-area {
-      width: 360px;
+      width: 390px;
       background: var(--card-bg);
       display: flex;
       flex-direction: column;
@@ -531,6 +531,23 @@
       }
       renderCart();
     }
+    
+    function setQty(productId, value) {
+      const val = parseInt(value, 10);
+      if (isNaN(val) || val <= 0) {
+        delete cart[productId];
+      } else {
+        const p = products.find(x => x.id == productId);
+        if (p && val > p.stock_quantity) {
+          alert(`Cannot set qty to ${val}. Only ${p.stock_quantity} available in stock.`);
+          cart[productId] = p.stock_quantity;
+        } else {
+          cart[productId] = val;
+        }
+      }
+      renderCart();
+    }
+
     document.getElementById('clearCartBtn').onclick = () => {
       cart = {};
       renderCart();
@@ -554,7 +571,7 @@
             <span style="font-weight:600; color:var(--primary);">${money(lineTotal)}</span>
             <div style="display:flex; align-items:center; gap:0.5rem;">
               <button class="qty-btn" onclick="updateQty(${p.id}, -1)">-</button>
-              <span style="font-weight:bold; width:24px; text-align:center;">${qty}</span>
+              <input type="number" value="${qty}" onchange="setQty(${p.id}, this.value)" style="font-weight:bold; width:50px; text-align:center; border:1px solid var(--border); border-radius:4px; padding: 4px; font-size: 1rem;">
               <button class="qty-btn" onclick="updateQty(${p.id}, 1)">+</button>
             </div>
           </div>

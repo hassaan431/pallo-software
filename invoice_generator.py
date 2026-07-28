@@ -18,7 +18,7 @@ _LIGHT_GREY = colors.HexColor("#fafafa")
 _VERY_LIGHT_GREY = colors.HexColor("#fdfdfd")
 _TEXT_GREY = colors.HexColor("#6b7280")
 
-_LOGO_MAX_SIZE = 70  # points (approx to requested 70x70px)
+_LOGO_MAX_SIZE = 55  # points (approx to requested 70x70px)
 _LEFT_MARGIN_FALLBACK = 36
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -196,12 +196,12 @@ def generate_invoice_pdf(sale_id: int) -> bytes:
     usable_width = page_width - (2 * margin)
 
     # Layout metrics
-    header_height = 100
-    meta_height = 80  # Height for 4 rows with padding
-    bill_height = 112
-    spacer_after_header = 12  # Increased from 8
-    spacer_after_meta = 10  # Increased from 8
-    table_header_height = 22
+    header_height = 80
+    meta_height = 40  # Height for 2 rows with padding
+    bill_height = 90
+    spacer_after_header = 8  # Increased from 8
+    spacer_after_meta = 6  # Increased from 8
+    table_header_height = 20
 
     totals_block_height = 90
     footer_height = 28
@@ -259,14 +259,13 @@ def generate_invoice_pdf(sale_id: int) -> bytes:
         brand_line = product_brand or desc_brand
         brand_line = brand_line.strip() if brand_line else ""
 
+        if brand_line:
+            item_line = f"{item_line} - ({brand_line})"
+
         item_lines = _wrap_text_lines(
             None, item_line, item_font, item_font_size, max_item_width
         )
         brand_lines = []
-        if brand_line:
-            brand_lines = _wrap_text_lines(
-                None, brand_line, brand_font, brand_font_size, max_item_width
-            )
 
         line_count = len(item_lines) + len(brand_lines)
         leading_total = len(item_lines) * row_leading_item + len(brand_lines) * row_leading_brand
@@ -336,11 +335,6 @@ def generate_invoice_pdf(sale_id: int) -> bytes:
             cnv.setFillColor(_DARK_NAVY)
             cnv.drawRightString(invoice_x_right, y_top - 34, "INVOICE")
     
-            # Horizontal line below header
-            cnv.setStrokeColor(colors.HexColor("#d1d5db"))
-            cnv.setLineWidth(1)
-            cnv.line(x0, y_top - header_height + 8, x0 + usable_width, y_top - header_height + 8)
-    
             # Meta info box
             meta_box_top = y_top - header_height + 8 - 10
             meta_box_bottom = meta_box_top - meta_height
@@ -348,25 +342,39 @@ def generate_invoice_pdf(sale_id: int) -> bytes:
             cnv.setFillColor(colors.white)
             cnv.roundRect(x0, meta_box_bottom, usable_width, meta_height, 6, stroke=1, fill=1)
     
-            meta_rows = [
+            meta_rows_left = [
                 ("Invoice #", inv_data["invoice_number"]),
                 ("Invoice Date", _format_date(inv_data["invoice_date"])),
+            ]
+            meta_rows_right = [
+                ("Due Date", _format_date(inv_data.get("due_date")) if inv_data.get("due_date") else ""),
                 ("Payment Type", inv_data["payment_type"].capitalize() if inv_data["payment_type"] else ""),
-                ("Terms", inv_data["terms"] or ""),
             ]
     
-            label_x = x0 + 18
-            value_x = x0 + 135
-            row_step = meta_height / 4.0
-            cnv.setFont("Helvetica", 10)
-            for idx, (lab, val) in enumerate(meta_rows):
+            label_x_left = x0 + 18
+            value_x_left = x0 + 110
+            label_x_right = x0 + usable_width / 2.0 + 18
+            value_x_right = x0 + usable_width / 2.0 + 110
+            row_step = meta_height / 2.0
+            
+            for idx, ((l_lab, l_val), (r_lab, r_val)) in enumerate(zip(meta_rows_left, meta_rows_right)):
                 y_text = meta_box_top - 14 - row_step * idx
+                
+                # Left side
                 cnv.setFillColor(_TEXT_GREY)
-                cnv.setFont("Helvetica", 10)
-                cnv.drawString(label_x, y_text, lab)
+                cnv.setFont("Helvetica", 9)
+                cnv.drawString(label_x_left, y_text, l_lab)
                 cnv.setFillColor(colors.black)
-                cnv.setFont("Helvetica-Bold", 10)
-                cnv.drawString(value_x, y_text, str(val or ""))
+                cnv.setFont("Helvetica-Bold", 9)
+                cnv.drawString(value_x_left, y_text, str(l_val or ""))
+                
+                # Right side
+                cnv.setFillColor(_TEXT_GREY)
+                cnv.setFont("Helvetica", 9)
+                cnv.drawString(label_x_right, y_text, r_lab)
+                cnv.setFillColor(colors.black)
+                cnv.setFont("Helvetica-Bold", 9)
+                cnv.drawString(value_x_right, y_text, str(r_val or ""))
     
             # Bill To / Ship To box
             bill_box_top = meta_box_bottom - spacer_after_meta
@@ -402,35 +410,35 @@ def generate_invoice_pdf(sale_id: int) -> bytes:
     
             # Draw billing column
             cnv.setFillColor(_DARK_NAVY)
-            cnv.setFont("Helvetica-Bold", 12)
-            cnv.drawString(left_x, bill_box_top - 40, bill_name)
+            cnv.setFont("Helvetica-Bold", 10)
+            cnv.drawString(left_x, bill_box_top - 32, bill_name)
             cnv.setFillColor(colors.black)
-            cnv.setFont("Helvetica", 10)
+            cnv.setFont("Helvetica", 9)
             # Wrap address text
-            addr_y = bill_box_top - 55
-            bill_lines = _wrap_text_lines(cnv, bill_address, "Helvetica", 10, inner_w)
+            addr_y = bill_box_top - 45
+            bill_lines = _wrap_text_lines(cnv, bill_address, "Helvetica", 9, inner_w)
             for ln in bill_lines:
                 cnv.drawString(left_x, addr_y, ln)
-                addr_y -= 13
+                addr_y -= 11
             
             # Add phone number if available
             if bill_phone:
                 cnv.setFillColor(colors.black)
-                cnv.setFont("Helvetica", 10)  # 10pt font as requested
+                cnv.setFont("Helvetica", 9)  # 10pt font as requested
                 cnv.drawString(left_x, addr_y, bill_phone)
-                addr_y -= 13
+                addr_y -= 11
     
             # Draw shipping column
             cnv.setFillColor(_DARK_NAVY)
             cnv.setFont("Helvetica-Bold", 10)
-            cnv.drawString(right_x, bill_box_top - 40, "")  # intentionally blank (label only in spec)
+            cnv.drawString(right_x, bill_box_top - 32, "")  # intentionally blank (label only in spec)
             cnv.setFillColor(colors.black)
-            cnv.setFont("Helvetica", 10)
-            addr_y2 = bill_box_top - 55
-            ship_lines = _wrap_text_lines(cnv, ship_address, "Helvetica", 10, inner_w)
+            cnv.setFont("Helvetica", 9)
+            addr_y2 = bill_box_top - 45
+            ship_lines = _wrap_text_lines(cnv, ship_address, "Helvetica", 9, inner_w)
             for ln in ship_lines:
                 cnv.drawString(right_x, addr_y2, ln)
-                addr_y2 -= 13
+                addr_y2 -= 11
     
             # Dividing line between columns
             cnv.setStrokeColor(colors.HexColor("#d1d5db"))

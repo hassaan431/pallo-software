@@ -19,6 +19,7 @@
             <th>ID</th>
             <th>Username</th>
             <th>Role</th>
+            <th>Status</th>
             <th>Actions</th>
           </tr>
         </thead>
@@ -35,12 +36,29 @@
               {% endif %}
             </td>
             <td>
+              {% if u.is_active == 1 %}
+                <span class="status-badge status-paid">Active</span>
+              {% else %}
+                <span class="status-badge status-overdue">Disabled</span>
+              {% endif %}
+            </td>
+            <td>
               <button class="btn btn-secondary btn-sm" onclick="openResetPassword({{ u.id }}, '{{ u.username }}')">Change Password</button>
+              
+              {% if current_user.id != u.id %}
+              <form action="{{ url_for('users_toggle_active', user_id=u.id) }}" method="POST" style="display: inline-block; margin-left: 8px;">
+                {% if u.is_active == 1 %}
+                  <button type="submit" class="btn btn-danger btn-sm" onclick="return confirm('Are you sure you want to disable this user?');">Disable</button>
+                {% else %}
+                  <button type="submit" class="btn btn-primary btn-sm">Enable</button>
+                {% endif %}
+              </form>
+              {% endif %}
             </td>
           </tr>
           {% else %}
           <tr>
-            <td colspan="4" class="text-center">No users found.</td>
+            <td colspan="5" class="text-center">No users found.</td>
           </tr>
           {% endfor %}
         </tbody>

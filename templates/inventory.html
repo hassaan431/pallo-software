@@ -172,7 +172,8 @@
 <section class="panel">
   <div class="panel-header" style="display: flex; justify-content: space-between; align-items: center;">
     <h2 style="margin: 0;">Products</h2>
-    <form action="/inventory" method="GET" style="display: flex; gap: 0.5rem;">
+    <form action="/inventory" method="GET" style="display: flex; gap: 0.5rem; align-items: center;">
+      <input type="text" id="productSearchInput" class="form-control" placeholder="Search products..." style="width: 200px; padding: 0.25rem 0.5rem; height: auto;" oninput="filterProductsTable()">
       <select name="brand" class="form-control" style="width: auto; padding: 0.25rem 0.5rem; height: auto;" onchange="this.form.submit()">
         <option value="">All Brands</option>
         {% set unique_brands = [] %}
@@ -226,13 +227,13 @@
             <td>{{ loop.index }}</td>
             <td>
               {% if p.image_url %}
-                <img src="{{ p.image_url }}" alt="Product" style="width: 40px; height: 40px; object-fit: cover; border-radius: 4px;">
+                <img src="{{ p.image_url }}" alt="Product" style="width: 40px; height: 40px; object-fit: cover; border-radius: 4px; cursor: pointer; border: 1px solid var(--border);" onclick="openImagePreview('{{ p.image_url }}')">
               {% else %}
-                <div style="width: 40px; height: 40px; background: #eee; border-radius: 4px; display: flex; align-items: center; justify-content: center; color: #999; font-size: 0.8rem;">None</div>
+                <div style="width: 40px; height: 40px; background: #eee; border-radius: 4px; display: flex; align-items: center; justify-content: center; color: #999; font-size: 0.8rem; border: 1px solid var(--border);">None</div>
               {% endif %}
             </td>
-            <td>{{ p.name }}</td>
-            <td>{{ p.brand or '' }}</td>
+            <td class="searchable-name">{{ p.name }}</td>
+            <td class="searchable-brand">{{ p.brand or '' }}</td>
             <td>{{ p.category_name or '' }}</td>
 
             <td>${{ '%.2f' % (p.selling_price|default(0)|float) }}</td>
@@ -257,6 +258,7 @@
               <button type="button" class="btn btn-edit" data-action="edit-product"
                 data-id="{{ p.id }}"
                 data-name="{{ p.name|e }}"
+                data-image-url="{{ p.image_url or '' }}"
                 data-brand="{{ (p.brand or '')|e }}"
                 data-category-id="{{ p.category_id or '' }}"
                 data-unit="{{ p.unit or 'Each' }}"
@@ -417,20 +419,16 @@
     <div class="modal-body">
       <form id="editProductForm" method="post" action="" enctype="multipart/form-data">
         <div class="modal-field">
-          <label for="editProductImage">Update Image (optional)</label>
+          <label for="editProductImage">Replace Image (optional)</label>
           <input type="file" class="form-control" id="editProductImage" name="product_image" accept="image/*">
         </div>
+        <div class="modal-field" id="removeImageContainer" style="display: none; align-items: center; gap: 8px; margin-top: -10px;">
+          <input type="hidden" id="editRemoveImageHidden" name="remove_image" value="0">
+          <button type="button" class="btn btn-danger btn-sm" id="btnRemoveImage" style="padding: 0.2rem 0.5rem; font-size: 0.8rem;">Remove Image</button>
+        </div>
         <div class="modal-field">
-          <label for="editProductNameSelect">Product Name</label>
-          <select class="form-control" id="editProductNameSelect">
-            <option value="" selected disabled>-- Select Product --</option>
-            <option value="__add_new__">+ Add New Product Name</option>
-          </select>
-          <input type="hidden" id="editProductNameHidden" name="product_name" value="">
-          <div id="editNewProductNameInline" class="inline-add" style="display:none; margin-top:0.65rem;">
-            <input class="form-control" type="text" id="editNewProductNameInput" placeholder="Product name">
-            <button type="button" class="btn btn-primary" id="editNewProductNameCreateBtn">Create</button>
-          </div>
+          <label for="editProductNameInput">Product Name</label>
+          <input type="text" class="form-control" id="editProductNameInput" name="product_name" required>
         </div>
 
         <div class="modal-field">
@@ -550,7 +548,34 @@
   </div>
 </section>
 
+<!-- Image Preview Modal -->
+<div id="imagePreviewModal" class="modal-backdrop" aria-hidden="true" style="display: none; z-index: 10000; justify-content: center; align-items: center; padding: 2rem;">
+  <div style="background: white; padding: 1rem; border-radius: 12px; position: relative; max-width: 90%; max-height: 90%; display: flex; flex-direction: column;">
+    <button type="button" class="modal-close" onclick="document.getElementById('imagePreviewModal').style.display='none'" style="position: absolute; top: 10px; right: 10px;">&times;</button>
+    <img id="imagePreviewImg" src="" style="max-width: 100%; max-height: 80vh; object-fit: contain; border-radius: 8px;">
+  </div>
+</div>
+
 <script>
+  function openImagePreview(url) {
+    document.getElementById('imagePreviewImg').src = url;
+    document.getElementById('imagePreviewModal').style.display = 'flex';
+  }
+
+  function filterProductsTable() {
+    const q = document.getElementById('productSearchInput').value.toLowerCase();
+    const rows = document.querySelectorAll('#productsTbody tr');
+    rows.forEach(row => {
+      if(row.querySelector('.empty-state')) return;
+      const name = row.querySelector('.searchable-name')?.textContent.toLowerCase() || '';
+      const brand = row.querySelector('.searchable-brand')?.textContent.toLowerCase() || '';
+      if(name.includes(q) || brand.includes(q)) {
+        row.style.display = '';
+      } else {
+        row.style.display = 'none';
+      }
+    });
+  }
   function calcProfitMargin(cpIn, spIn, marginDisp, amtDisp) {
     const cp = parseFloat(cpIn.value || 0);
     const sp = parseFloat(spIn.value || 0);
@@ -891,17 +916,12 @@
 
   // -------- Products (Name Dropdown + Inline Create) --------
   const addProductNameSelect = document.getElementById('addProductNameSelect');
-  const editProductNameSelect = document.getElementById('editProductNameSelect');
-  const addProductNameHidden = document.getElementById('addProductNameHidden');
-  const editProductNameHidden = document.getElementById('editProductNameHidden');
-
-  const addNewProductNameInline = document.getElementById('addNewProductNameInline');
+  const editProductNameInput = document.getElementById('editProductNameInput');
   const addNewProductNameInput = document.getElementById('addNewProductNameInput');
   const addNewProductNameCreateBtn = document.getElementById('addNewProductNameCreateBtn');
 
   const editNewProductNameInline = document.getElementById('editNewProductNameInline');
   const editNewProductNameInput = document.getElementById('editNewProductNameInput');
-  const editNewProductNameCreateBtn = document.getElementById('editNewProductNameCreateBtn');
 
   const productsById = {};
 
@@ -951,7 +971,6 @@
     });
 
     populateProductSelect(addProductNameSelect);
-    populateProductSelect(editProductNameSelect);
     return data;
   }
 
@@ -1055,36 +1074,10 @@
         return;
       }
 
-      const opt = addProductNameSelect.selectedOptions[0];
-      const productName = (opt?.textContent || '').trim();
-      setHiddenProductName(addProductNameHidden, productName);
       hideProductInline(addNewProductNameInline);
 
       const p = productsById[selectedVal];
       if (p) autofillFromProduct(p, 'add');
-    });
-  }
-
-  if (editProductNameSelect) {
-    editProductNameSelect.addEventListener('change', async () => {
-      if (!editProductNameSelect) return;
-      const selectedVal = editProductNameSelect.value;
-
-      if (selectedVal === '__add_new__') {
-        if (editNewProductNameInline) {
-          editNewProductNameInline.style.display = 'flex';
-          editNewProductNameInput?.focus();
-        }
-        return;
-      }
-
-      const opt = editProductNameSelect.selectedOptions[0];
-      const productName = (opt?.textContent || '').trim();
-      setHiddenProductName(editProductNameHidden, productName);
-      hideProductInline(editNewProductNameInline);
-
-      const p = productsById[selectedVal];
-      if (p) autofillFromProduct(p, 'edit');
     });
   }
 
@@ -1101,35 +1094,12 @@
       const ref = addProductNameSelect.querySelector('option[value="__add_new__"]');
       addProductNameSelect.insertBefore(opt, ref);
       addProductNameSelect.value = customValue;
-      setHiddenProductName(addProductNameHidden, name);
 
       addNewProductNameInput.value = '';
       hideProductInline(addNewProductNameInline);
 
       // Clear other fields for a fresh entry.
       clearProductFields('add');
-    });
-  }
-
-  if (editNewProductNameCreateBtn) {
-    editNewProductNameCreateBtn.addEventListener('click', () => {
-      const name = (editNewProductNameInput?.value || '').trim();
-      if (!name) return;
-
-      const customValue = 'custom:' + name + ':' + Date.now();
-      const opt = document.createElement('option');
-      opt.value = customValue;
-      opt.textContent = name;
-
-      const ref = editProductNameSelect.querySelector('option[value="__add_new__"]');
-      editProductNameSelect.insertBefore(opt, ref);
-      editProductNameSelect.value = customValue;
-      setHiddenProductName(editProductNameHidden, name);
-
-      editNewProductNameInput.value = '';
-      hideProductInline(editNewProductNameInline);
-
-      clearProductFields('edit');
     });
   }
 
@@ -1199,12 +1169,25 @@
         const productId = editBtn.getAttribute('data-id');
 
         document.getElementById('editProductForm').action = '/inventory/edit/' + productId;
+        const imgUrl = editBtn.getAttribute('data-image-url');
+        const removeImgContainer = document.getElementById('removeImageContainer');
+        const removeImgHidden = document.getElementById('editRemoveImageHidden');
+        const btnRemoveImg = document.getElementById('btnRemoveImage');
+        if (imgUrl) {
+          removeImgContainer.style.display = 'flex';
+        } else {
+          removeImgContainer.style.display = 'none';
+        }
+        removeImgHidden.value = '0';
+        btnRemoveImg.textContent = 'Remove Image';
+        btnRemoveImg.disabled = false;
+        btnRemoveImg.classList.remove('btn-secondary');
+        btnRemoveImg.classList.add('btn-danger');
+        
         try {
           await productsLoadPromise;
         } catch (err) {}
-        if (editProductNameSelect) editProductNameSelect.value = String(productId);
-        setHiddenProductName(editProductNameHidden, editBtn.getAttribute('data-name') || '');
-        hideProductInline(editNewProductNameInline);
+        if (editProductNameInput) editProductNameInput.value = editBtn.getAttribute('data-name') || '';
         if (editNewProductNameInput) editNewProductNameInput.value = '';
         const brandName = editBtn.getAttribute('data-brand') || '';
         try {
@@ -1409,6 +1392,18 @@
         location.reload();
         return;
       }
+    });
+  }
+
+  const btnRemoveImg = document.getElementById('btnRemoveImage');
+  if (btnRemoveImg) {
+    btnRemoveImg.addEventListener('click', () => {
+      document.getElementById('editRemoveImageHidden').value = '1';
+      document.getElementById('editProductImage').value = '';
+      btnRemoveImg.textContent = 'Image will be removed';
+      btnRemoveImg.disabled = true;
+      btnRemoveImg.classList.remove('btn-danger');
+      btnRemoveImg.classList.add('btn-secondary');
     });
   }
 </script>
