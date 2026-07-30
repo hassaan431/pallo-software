@@ -930,6 +930,24 @@ def brands_search():
     finally:
         conn.close()
 
+@app.route("/api/backup")
+def trigger_backup():
+    # Token to prevent unauthorized triggers (for external cron services)
+    token = request.args.get('token')
+    if token != "ak-secure-backup-2024":
+        return jsonify({"error": "Unauthorized"}), 401
+    
+    try:
+        import subprocess
+        script_path = os.path.join(app.root_path, 'backup_to_drive.py')
+        result = subprocess.run(['python3', script_path], capture_output=True, text=True)
+        if result.returncode == 0:
+            return jsonify({"status": "success", "output": result.stdout})
+        else:
+            return jsonify({"status": "error", "output": result.stderr}), 500
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
 
 @app.route("/backup/download")
 @admin_required
