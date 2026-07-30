@@ -944,7 +944,11 @@ def trigger_backup():
         if result.returncode == 0:
             return jsonify({"status": "success", "output": result.stdout})
         else:
-            return jsonify({"status": "error", "output": result.stderr}), 500
+            return jsonify({
+                "status": "error", 
+                "error_details": result.stderr,
+                "output": result.stdout
+            }), 500
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
