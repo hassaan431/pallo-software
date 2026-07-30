@@ -1,1 +1,0 @@
-../Resources/invoice_generator.py
