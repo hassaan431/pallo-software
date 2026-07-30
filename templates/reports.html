@@ -375,17 +375,17 @@
       <div class="card-grid" style="margin-bottom: 2rem; gap: 2rem;">
         <article class="stat-card" style="padding: 1rem; min-height: 110px; display: flex; flex-direction: column; justify-content: center; align-items: center; text-align: center;">
           <h3>Total Sales Amount</h3>
-          <p class="stat-value" id="summaryTotalSales">$0.00</p>
+          <p class="stat-value sensitive-data" id="summaryTotalSales">$0.00</p>
           <p class="stat-note">For selected filters</p>
         </article>
         <article class="stat-card" style="padding: 1rem; min-height: 110px; display: flex; flex-direction: column; justify-content: center; align-items: center; text-align: center;">
           <h3>Total Profit Amount</h3>
-          <p class="stat-value" id="summaryTotalProfit">$0.00</p>
+          <p class="stat-value sensitive-data" id="summaryTotalProfit">$0.00</p>
           <p class="stat-note">For selected filters</p>
         </article>
         <article class="stat-card" style="padding: 1rem; min-height: 110px; display: flex; flex-direction: column; justify-content: center; align-items: center; text-align: center;">
           <h3>Overall Profit Margin</h3>
-          <p class="stat-value" id="summaryProfitMargin">0%</p>
+          <p class="stat-value sensitive-data" id="summaryProfitMargin">0%</p>
           <p class="stat-note">For selected filters</p>
         </article>
         <article class="stat-card" style="padding: 1rem; min-height: 110px; display: flex; flex-direction: column; justify-content: center; align-items: center; text-align: center;">
@@ -603,17 +603,21 @@
         tdInv.textContent = r.invoice_count || 0;
 
         const tdRev = document.createElement('td');
+        tdRev.className = 'sensitive-data';
         tdRev.textContent = '$' + formatNumber(r.total_revenue);
 
         const tdMargin = document.createElement('td');
+        tdMargin.className = 'sensitive-data';
         tdMargin.textContent = formatNumber(r.profit_margin) + '%';
         if (r.profit_margin < 0) tdMargin.style.color = '#dc2626';
 
         const tdProfit = document.createElement('td');
+        tdProfit.className = 'sensitive-data';
         tdProfit.textContent = '$' + formatNumber(r.profit_amount);
         if (r.profit_amount < 0) tdProfit.style.color = '#dc2626';
 
         const tdOut = document.createElement('td');
+        tdOut.className = 'sensitive-data';
         tdOut.textContent = '$' + formatNumber(r.outstanding);
         if (r.outstanding > 0) tdOut.style.color = '#dc2626';
 
@@ -689,8 +693,8 @@
       tr.innerHTML = `
         <td>${inv.invoice_number || ''}</td>
         <td>${inv.invoice_date || ''}</td>
-        <td>${money(inv.grand_total)}</td>
-        <td style="color:${profitColor}; font-weight:600;">${money(profitVal)}</td>
+        <td class="sensitive-data">${money(inv.grand_total)}</td>
+        <td class="sensitive-data" style="color:${profitColor}; font-weight:600;">${money(profitVal)}</td>
         <td>${inv.payment_type || ''}</td>
         <td>${statusHtml}</td>
       `;
@@ -742,9 +746,9 @@
       tr.innerHTML = `
         <td>${r.area || ''}</td>
         <td>${r.invoice_count || 0}</td>
-        <td>${money(r.total_revenue)}</td>
-        <td>${margin}</td>
-        <td style="font-weight:600; color:${outColor}">${money(r.outstanding)}</td>
+        <td class="sensitive-data">${money(r.total_revenue)}</td>
+        <td class="sensitive-data">${margin}</td>
+        <td class="sensitive-data" style="font-weight:600; color:${outColor}">${money(r.outstanding)}</td>
         <td>${r.last_sale_date || ''}</td>
       `;
       tr.prepend(tdName);
@@ -765,7 +769,7 @@
     if (!invoices || invoices.length === 0) return '<div style="color: #6b7280; font-weight:600; padding:0.6rem 0;">No invoices for this customer matching filters.</div>';
     let html = '<div class="table-wrap" style="margin-top:0.1rem;"><table class="data-table"><thead><tr><th>Invoice#</th><th>Date</th><th>Salesman</th><th>Grand Total</th><th>Payment</th><th>Status</th></tr></thead><tbody>';
     invoices.forEach((inv) => {
-      html += `<tr><td>${inv.invoice_number || ''}</td><td>${inv.invoice_date || ''}</td><td>${inv.salesman_name || 'Admin'}</td><td>${money(inv.grand_total)}</td><td>${inv.payment_type || ''}</td><td>${inv.status || ''}</td></tr>`;
+      html += `<tr><td>${inv.invoice_number || ''}</td><td>${inv.invoice_date || ''}</td><td>${inv.salesman_name || 'Admin'}</td><td class="sensitive-data">${money(inv.grand_total)}</td><td>${inv.payment_type || ''}</td><td>${inv.status || ''}</td></tr>`;
     });
     html += '</tbody></table></div>';
     return html;
@@ -793,8 +797,8 @@
         tr.innerHTML = `
           <td>${r.brand || 'Unbranded'}</td>
           <td>${qty(r.units_sold)}</td>
-          <td>${money(r.total_revenue)}</td>
-          <td>${margin}</td>
+          <td class="sensitive-data">${money(r.total_revenue)}</td>
+          <td class="sensitive-data">${margin}</td>
         `;
         tbody.appendChild(tr);
       });
@@ -830,8 +834,8 @@
         tr.innerHTML = `
           <td>${r.category_name || ''}</td>
           <td>${qty(r.qty_sold)}</td>
-          <td>${money(r.total_revenue)}</td>
-          <td>${margin}</td>
+          <td class="sensitive-data">${money(r.total_revenue)}</td>
+          <td class="sensitive-data">${margin}</td>
           <td>${qty(r.current_stock)}</td>
         `;
         tbody.appendChild(tr);
@@ -880,9 +884,9 @@
         <td>${r.brand || ''}</td>
         <td>${r.category || ''}</td>
         <td>${qty(r.units_sold)}</td>
-        <td>${money(r.total_revenue)}</td>
-        <td>${margin}</td>
-        <td style="font-weight: 700;">${profitAmt}</td>
+        <td class="sensitive-data">${money(r.total_revenue)}</td>
+        <td class="sensitive-data">${margin}</td>
+        <td class="sensitive-data" style="font-weight: 700;">${profitAmt}</td>
         <td><span class="stock-pill ${stockC}">${qty(stock)}</span></td>
       `;
       tbody.appendChild(tr);
@@ -949,9 +953,9 @@
       tr.innerHTML = `
         <td>${r.date}</td>
         <td>${r.invoice_count}</td>
-        <td>${money(r.total_revenue)}</td>
-        <td><span class="stock-pill ${r.profit_margin > 0 ? 'stock-ok' : (r.profit_margin < 0 ? 'stock-zero' : 'stock-low')}">${Math.round(r.profit_margin)}%</span></td>
-        <td style="font-weight: 700;">${money(r.profit_amount)}</td>
+        <td class="sensitive-data">${money(r.total_revenue)}</td>
+        <td><span class="stock-pill sensitive-data ${r.profit_margin > 0 ? 'stock-ok' : (r.profit_margin < 0 ? 'stock-zero' : 'stock-low')}">${Math.round(r.profit_margin)}%</span></td>
+        <td class="sensitive-data" style="font-weight: 700;">${money(r.profit_amount)}</td>
       `;
       tbody.appendChild(tr);
     });

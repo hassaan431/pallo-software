@@ -284,11 +284,11 @@
               {% if p.selling_price and p.selling_price > 0 %}
                 {% set margin = ((p.selling_price - p.cost_price) / p.selling_price * 100) %}
                 {% if margin >= 30 %}
-                  <span style="color: #16a34a; font-weight: 600;">{{ "%.1f"|format(margin) }}%</span>
+                  <span class="sensitive-data" style="color: #16a34a; font-weight: 600;">{{ "%.1f"|format(margin) }}%</span>
                 {% elif margin >= 15 %}
-                  <span style="color: #e8800a; font-weight: 600;">{{ "%.1f"|format(margin) }}%</span>
+                  <span class="sensitive-data" style="color: #e8800a; font-weight: 600;">{{ "%.1f"|format(margin) }}%</span>
                 {% else %}
-                  <span style="color: #dc2626; font-weight: 600;">{{ "%.1f"|format(margin) }}%</span>
+                  <span class="sensitive-data" style="color: #dc2626; font-weight: 600;">{{ "%.1f"|format(margin) }}%</span>
                 {% endif %}
               {% else %}
                 <span style="color: #6b7280;">-</span>
@@ -395,7 +395,7 @@
 
         <div class="modal-field">
           <label for="addCostPrice">Cost Price</label>
-          <input class="form-control" type="number" step="0.01" id="addCostPrice" name="cost_price" required>
+          <input class="form-control sensitive-data" type="number" step="0.01" id="addCostPrice" name="cost_price" required>
         </div>
 
         <div class="modal-field">
@@ -405,12 +405,12 @@
 
         <div class="col-md-6 mb-3">
           <label for="profitMarginDisplay">Profit Margin</label>
-          <input class="form-control" type="text" id="profitMarginDisplay" readonly 
+          <input class="form-control sensitive-data" type="text" id="profitMarginDisplay" readonly 
                  style="background-color: var(--color-bg-alt); font-weight: 600; text-align: right;">
         </div>
         <div class="col-md-6 mb-3">
           <label for="profitAmountDisplay">Profit Amount</label>
-          <input class="form-control" type="text" id="profitAmountDisplay" readonly 
+          <input class="form-control sensitive-data" type="text" id="profitAmountDisplay" readonly 
                  style="background-color: var(--color-bg-alt); font-weight: 600; text-align: right;">
         </div>
 
@@ -487,7 +487,7 @@
 
         <div class="modal-field">
           <label for="editCostPrice">Cost Price</label>
-          <input class="form-control" type="number" step="0.01" id="editCostPrice" name="cost_price" required>
+          <input class="form-control sensitive-data" type="number" step="0.01" id="editCostPrice" name="cost_price" required>
         </div>
 
         <div class="modal-field">
@@ -497,12 +497,12 @@
 
         <div class="col-md-6 mb-3">
           <label for="editProfitMarginDisplay">Profit Margin</label>
-          <input class="form-control" type="text" id="editProfitMarginDisplay" readonly 
+          <input class="form-control sensitive-data" type="text" id="editProfitMarginDisplay" readonly 
                  style="background-color: var(--color-bg-alt); font-weight: 600; text-align: right;">
         </div>
         <div class="col-md-6 mb-3">
           <label for="editProfitAmountDisplay">Profit Amount</label>
-          <input class="form-control" type="text" id="editProfitAmountDisplay" readonly 
+          <input class="form-control sensitive-data" type="text" id="editProfitAmountDisplay" readonly 
                  style="background-color: var(--color-bg-alt); font-weight: 600; text-align: right;">
         </div>
 

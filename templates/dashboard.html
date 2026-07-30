@@ -8,22 +8,22 @@
 <div class="card-grid">
   <article class="stat-card">
     <h3>Daily Sale Amount</h3>
-    <p class="stat-value">${{ "%.2f"|format(daily_revenue) }}</p>
+    <p class="stat-value sensitive-data">${{ "%.2f"|format(daily_revenue) }}</p>
     <p class="stat-note">Sales amount for today</p>
   </article>
   <article class="stat-card">
     <h3>Daily Profit Amount</h3>
-    <p class="stat-value" style="color: {% if daily_profit < 0 %}var(--color-danger){% else %}var(--color-success){% endif %};">${{ "%.0f"|format(daily_profit) }}</p>
+    <p class="stat-value sensitive-data" style="color: {% if daily_profit < 0 %}var(--color-danger){% else %}var(--color-success){% endif %};">${{ "%.0f"|format(daily_profit) }}</p>
     <p class="stat-note">Profit amount for today</p>
   </article>
   <article class="stat-card">
     <h3>Monthly Sales</h3>
-    <p class="stat-value">${{ "%.2f"|format(monthly_revenue) }}</p>
+    <p class="stat-value sensitive-data">${{ "%.2f"|format(monthly_revenue) }}</p>
     <p class="stat-note">Current month to date</p>
   </article>
   <article class="stat-card">
     <h3>Monthly Profit Amount</h3>
-    <p class="stat-value" style="color: {% if monthly_profit < 0 %}var(--color-danger){% else %}var(--color-success){% endif %};">${{ "%.0f"|format(monthly_profit) }}</p>
+    <p class="stat-value sensitive-data" style="color: {% if monthly_profit < 0 %}var(--color-danger){% else %}var(--color-success){% endif %};">${{ "%.0f"|format(monthly_profit) }}</p>
     <p class="stat-note">Current month to date</p>
   </article>
 </div>
@@ -33,7 +33,7 @@
     <h2>Daily Sales (Last 30 Days)</h2>
   </div>
   <div class="panel-body" style="padding: 1.5rem;">
-    <canvas id="salesChart" height="80"></canvas>
+    <canvas id="salesChart" height="80" class="sensitive-data"></canvas>
   </div>
 </section>
 <section class="panel">
@@ -63,9 +63,9 @@
               <td>{{ sale.invoice_number }}</td>
               <td>{{ sale.customer_name }}</td>
               <td>{{ sale.invoice_date }}</td>
-              <td>${{ "%.2f"|format(sale.grand_total) }}</td>
-              <td style="color: {{ '#dc2626' if sale.profit_margin < 0 else '#16a34a' }}; font-weight: 600;">{{ "%.0f"|format(sale.profit_margin) }}%</td>
-              <td style="color: {{ '#dc2626' if sale.profit_amount < 0 else '#16a34a' }}; font-weight: 600;">${{ "%.2f"|format(sale.profit_amount) }}</td>
+              <td class="sensitive-data">${{ "%.2f"|format(sale.grand_total) }}</td>
+              <td class="sensitive-data" style="color: {{ '#dc2626' if sale.profit_margin < 0 else '#16a34a' }}; font-weight: 600;">{{ "%.0f"|format(sale.profit_margin) }}%</td>
+              <td class="sensitive-data" style="color: {{ '#dc2626' if sale.profit_amount < 0 else '#16a34a' }}; font-weight: 600;">${{ "%.2f"|format(sale.profit_amount) }}</td>
               <td style="text-transform: capitalize;">{{ sale.payment_type }}</td>
               <td>
                 <span class="status-badge {{ sale.status }}">
@@ -113,7 +113,7 @@
               <td>{{ payment.invoice_number }}</td>
               <td>{{ payment.customer_name }}</td>
               <td>{{ payment.customer_phone or '-' }}</td>
-              <td style="font-weight: bold; color: #e8800a;">${{ "%.2f"|format(payment.remaining_amount) }}</td>
+              <td class="sensitive-data" style="font-weight: bold; color: #e8800a;">${{ "%.2f"|format(payment.remaining_amount) }}</td>
               <td>
                 <a href="/sales" class="btn btn-primary" style="padding: 4px 10px; font-size: 12px; text-decoration: none;">Go to Sales</a>
               </td>

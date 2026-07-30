@@ -16,6 +16,21 @@
       border-left-color: var(--color-danger) !important;
       background: rgba(239, 68, 68, 0.08) !important;
     }
+    
+    body.privacy-mode .sensitive-data {
+      filter: blur(6px) !important;
+      opacity: 0.8 !important;
+      user-select: none !important;
+      pointer-events: none !important;
+      transition: filter 0.2s ease, opacity 0.2s ease;
+    }
+    
+    #privacyModeToggle {
+      transition: transform 0.2s ease;
+    }
+    #privacyModeToggle:hover {
+      transform: scale(1.1);
+    }
   </style>
 </head>
 <body>
@@ -90,9 +105,14 @@
     <div class="main-wrap">
       <header class="topbar">
         <h1 class="topbar-title">{% block page_heading %}Dashboard{% endblock %}</h1>
-        <div class="topbar-user">
-          <span>Signed in as</span>
-          <strong>{% if current_user.is_authenticated %}{{ current_user.username }}{% else %}Guest{% endif %}</strong>
+        <div style="display: flex; align-items: center; gap: 1.5rem;">
+          <button id="privacyModeToggle" style="background: none; border: none; font-size: 1.5rem; cursor: pointer; padding: 0.25rem;" title="Toggle Privacy Mode">
+            👁️
+          </button>
+          <div class="topbar-user">
+            <span>Signed in as</span>
+            <strong>{% if current_user.is_authenticated %}{{ current_user.username }}{% else %}Guest{% endif %}</strong>
+          </div>
         </div>
       </header>
       <main class="content-area">
@@ -100,5 +120,28 @@
       </main>
     </div>
   </div>
+  
+  <script>
+    document.addEventListener('DOMContentLoaded', () => {
+      const toggleBtn = document.getElementById('privacyModeToggle');
+      if (toggleBtn) {
+        // Load preference
+        const isPrivacyMode = localStorage.getItem('privacyMode') === 'true';
+        if (isPrivacyMode) {
+          document.body.classList.add('privacy-mode');
+          toggleBtn.textContent = '🙈';
+        } else {
+          toggleBtn.textContent = '👁️';
+        }
+
+        // Toggle action
+        toggleBtn.addEventListener('click', () => {
+          const isActive = document.body.classList.toggle('privacy-mode');
+          localStorage.setItem('privacyMode', isActive);
+          toggleBtn.textContent = isActive ? '🙈' : '👁️';
+        });
+      }
+    });
+  </script>
 </body>
 </html>

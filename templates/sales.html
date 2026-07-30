@@ -388,7 +388,7 @@
           <div style="display:grid; gap:0.65rem; padding: 0.95rem 1rem; border-radius: 10px; background: #fff; border: 1px solid var(--color-border); box-shadow: var(--shadow-card);">
             <div style="display:flex; justify-content:space-between; gap:1rem;">
               <div style="color: var(--color-text-muted); font-weight:700;">Subtotal</div>
-              <div id="subtotalAmount" class="row-amount">$0.00</div>
+              <div id="subtotalAmount" class="row-amount sensitive-data">$0.00</div>
             </div>
             <div style="display:flex; justify-content:space-between; gap:1rem; align-items:center;">
               <div style="color: var(--color-text-muted); font-weight:700;">Discount</div>
@@ -399,15 +399,15 @@
             </div>
             <div style="display:flex; justify-content:space-between; gap:1rem; align-items:baseline;">
               <div style="color: var(--color-text-muted); font-weight:800;">Grand Total</div>
-              <div id="grandTotalAmount" class="grand-total">$0.00</div>
+              <div id="grandTotalAmount" class="grand-total sensitive-data">$0.00</div>
             </div>
             <div style="display:flex; justify-content:space-between; gap:1rem; align-items:baseline; margin-top: 0.5rem; padding-top: 0.5rem; border-top: 1px dashed var(--color-border);">
               <div style="color: var(--color-text-muted); font-weight:800;">Profit Margin</div>
-              <div id="profitMarginAmount" style="font-weight: 800; color: var(--color-success);">0.00%</div>
+              <div id="profitMarginAmount" class="sensitive-data" style="font-weight: 800; color: var(--color-success);">0.00%</div>
             </div>
             <div style="display:flex; justify-content:space-between; gap:1rem; align-items:baseline;">
               <div style="color: var(--color-text-muted); font-weight:800;">Profit Amount</div>
-              <div id="profitAmount" style="font-weight: 800; color: var(--color-success);">$0.00</div>
+              <div id="profitAmount" class="sensitive-data" style="font-weight: 800; color: var(--color-success);">$0.00</div>
             </div>
           </div>
         </div>
@@ -1133,11 +1133,13 @@
 
       // Grand Total
       const tdGrand = document.createElement('td');
+      tdGrand.className = 'sensitive-data';
       tdGrand.textContent = money(s.grand_total);
       tr.appendChild(tdGrand);
 
       // Margin
       const tdMargin = document.createElement('td');
+      tdMargin.className = 'sensitive-data';
       const margin = Number(s.profit_margin || 0);
       tdMargin.textContent = margin.toFixed(2) + '%';
       tdMargin.style.color = margin < 0 ? 'var(--color-danger)' : 'var(--color-success)';
@@ -1146,6 +1148,7 @@
 
       // Profit Amount
       const tdProfitAmt = document.createElement('td');
+      tdProfitAmt.className = 'sensitive-data';
       const profitAmt = Number(s.profit_amount || 0);
       tdProfitAmt.textContent = money(profitAmt);
       tdProfitAmt.style.color = profitAmt < 0 ? 'var(--color-danger)' : 'var(--color-success)';
