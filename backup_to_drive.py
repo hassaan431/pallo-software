@@ -6,7 +6,9 @@ from pathlib import Path
 
 # Google API libraries
 try:
-    from google.oauth2 import service_account
+    from google.oauth2.credentials import Credentials
+    from google_auth_oauthlib.flow import InstalledAppFlow
+    from google.auth.transport.requests import Request
     from googleapiclient.discovery import build
     from googleapiclient.http import MediaIoBaseUpload
 except ImportError:
@@ -18,7 +20,8 @@ except ImportError:
 BASE_DIR = Path(__file__).resolve().parent
 DB_PATH = BASE_DIR / "database.db"
 UPLOADS_DIR = BASE_DIR / "static" / "uploads" / "products"
-CREDENTIALS_FILE = BASE_DIR / "credentials.json"
+TOKEN_FILE = BASE_DIR / "token.json"
+CREDENTIALS_FILE = BASE_DIR / "client_secret.json"
 
 # Google Drive folder ID (leave empty to upload to root)
 # The user can find this in the URL of their Google Drive folder: https://drive.google.com/drive/folders/YOUR_FOLDER_ID
@@ -26,6 +29,22 @@ DRIVE_FOLDER_ID = "1ss8jIbGSBwvEXOeXlwA5hICHxKRLrh-H"  # Update this if you want
 
 # Scopes required for Google Drive API
 SCOPES = ['https://www.googleapis.com/auth/drive.file']
+
+def get_drive_service():
+    creds = None
+    if TOKEN_FILE.exists():
+        creds = Credentials.from_authorized_user_file(str(TOKEN_FILE), SCOPES)
+    
+    if not creds or not creds.valid:
+        if creds and creds.expired and creds.refresh_token:
+            print("Refreshing access token...")
+            creds.refresh(Request())
+        else:
+            print("ERROR: token.json is missing or invalid.")
+            print("You must generate token.json locally and upload it to the server.")
+            exit(1)
+            
+    return build('drive', 'v3', credentials=creds)
 
 def create_backup_zip():
     print("Creating backup zip file in memory...")
@@ -39,24 +58,18 @@ def create_backup_zip():
         if UPLOADS_DIR.exists():
             for root, _, files in os.walk(UPLOADS_DIR):
                 for file in files:
-                    full_path = os.path.join(root, file)
-                    rel_path = os.path.relpath(full_path, BASE_DIR)
-                    zf.write(full_path, arcname=rel_path)
+                    full_path = Path(root) / file
+                    rel_path = full_path.relative_to(BASE_DIR)
+                    zf.write(full_path, arcname=str(rel_path))
+        else:
+            print(f"Warning: {UPLOADS_DIR} not found!")
     
     memory_file.seek(0)
     return memory_file
 
 def upload_to_drive(file_stream, filename):
-    if not CREDENTIALS_FILE.exists():
-        print(f"Error: Credentials file not found at {CREDENTIALS_FILE}.")
-        print("Please download the service account JSON key and save it as credentials.json in the project root.")
-        return False
-
     print("Authenticating with Google Drive API...")
-    creds = service_account.Credentials.from_service_account_file(
-        str(CREDENTIALS_FILE), scopes=SCOPES)
-    
-    service = build('drive', 'v3', credentials=creds)
+    service = get_drive_service()
 
     file_metadata = {'name': filename}
     if DRIVE_FOLDER_ID:
