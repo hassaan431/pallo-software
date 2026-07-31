@@ -247,20 +247,7 @@ def generate_invoice_pdf(sale_id: int) -> bytes:
         product_name = (it["product_name"] or "").strip()
         product_brand = (it["product_brand"] or "").strip()
 
-        # Use sale_item.description to infer item+brand if product brand isn't available.
-        item_line = description
-        desc_brand = None
-        if " - " in description:
-            parts = [p.strip() for p in description.split(" - ", 1)]
-            if len(parts) == 2:
-                item_line = parts[0] or description
-                desc_brand = parts[1] or None
-
-        brand_line = product_brand or desc_brand
-        brand_line = brand_line.strip() if brand_line else ""
-
-        if brand_line:
-            item_line = f"{item_line} - ({brand_line})"
+        item_line = description or product_name
 
         item_lines = _wrap_text_lines(
             None, item_line, item_font, item_font_size, max_item_width
