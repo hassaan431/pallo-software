@@ -495,15 +495,19 @@ def inventory_add():
         conn.execute("BEGIN")
         
         # Check if product already exists
-        cur = conn.execute("SELECT id FROM products WHERE LOWER(name) = LOWER(?)", (product_name,))
+        cur = conn.execute("SELECT id, stock_quantity FROM products WHERE LOWER(name) = LOWER(?)", (product_name,))
         existing = cur.fetchone()
         
         if existing:
+            product_id = existing["id"]
+            old_stock = float(existing["stock_quantity"] or 0)
+            new_stock = float(stock_quantity)
+            
             update_query = """
                 UPDATE products
                 SET category_id = ?, brand = ?, unit = ?, cost_price = ?, selling_price = ?, stock_quantity = ?
             """
-            params = [category_id, brand or None, unit, cost_price, selling_price, stock_quantity]
+            params = [category_id, brand or None, unit, cost_price, selling_price, new_stock]
             
             if created_at:
                 update_query += ", created_at = ?"
@@ -513,10 +517,17 @@ def inventory_add():
                 update_query += ", image_url = ?"
                 params.append(image_url)
             update_query += " WHERE id = ?"
-            params.append(existing["id"])
+            params.append(product_id)
             
             conn.execute(update_query, params)
-            product_id = existing["id"]
+            
+            if new_stock != old_stock:
+                diff = new_stock - old_stock
+                t_type = 'IN' if diff > 0 else 'ADJUSTMENT'
+                conn.execute("""
+                    INSERT INTO inventory_history (product_id, transaction_type, quantity_change, previous_stock, new_stock, reference)
+                    VALUES (?, ?, ?, ?, ?, ?)
+                """, (product_id, t_type, diff, old_stock, new_stock, 'Manual Edit (Add Product)'))
         else:
             if created_at:
                 cur = conn.execute(
@@ -539,6 +550,12 @@ def inventory_add():
                     (product_name, category_id, brand or None, unit, cost_price, selling_price, stock_quantity, image_url),
                 )
             product_id = int(cur.lastrowid)
+            
+            if stock_quantity != 0:
+                conn.execute("""
+                    INSERT INTO inventory_history (product_id, transaction_type, quantity_change, previous_stock, new_stock, reference)
+                    VALUES (?, ?, ?, ?, ?, ?)
+                """, (product_id, 'IN', stock_quantity, 0, stock_quantity, 'Initial Stock'))
 
         # Keep brands table in sync for the Brand dropdown.
         if brand:
@@ -606,6 +623,11 @@ def inventory_edit(product_id: int):
     try:
         conn.execute("BEGIN")
         
+        cur = conn.execute("SELECT stock_quantity FROM products WHERE id = ?", (product_id,))
+        old_stock_row = cur.fetchone()
+        old_stock = float(old_stock_row["stock_quantity"] or 0) if old_stock_row else 0
+        new_stock = float(stock_quantity)
+        
         # If user uploaded a new image, use it. Else if they clicked remove, set it to NULL.
         # Otherwise, keep existing image_url.
         update_query = """
@@ -628,6 +650,14 @@ def inventory_edit(product_id: int):
         params.append(product_id)
         
         conn.execute(update_query, params)
+        
+        if new_stock != old_stock:
+            diff = new_stock - old_stock
+            t_type = 'IN' if diff > 0 else 'ADJUSTMENT'
+            conn.execute("""
+                INSERT INTO inventory_history (product_id, transaction_type, quantity_change, previous_stock, new_stock, reference)
+                VALUES (?, ?, ?, ?, ?, ?)
+            """, (product_id, t_type, diff, old_stock, new_stock, 'Manual Edit (Edit Product)'))
 
 
         # Keep brands table in sync for the Brand dropdown.
@@ -669,6 +699,28 @@ def inventory_delete(product_id: int):
         return jsonify({"ok": False, "error": error or "Delete failed."}), 400
 
     return redirect(url_for("inventory"))
+
+
+@app.route("/api/inventory_history/<int:product_id>", methods=["GET"])
+@login_required
+def api_inventory_history(product_id):
+    conn = get_connection()
+    try:
+        cur = conn.execute(
+            """
+            SELECT transaction_type, quantity_change, previous_stock, new_stock, reference, created_at
+            FROM inventory_history
+            WHERE product_id = ?
+            ORDER BY created_at DESC
+            """,
+            (product_id,)
+        )
+        history = [dict(row) for row in cur.fetchall()]
+        return jsonify({"ok": True, "history": history})
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)}), 500
+    finally:
+        conn.close()
 
 
 @app.route("/categories/add", methods=["POST"])
@@ -1706,6 +1758,10 @@ def sales_new():
 
             # Deduct stock atomically (per product total)
             for product_id, qty_total in qty_total_by_product.items():
+                cur = conn.execute("SELECT stock_quantity FROM products WHERE id = ?", (product_id,))
+                row = cur.fetchone()
+                old_stock = float(row["stock_quantity"] or 0) if row else 0
+
                 upd = conn.execute(
                     """
                     UPDATE products
@@ -1722,6 +1778,12 @@ def sales_new():
                     row = cur.fetchone()
                     product_name = row["name"] if row else "Unknown Product"
                     raise ValueError(f"Insufficient stock for {product_name}.")
+                else:
+                    new_stock = old_stock - qty_total
+                    conn.execute("""
+                        INSERT INTO inventory_history (product_id, transaction_type, quantity_change, previous_stock, new_stock, reference)
+                        VALUES (?, ?, ?, ?, ?, ?)
+                    """, (product_id, 'OUT', -qty_total, old_stock, new_stock, f'Invoice #{invoice_number}'))
 
             conn.commit()
         except Exception as e:
@@ -2023,10 +2085,20 @@ def sales_update(sale_id: int):
                 old_qty_by_product[item["product_id"]] += float(item["qty"])
 
             for product_id, qty_total in old_qty_by_product.items():
+                cur = conn.execute("SELECT stock_quantity FROM products WHERE id = ?", (product_id,))
+                row = cur.fetchone()
+                old_stock = float(row["stock_quantity"] or 0) if row else 0
+                new_stock = old_stock + qty_total
+                
                 conn.execute(
-                    "UPDATE products SET stock_quantity = stock_quantity + ? WHERE id = ?",
-                    (qty_total, product_id),
+                    "UPDATE products SET stock_quantity = ? WHERE id = ?",
+                    (new_stock, product_id),
                 )
+                
+                conn.execute("""
+                    INSERT INTO inventory_history (product_id, transaction_type, quantity_change, previous_stock, new_stock, reference)
+                    VALUES (?, ?, ?, ?, ?, ?)
+                """, (product_id, 'IN', qty_total, old_stock, new_stock, f'Invoice #{invoice_number} Edit Restore'))
 
             # Calculate new stock requirements
             new_qty_by_product = defaultdict(float)
@@ -2105,6 +2177,10 @@ def sales_update(sale_id: int):
 
             # Deduct new stock
             for product_id, qty_total in new_qty_by_product.items():
+                cur = conn.execute("SELECT stock_quantity FROM products WHERE id = ?", (product_id,))
+                row = cur.fetchone()
+                old_stock = float(row["stock_quantity"] or 0) if row else 0
+
                 upd = conn.execute(
                     """
                     UPDATE products
@@ -2121,6 +2197,12 @@ def sales_update(sale_id: int):
                     row = cur.fetchone()
                     product_name = row["name"] if row else "Unknown Product"
                     raise ValueError(f"Insufficient stock for {product_name}.")
+                else:
+                    new_stock = old_stock - qty_total
+                    conn.execute("""
+                        INSERT INTO inventory_history (product_id, transaction_type, quantity_change, previous_stock, new_stock, reference)
+                        VALUES (?, ?, ?, ?, ?, ?)
+                    """, (product_id, 'OUT', -qty_total, old_stock, new_stock, f'Invoice #{invoice_number} Edit'))
 
             conn.commit()
         except Exception as e:
@@ -2358,18 +2440,32 @@ def sales_delete(id: int):
             (id,),
         ).fetchall()
 
+        cur = conn.execute("SELECT invoice_number FROM sales WHERE id = ?", (id,))
+        row = cur.fetchone()
+        invoice_number = row["invoice_number"] if row else str(id)
+        
         conn.execute("DELETE FROM sale_items WHERE sale_id = ?", (id,))
         conn.execute("DELETE FROM sales WHERE id = ?", (id,))
 
         for it in items:
+            cur = conn.execute("SELECT stock_quantity FROM products WHERE id = ?", (it["product_id"],))
+            row = cur.fetchone()
+            old_stock = float(row["stock_quantity"] or 0) if row else 0
+            new_stock = old_stock + it["qty"]
+            
             conn.execute(
                 """
                 UPDATE products
-                SET stock_quantity = stock_quantity + ?
+                SET stock_quantity = ?
                 WHERE id = ?
                 """,
-                (it["qty"], it["product_id"]),
+                (new_stock, it["product_id"]),
             )
+            
+            conn.execute("""
+                INSERT INTO inventory_history (product_id, transaction_type, quantity_change, previous_stock, new_stock, reference)
+                VALUES (?, ?, ?, ?, ?, ?)
+            """, (it["product_id"], 'IN', it["qty"], old_stock, new_stock, f'Invoice #{invoice_number} Deleted'))
 
         conn.commit()
     except Exception:

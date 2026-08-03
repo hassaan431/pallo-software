@@ -276,6 +276,15 @@
               >
                 Edit
               </button>
+
+              <button type="button" class="btn btn-secondary" data-action="history-product"
+                data-id="{{ p.id }}"
+                data-name="{{ p.name|e }}"
+                style="padding: 3px 8px; font-size: 11px; border-radius: 4px; margin: 0 1px;"
+              >
+                History
+              </button>
+
               <button type="button" class="btn btn-danger" data-action="delete-product"
                 data-id="{{ p.id }}"
                 data-name="{{ p.name|e }}"
@@ -525,6 +534,33 @@
   </div>
 </div>
 
+<!-- History Modal -->
+<div id="historyProductModal" class="modal-backdrop" aria-hidden="true">
+  <div class="modal" role="dialog" aria-modal="true" aria-label="Product History" style="max-width: 800px;">
+    <div class="modal-header">
+      <h3 id="historyProductName">Product History</h3>
+      <button type="button" class="modal-close" data-close-modal="historyProductModal" aria-label="Close">&times;</button>
+    </div>
+    <div class="modal-body">
+      <div class="table-wrap">
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>Date</th>
+              <th>Type</th>
+              <th>Change</th>
+              <th>Prev</th>
+              <th>New</th>
+              <th>Ref</th>
+            </tr>
+          </thead>
+          <tbody id="historyTbody"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+
 <section class="panel" style="margin-top: 1.6rem;">
   <div class="panel-header">
     <h2>Categories</h2>
@@ -628,7 +664,7 @@
     });
   });
 
-  [addProductModal, editProductModal].forEach((modalEl) => {
+  [addProductModal, editProductModal, document.getElementById('historyProductModal')].forEach((modalEl) => {
     if (!modalEl) return;
     modalEl.addEventListener('click', (e) => {
       if (e.target === modalEl) closeModal(modalEl);
@@ -1250,10 +1286,54 @@
         return;
       }
 
-      const deleteBtn = e.target.closest('[data-action="delete-product"]');
-      if (deleteBtn) {
-        const productId = deleteBtn.getAttribute('data-id');
-        const name = deleteBtn.getAttribute('data-name') || 'this product';
+      const historyBtn = e.target.closest('[data-action="history-product"]');
+      if (historyBtn) {
+        const productId = historyBtn.getAttribute('data-id');
+        const productName = historyBtn.getAttribute('data-name');
+        document.getElementById('historyProductName').textContent = `History: ${productName}`;
+        
+        const historyTbody = document.getElementById('historyTbody');
+        historyTbody.innerHTML = '<tr><td colspan="6" class="empty-state">Loading...</td></tr>';
+        openModal(document.getElementById('historyProductModal'));
+        
+        try {
+          const res = await fetch(`/api/inventory_history/${productId}`);
+          const data = await res.json();
+          if (data.ok) {
+            if (data.history.length === 0) {
+              historyTbody.innerHTML = '<tr><td colspan="6" class="empty-state">No history available for this product.</td></tr>';
+            } else {
+              historyTbody.innerHTML = data.history.map(h => {
+                let badge = '';
+                if (h.transaction_type === 'IN') badge = '<span style="color: green; font-weight: bold;">IN</span>';
+                else if (h.transaction_type === 'OUT') badge = '<span style="color: red; font-weight: bold;">OUT</span>';
+                else badge = '<span style="color: orange; font-weight: bold;">ADJUST</span>';
+                
+                const dt = new Date(h.created_at).toLocaleString();
+                const sign = h.quantity_change > 0 ? '+' : '';
+                return `<tr>
+                  <td>${dt}</td>
+                  <td>${badge}</td>
+                  <td>${sign}${h.quantity_change}</td>
+                  <td>${h.previous_stock}</td>
+                  <td>${h.new_stock}</td>
+                  <td>${h.reference || '-'}</td>
+                </tr>`;
+              }).join('');
+            }
+          } else {
+            historyTbody.innerHTML = `<tr><td colspan="6" class="empty-state">Error: ${data.error}</td></tr>`;
+          }
+        } catch (err) {
+            historyTbody.innerHTML = `<tr><td colspan="6" class="empty-state">Failed to load history.</td></tr>`;
+        }
+        return;
+      }
+      
+      const delBtn = e.target.closest('[data-action="delete-product"]');
+      if (delBtn) {
+        const productId = delBtn.getAttribute('data-id');
+        const name = delBtn.getAttribute('data-name') || 'this product';
         if (!confirm('Are you sure you want to delete ' + name + '?')) return;
 
         try {

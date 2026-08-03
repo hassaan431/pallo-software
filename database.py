@@ -102,6 +102,17 @@ def init_db():
                 cost_price REAL DEFAULT 0
             );
 
+            CREATE TABLE IF NOT EXISTS inventory_history (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                product_id INTEGER REFERENCES products(id),
+                transaction_type TEXT NOT NULL,
+                quantity_change REAL NOT NULL,
+                previous_stock REAL NOT NULL,
+                new_stock REAL NOT NULL,
+                reference TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            );
+
             """
         )
         
