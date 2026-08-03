@@ -295,6 +295,7 @@ def inventory():
                     p.stock_quantity,
                     p.image_url,
                     p.category_id,
+                    p.created_at,
                     c.name AS category_name
                 FROM products p
                 LEFT JOIN categories c ON p.category_id = c.id
@@ -316,6 +317,7 @@ def inventory():
                     p.stock_quantity,
                     p.image_url,
                     p.category_id,
+                    p.created_at,
                     c.name AS category_name
                 FROM products p
                 LEFT JOIN categories c ON p.category_id = c.id
@@ -376,6 +378,7 @@ def inventory_download_csv():
                     p.cost_price,
                     p.selling_price,
                     p.stock_quantity,
+                    p.created_at,
                     c.name AS category_name
                 FROM products p
                 LEFT JOIN categories c ON p.category_id = c.id
@@ -395,6 +398,7 @@ def inventory_download_csv():
                     p.cost_price,
                     p.selling_price,
                     p.stock_quantity,
+                    p.created_at,
                     c.name AS category_name
                 FROM products p
                 LEFT JOIN categories c ON p.category_id = c.id
@@ -413,7 +417,7 @@ def inventory_download_csv():
     
     # Write header
     writer.writerow([
-        "ID", "Product Name", "Brand", "Category", 
+        "ID", "Date Added", "Product Name", "Brand", "Category", 
         "Cost Price", "Selling Price", "Stock Quantity", "Stock Value"
     ])
     
@@ -429,6 +433,7 @@ def inventory_download_csv():
         
         writer.writerow([
             p["id"],
+            str(p["created_at"] or "")[:10],
             p["name"],
             p["brand"] or "",
             p["category_name"] or "",
@@ -440,7 +445,7 @@ def inventory_download_csv():
     
     # Write totals row
     writer.writerow([
-        "", "TOTALS", "", "", "", "", total_qty, f"{total_value:.2f}"
+        "", "", "TOTALS", "", "", "", "", total_qty, f"{total_value:.2f}"
     ])
     
     from datetime import date
