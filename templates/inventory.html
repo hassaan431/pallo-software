@@ -172,7 +172,12 @@
 <section class="panel">
   <div class="panel-header" style="display: flex; justify-content: space-between; align-items: center;">
     <h2 style="margin: 0;">Products</h2>
-    <form action="/inventory" method="GET" style="display: flex; gap: 0.5rem; align-items: center;">
+    <form action="/inventory" method="GET" style="display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap;">
+      <input type="date" name="date_from" class="form-control" value="{{ request.args.get('date_from', '') }}" title="Date From" style="width: auto; padding: 0.25rem 0.5rem; height: auto;" onchange="this.form.submit()">
+      <input type="date" name="date_to" class="form-control" value="{{ request.args.get('date_to', '') }}" title="Date To" style="width: auto; padding: 0.25rem 0.5rem; height: auto;" onchange="this.form.submit()">
+      {% if request.args.get('date_from') or request.args.get('date_to') %}
+      <a href="/inventory{% if request.args.get('brand') %}?brand={{ request.args.get('brand')|urlencode }}{% endif %}" class="btn btn-secondary" style="padding: 0.25rem 0.5rem; text-decoration: none;">Clear Dates</a>
+      {% endif %}
       <input type="text" id="productSearchInput" class="form-control" placeholder="Search products..." style="width: 200px; padding: 0.25rem 0.5rem; height: auto;" oninput="filterProductsTable()">
       <select name="brand" class="form-control" style="width: auto; padding: 0.25rem 0.5rem; height: auto;" onchange="this.form.submit()">
         <option value="">All Brands</option>
@@ -266,6 +271,7 @@
                 data-cost-price="{{ p.cost_price|default(0)|float }}"
                 data-selling-price="{{ p.selling_price|default(0)|float }}"
                 data-stock-quantity="{{ qty_int }}"
+                data-created-at="{{ (p.created_at or '')[:10] }}"
                 style="padding: 3px 8px; font-size: 11px; border-radius: 4px; margin: 0 1px;"
               >
                 Edit
@@ -315,6 +321,10 @@
         <div class="modal-field">
           <label for="addProductImage">Product Image</label>
           <input type="file" class="form-control" id="addProductImage" name="product_image" accept="image/*">
+        </div>
+        <div class="modal-field">
+          <label for="addCreatedAt">Date Added</label>
+          <input type="date" class="form-control" id="addCreatedAt" name="created_at">
         </div>
         <div class="modal-field">
           <label for="addProductNameSelect">Product Name</label>
@@ -425,6 +435,10 @@
         <div class="modal-field" id="removeImageContainer" style="display: none; align-items: center; gap: 8px; margin-top: -10px;">
           <input type="hidden" id="editRemoveImageHidden" name="remove_image" value="0">
           <button type="button" class="btn btn-danger btn-sm" id="btnRemoveImage" style="padding: 0.2rem 0.5rem; font-size: 0.8rem;">Remove Image</button>
+        </div>
+        <div class="modal-field">
+          <label for="editCreatedAt">Date Added</label>
+          <input type="date" class="form-control" id="editCreatedAt" name="created_at">
         </div>
         <div class="modal-field">
           <label for="editProductNameInput">Product Name</label>
@@ -1146,6 +1160,10 @@
       document.getElementById('addCostPrice').value = '';
       document.getElementById('addSellingPrice').value = '';
       document.getElementById('addStockQuantity').value = '';
+      
+      if (document.getElementById('addCreatedAt')) {
+        document.getElementById('addCreatedAt').value = new Date().toISOString().split('T')[0];
+      }
 
       openModal(addProductModal);
     });
@@ -1188,6 +1206,11 @@
           await productsLoadPromise;
         } catch (err) {}
         if (editProductNameInput) editProductNameInput.value = editBtn.getAttribute('data-name') || '';
+        
+        if (document.getElementById('editCreatedAt')) {
+          document.getElementById('editCreatedAt').value = editBtn.getAttribute('data-created-at') || '';
+        }
+        
         if (editNewProductNameInput) editNewProductNameInput.value = '';
         const brandName = editBtn.getAttribute('data-brand') || '';
         try {
