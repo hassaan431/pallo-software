@@ -156,40 +156,40 @@ def dashboard():
     try:
         # Get today's sales
         today = date.today().isoformat()
-        todays_data = conn.execute(
-            '''
-            SELECT 
-                COALESCE(SUM(s.grand_total), 0) as total_revenue,
-                COALESCE(SUM(si.qty * si.cost_price), 0) as total_cost
-            FROM sales s
-            LEFT JOIN sale_items si ON si.sale_id = s.id
-            WHERE s.invoice_date = ?
-            ''', 
+        daily_revenue_row = conn.execute(
+            'SELECT COALESCE(SUM(grand_total), 0) as total_revenue FROM sales WHERE invoice_date = ?', 
+            (today,)
+        ).fetchone()
+        daily_cost_row = conn.execute(
+            '''SELECT COALESCE(SUM(si.qty * si.cost_price), 0) as total_cost 
+               FROM sale_items si 
+               JOIN sales s ON si.sale_id = s.id 
+               WHERE s.invoice_date = ?''', 
             (today,)
         ).fetchone()
         
-        daily_revenue = float(todays_data["total_revenue"] or 0)
-        daily_cost = float(todays_data["total_cost"] or 0)
+        daily_revenue = float(daily_revenue_row["total_revenue"] or 0)
+        daily_cost = float(daily_cost_row["total_cost"] or 0)
         daily_profit = daily_revenue - daily_cost
         
         # Get monthly revenue and cost
         now = date.today()
         current_month = now.month
         current_year = now.year
-        monthly_data = conn.execute(
-            """
-            SELECT 
-                COALESCE(SUM(s.grand_total), 0) as total_revenue,
-                COALESCE(SUM(si.qty * si.cost_price), 0) as total_cost
-            FROM sales s
-            LEFT JOIN sale_items si ON si.sale_id = s.id
-            WHERE strftime('%m', s.invoice_date) = ? AND strftime('%Y', s.invoice_date) = ?
-            """,
+        monthly_revenue_row = conn.execute(
+            "SELECT COALESCE(SUM(grand_total), 0) as total_revenue FROM sales WHERE strftime('%m', invoice_date) = ? AND strftime('%Y', invoice_date) = ?",
+            (f"{current_month:02d}", str(current_year))
+        ).fetchone()
+        monthly_cost_row = conn.execute(
+            '''SELECT COALESCE(SUM(si.qty * si.cost_price), 0) as total_cost 
+               FROM sale_items si 
+               JOIN sales s ON si.sale_id = s.id 
+               WHERE strftime('%m', s.invoice_date) = ? AND strftime('%Y', s.invoice_date) = ?''',
             (f"{current_month:02d}", str(current_year))
         ).fetchone()
         
-        monthly_revenue = float(monthly_data["total_revenue"] or 0)
-        monthly_cost = float(monthly_data["total_cost"] or 0)
+        monthly_revenue = float(monthly_revenue_row["total_revenue"] or 0)
+        monthly_cost = float(monthly_cost_row["total_cost"] or 0)
         monthly_profit = monthly_revenue - monthly_cost
         monthly_margin = round((monthly_profit / monthly_revenue * 100), 2) if monthly_revenue > 0 else 0
         
