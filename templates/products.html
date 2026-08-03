@@ -229,9 +229,19 @@
 </section>
 
 <section class="panel">
-  <div class="panel-header" style="display: flex; align-items: center; justify-content: space-between;">
+  <div class="panel-header" style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px;">
     <h2>Products</h2>
-    <input type="text" id="productSearchInput" class="form-control" placeholder="Search products..." style="width: 250px;" oninput="filterProductsTable()">
+    <div style="display: flex; align-items: center; gap: 10px;">
+      <form method="GET" action="{{ url_for('inventory') }}" style="display: flex; gap: 10px; align-items: center; margin: 0;">
+        <input type="date" name="date_from" class="form-control" value="{{ request.args.get('date_from', '') }}" title="Date From">
+        <input type="date" name="date_to" class="form-control" value="{{ request.args.get('date_to', '') }}" title="Date To">
+        <button type="submit" class="btn btn-primary" style="padding: 0.5rem 1rem;">Filter</button>
+        {% if request.args.get('date_from') or request.args.get('date_to') %}
+        <a href="{{ url_for('inventory') }}" class="btn btn-secondary" style="padding: 0.5rem 1rem;">Clear</a>
+        {% endif %}
+      </form>
+      <input type="text" id="productSearchInput" class="form-control" placeholder="Search products..." style="width: 250px;" oninput="filterProductsTable()">
+    </div>
   </div>
   <div class="panel-body">
     <div class="table-wrap">
@@ -309,6 +319,7 @@
                 data-cost-price="{{ p.cost_price|default(0)|float }}"
                 data-selling-price="{{ p.selling_price|default(0)|float }}"
                 data-stock-quantity="{{ qty_int }}"
+                data-created-at="{{ (p.created_at or '')[:10] }}"
                 style="padding: 3px 8px; font-size: 11px; border-radius: 4px; margin: 0 1px;"
               >
                 Edit
@@ -339,6 +350,11 @@
     </div>
     <div class="modal-body">
       <form id="addProductForm" method="post" action="{{ url_for('products_add') }}">
+        <div class="modal-field">
+          <label for="addCreatedAt">Date Added</label>
+          <input type="date" class="form-control" id="addCreatedAt" name="created_at">
+        </div>
+        
         <div class="modal-field">
           <label for="addProductNameSelect">Product Name</label>
           <select class="form-control" id="addProductNameSelect">
@@ -439,6 +455,11 @@
     </div>
     <div class="modal-body">
       <form id="editProductForm" method="post" action="">
+        <div class="modal-field">
+          <label for="editCreatedAt">Date Added</label>
+          <input type="date" class="form-control" id="editCreatedAt" name="created_at">
+        </div>
+        
         <div class="modal-field">
           <label for="editProductNameInput">Product Name</label>
           <input type="text" class="form-control" id="editProductNameInput" name="product_name" required>
@@ -1181,6 +1202,11 @@
       document.getElementById('addCostPrice').value = '';
       document.getElementById('addSellingPrice').value = '';
       document.getElementById('addStockQuantity').value = '';
+      
+      const addCreatedAt = document.getElementById('addCreatedAt');
+      if (addCreatedAt) {
+        addCreatedAt.value = new Date().toISOString().split('T')[0];
+      }
 
       openModal(addProductModal);
     });
@@ -1207,6 +1233,12 @@
         try {
           await productsLoadPromise;
         } catch (err) {}
+        
+        const editCreatedAt = document.getElementById('editCreatedAt');
+        if (editCreatedAt) {
+          editCreatedAt.value = editBtn.getAttribute('data-created-at') || '';
+        }
+        
         if (editProductNameInput) editProductNameInput.value = editBtn.getAttribute('data-name') || '';
         hideProductInline(editNewProductNameInline);
         if (editNewProductNameInput) editNewProductNameInput.value = '';

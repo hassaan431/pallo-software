@@ -279,51 +279,42 @@ def dashboard():
 @admin_required
 def inventory():
     brand_filter = request.args.get("brand", "").strip()
+    date_from = request.args.get("date_from", "").strip()
+    date_to = request.args.get("date_to", "").strip()
 
     conn = get_connection()
     try:
+        query = """
+            SELECT
+                p.id,
+                p.name,
+                p.brand,
+                p.unit,
+                p.cost_price,
+                p.selling_price,
+                p.stock_quantity,
+                p.image_url,
+                p.category_id,
+                p.created_at,
+                c.name AS category_name
+            FROM products p
+            LEFT JOIN categories c ON p.category_id = c.id
+            WHERE 1=1
+        """
+        params = []
+        
         if brand_filter:
-            cur = conn.execute(
-                """
-                SELECT
-                    p.id,
-                    p.name,
-                    p.brand,
-                    p.unit,
-                    p.cost_price,
-                    p.selling_price,
-                    p.stock_quantity,
-                    p.image_url,
-                    p.category_id,
-                    p.created_at,
-                    c.name AS category_name
-                FROM products p
-                LEFT JOIN categories c ON p.category_id = c.id
-                WHERE p.brand = ?
-                ORDER BY p.name COLLATE NOCASE
-                """,
-                (brand_filter,)
-            )
-        else:
-            cur = conn.execute(
-                """
-                SELECT
-                    p.id,
-                    p.name,
-                    p.brand,
-                    p.unit,
-                    p.cost_price,
-                    p.selling_price,
-                    p.stock_quantity,
-                    p.image_url,
-                    p.category_id,
-                    p.created_at,
-                    c.name AS category_name
-                FROM products p
-                LEFT JOIN categories c ON p.category_id = c.id
-                ORDER BY p.name COLLATE NOCASE
-                """
-            )
+            query += " AND p.brand = ?"
+            params.append(brand_filter)
+        if date_from:
+            query += " AND date(p.created_at) >= ?"
+            params.append(date_from)
+        if date_to:
+            query += " AND date(p.created_at) <= ?"
+            params.append(date_to)
+            
+        query += " ORDER BY p.name COLLATE NOCASE"
+        cur = conn.execute(query, params)
         products = [dict(row) for row in cur.fetchall()]
 
         cur = conn.execute("SELECT COUNT(*) AS total_products FROM products")
@@ -365,46 +356,39 @@ def inventory():
 @admin_required
 def inventory_download_csv():
     brand = request.args.get("brand", "").strip()
+    date_from = request.args.get("date_from", "").strip()
+    date_to = request.args.get("date_to", "").strip()
+    
     conn = get_connection()
     try:
+        query = """
+            SELECT
+                p.id,
+                p.name,
+                p.brand,
+                p.unit,
+                p.cost_price,
+                p.selling_price,
+                p.stock_quantity,
+                p.created_at,
+                c.name AS category_name
+            FROM products p
+            LEFT JOIN categories c ON p.category_id = c.id
+            WHERE 1=1
+        """
+        params = []
         if brand:
-            cur = conn.execute(
-                """
-                SELECT
-                    p.id,
-                    p.name,
-                    p.brand,
-                    p.unit,
-                    p.cost_price,
-                    p.selling_price,
-                    p.stock_quantity,
-                    p.created_at,
-                    c.name AS category_name
-                FROM products p
-                LEFT JOIN categories c ON p.category_id = c.id
-                WHERE p.brand = ?
-                ORDER BY p.name COLLATE NOCASE
-                """,
-                (brand,)
-            )
-        else:
-            cur = conn.execute(
-                """
-                SELECT
-                    p.id,
-                    p.name,
-                    p.brand,
-                    p.unit,
-                    p.cost_price,
-                    p.selling_price,
-                    p.stock_quantity,
-                    p.created_at,
-                    c.name AS category_name
-                FROM products p
-                LEFT JOIN categories c ON p.category_id = c.id
-                ORDER BY p.name COLLATE NOCASE
-                """
-            )
+            query += " AND p.brand = ?"
+            params.append(brand)
+        if date_from:
+            query += " AND date(p.created_at) >= ?"
+            params.append(date_from)
+        if date_to:
+            query += " AND date(p.created_at) <= ?"
+            params.append(date_to)
+            
+        query += " ORDER BY p.name COLLATE NOCASE"
+        cur = conn.execute(query, params)
         products = [dict(row) for row in cur.fetchall()]
     finally:
         conn.close()
@@ -520,6 +504,11 @@ def inventory_add():
                 SET category_id = ?, brand = ?, unit = ?, cost_price = ?, selling_price = ?, stock_quantity = ?
             """
             params = [category_id, brand or None, unit, cost_price, selling_price, stock_quantity]
+            
+            if created_at:
+                update_query += ", created_at = ?"
+                params.append(created_at)
+                
             if image_url:
                 update_query += ", image_url = ?"
                 params.append(image_url)
@@ -529,15 +518,26 @@ def inventory_add():
             conn.execute(update_query, params)
             product_id = existing["id"]
         else:
-            cur = conn.execute(
-                """
-                INSERT INTO products
-                    (name, category_id, brand, unit, cost_price, selling_price, stock_quantity, image_url)
-                VALUES
-                    (?, ?, ?, ?, ?, ?, ?, ?)
-                """,
-                (product_name, category_id, brand or None, unit, cost_price, selling_price, stock_quantity, image_url),
-            )
+            if created_at:
+                cur = conn.execute(
+                    """
+                    INSERT INTO products
+                        (name, category_id, brand, unit, cost_price, selling_price, stock_quantity, image_url, created_at)
+                    VALUES
+                        (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    (product_name, category_id, brand or None, unit, cost_price, selling_price, stock_quantity, image_url, created_at),
+                )
+            else:
+                cur = conn.execute(
+                    """
+                    INSERT INTO products
+                        (name, category_id, brand, unit, cost_price, selling_price, stock_quantity, image_url)
+                    VALUES
+                        (?, ?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    (product_name, category_id, brand or None, unit, cost_price, selling_price, stock_quantity, image_url),
+                )
             product_id = int(cur.lastrowid)
 
         # Keep brands table in sync for the Brand dropdown.
@@ -560,6 +560,7 @@ def inventory_edit(product_id: int):
         brand = ""
     unit = (request.form.get("unit") or "Each").strip()
     category_id_raw = (request.form.get("category_id") or "").strip()
+    created_at = (request.form.get("created_at") or "").strip()
 
     try:
         category_id = int(category_id_raw)
@@ -607,51 +608,25 @@ def inventory_edit(product_id: int):
         
         # If user uploaded a new image, use it. Else if they clicked remove, set it to NULL.
         # Otherwise, keep existing image_url.
+        update_query = """
+            UPDATE products
+            SET name = ?, brand = ?, category_id = ?, unit = ?, cost_price = ?, selling_price = ?, stock_quantity = ?
+        """
+        params = [product_name, brand, category_id, unit, cost_price, selling_price, stock_quantity]
+        
+        if created_at:
+            update_query += ", created_at = ?"
+            params.append(created_at)
+
         if image_url:
-            update_query = """
-                UPDATE products
-                SET
-                    name = ?,
-                    brand = ?,
-                    category_id = ?,
-                    unit = ?,
-                    cost_price = ?,
-                    selling_price = ?,
-                    stock_quantity = ?,
-                    image_url = ?
-                WHERE id = ?
-            """
-            params = (product_name, brand, category_id, unit, cost_price, selling_price, stock_quantity, image_url, product_id)
+            update_query += ", image_url = ?"
+            params.append(image_url)
         elif remove_image:
-            update_query = """
-                UPDATE products
-                SET
-                    name = ?,
-                    brand = ?,
-                    category_id = ?,
-                    unit = ?,
-                    cost_price = ?,
-                    selling_price = ?,
-                    stock_quantity = ?,
-                    image_url = NULL
-                WHERE id = ?
-            """
-            params = (product_name, brand, category_id, unit, cost_price, selling_price, stock_quantity, product_id)
-        else:
-            update_query = """
-                UPDATE products
-                SET
-                    name = ?,
-                    brand = ?,
-                    category_id = ?,
-                    unit = ?,
-                    cost_price = ?,
-                    selling_price = ?,
-                    stock_quantity = ?
-                WHERE id = ?
-            """
-            params = (product_name, brand, category_id, unit, cost_price, selling_price, stock_quantity, product_id)
+            update_query += ", image_url = NULL"
             
+        update_query += " WHERE id = ?"
+        params.append(product_id)
+        
         conn.execute(update_query, params)
 
 
