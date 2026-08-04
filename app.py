@@ -110,6 +110,7 @@ def index():
     return redirect(url_for("login"))
 
 
+
 @app.route("/login", methods=["GET", "POST"])
 def login():
     if current_user.is_authenticated:
@@ -456,7 +457,7 @@ def inventory_add():
         category_id = int(category_id_raw)
         cost_price = float(request.form.get("cost_price") or 0)
         selling_price = float(request.form.get("selling_price") or 0)
-        stock_quantity = int(float(request.form.get("stock_quantity") or 0))
+        stock_quantity = float(request.form.get("stock_quantity") or 0)
     except ValueError:
         return redirect(url_for("inventory"))
 
@@ -583,7 +584,7 @@ def inventory_edit(product_id: int):
         category_id = int(category_id_raw)
         cost_price = float(request.form.get("cost_price") or 0)
         selling_price = float(request.form.get("selling_price") or 0)
-        stock_quantity = int(float(request.form.get("stock_quantity") or 0))
+        stock_quantity = float(request.form.get("stock_quantity") or 0)
     except ValueError:
         return redirect(url_for("inventory"))
 
@@ -1625,8 +1626,8 @@ def sales_new():
                 error = f"Invalid values in item row {idx + 1}."
                 break
 
-            if qty < 0.01:
-                error = f"Qty must be at least 0.01 in item row {idx + 1}."
+            if qty <= 0:
+                error = f"Qty must be greater than 0 in item row {idx + 1}."
                 break
             if rate < 0:
                 error = f"Rate cannot be negative in item row {idx + 1}."
@@ -2013,8 +2014,8 @@ def sales_update(sale_id: int):
                 error = f"Invalid values in item row {idx + 1}."
                 break
 
-            if qty < 0.01:
-                error = f"Qty must be at least 0.01 in item row {idx + 1}."
+            if qty <= 0:
+                error = f"Qty must be greater than 0 in item row {idx + 1}."
                 break
             if rate < 0:
                 error = f"Rate cannot be negative in item row {idx + 1}."
