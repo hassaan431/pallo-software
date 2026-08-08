@@ -452,6 +452,7 @@ def inventory_add():
         brand = ""
     unit = (request.form.get("unit") or "Each").strip()
     category_id_raw = (request.form.get("category_id") or "").strip()
+    created_at = (request.form.get("created_at") or "").strip()
 
     try:
         category_id = int(category_id_raw)
