@@ -770,6 +770,7 @@
   const displayCp = isEditItem
     ? (product.cost_price || 0)
     : (product ? (product.cost_price || 0) : 0);
+  const displayPrintDualUnits = product ? (product.print_dual_units ? 'checked' : '') : '';
 
   return `
     <tr class="line-item-row" data-row-index="${index}" data-cost-price="${displayCp}">
@@ -785,6 +786,9 @@
             />
           <div class="suggestions product-suggestions" style="display:none;"></div>
           ${stockBadge}
+          <label style="font-size: 0.8em; margin-top: 4px; display: flex; align-items: center; gap: 4px; cursor: pointer; color: var(--color-text);">
+             <input type="checkbox" class="dual-unit-toggle" ${displayPrintDualUnits}> Print G & lb
+          </label>
         </div>
       </td>
       <td><input type="number" class="form-control qty-input" min="0.001" step="any" value="${displayQty}"></td>
@@ -1351,6 +1355,9 @@
       const qty = Number(qtyEl && qtyEl.value);
       const rate = Number(rateEl && rateEl.value);
 
+      const dualUnitEl = row.querySelector('.dual-unit-toggle');
+      const dualUnit = dualUnitEl ? (dualUnitEl.checked ? 1 : 0) : 0;
+
       if (!productId) return;
 
       if (!desc) return;
@@ -1361,6 +1368,7 @@
         rate: rate,
         cost_price: Number(cpStr),
         amount: Math.round((qty * rate) * 100) / 100,
+        print_dual_units: dualUnit,
       });
     });
 

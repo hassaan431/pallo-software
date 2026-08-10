@@ -188,6 +188,7 @@ def generate_invoice_pdf(sale_id: int) -> bytes:
                 si.qty,
                 si.rate,
                 si.amount,
+                si.print_dual_units,
                 p.name AS product_name,
                 p.brand AS product_brand
             FROM sale_items si
@@ -590,13 +591,20 @@ def generate_pdf_from_data(sale: dict, customer: dict, sale_items: list, is_quot
             # Qty/Rate/Amount right aligned
             cnv.setFillColor(colors.black)
             cnv.setFont("Helvetica", item_font_size)
-            qty_str = f"{float(qty):g}" if qty is not None else "0"
+            qty_val = float(qty) if qty is not None else 0
+            rate_val = float(rate) if rate is not None else 0
+            if row["sale_item"].get("print_dual_units") == 1:
+                qty_str = f"{qty_val:g}g / {qty_val/453.59237:.2f}lb"
+                rate_str = f"${format_rate(rate_val)}/g / ${format_rate(rate_val * 453.59237)}/lb"
+            else:
+                qty_str = f"{qty_val:g}"
+                rate_str = f"${format_rate(rate_val)}"
             # Align right with padding
             qty_x_right = x_qty_right - 6
             rate_x_right = x_rate_right - 6
             amt_x_right = x_amt_right - 6
             cnv.drawRightString(qty_x_right, row_bottom + row_padding_y + 2, qty_str)
-            cnv.drawRightString(rate_x_right, row_bottom + row_padding_y + 2, f"${format_rate(rate)}")
+            cnv.drawRightString(rate_x_right, row_bottom + row_padding_y + 2, rate_str)
             cnv.drawRightString(amt_x_right, row_bottom + row_padding_y + 2, f"${float(amount or 0):.2f}")
 
             # Move cursor down

@@ -1645,6 +1645,7 @@ def sales_new():
                 description = (it.get("description") or "").strip()
                 qty = float(it.get("qty"))
                 rate = float(it.get("rate"))
+                print_dual_units = int(it.get("print_dual_units") or 0)
             except Exception:
                 error = f"Invalid values in item row {idx + 1}."
                 break
@@ -1667,6 +1668,7 @@ def sales_new():
                     "qty": qty,
                     "rate": rate,
                     "amount": amount,
+                    "print_dual_units": print_dual_units,
                 }
             )
 
@@ -1797,9 +1799,9 @@ def sales_new():
                 conn.execute(
                     """
                     INSERT INTO sale_items
-                        (sale_id, product_id, description, qty, rate, amount, cost_price)
+                        (sale_id, product_id, description, qty, rate, amount, cost_price, print_dual_units)
                     VALUES
-                        (?, ?, ?, ?, ?, ?, COALESCE((SELECT cost_price FROM products WHERE id = ?), 0))
+                        (?, ?, ?, ?, ?, ?, COALESCE((SELECT cost_price FROM products WHERE id = ?), 0), ?)
                     """,
                     (
                         sale_id,
@@ -1809,6 +1811,7 @@ def sales_new():
                         li["rate"],
                         li["amount"],
                         li["product_id"],
+                        li["print_dual_units"],
                     ),
                 )
 
@@ -1929,6 +1932,7 @@ def sales_edit(sale_id: int):
                 si.qty,
                 si.rate,
                 si.amount,
+                si.print_dual_units,
                 p.stock_quantity
             FROM sale_items si
             LEFT JOIN products p ON p.id = si.product_id
@@ -2072,6 +2076,7 @@ def sales_update(sale_id: int):
                 description = (it.get("description") or "").strip()
                 qty = float(it.get("qty"))
                 rate = float(it.get("rate"))
+                print_dual_units = int(it.get("print_dual_units") or 0)
             except Exception:
                 error = f"Invalid values in item row {idx + 1}."
                 break
@@ -2094,6 +2099,7 @@ def sales_update(sale_id: int):
                     "qty": qty,
                     "rate": rate,
                     "amount": amount,
+                    "print_dual_units": print_dual_units,
                 }
             )
 
@@ -2255,9 +2261,9 @@ def sales_update(sale_id: int):
                 conn.execute(
                     """
                     INSERT INTO sale_items
-                        (sale_id, product_id, description, qty, rate, amount, cost_price)
+                        (sale_id, product_id, description, qty, rate, amount, cost_price, print_dual_units)
                     VALUES
-                        (?, ?, ?, ?, ?, ?, COALESCE((SELECT cost_price FROM products WHERE id = ?), 0))
+                        (?, ?, ?, ?, ?, ?, COALESCE((SELECT cost_price FROM products WHERE id = ?), 0), ?)
                     """,
                     (
                         sale_id,
@@ -2267,6 +2273,7 @@ def sales_update(sale_id: int):
                         li["rate"],
                         li["amount"],
                         li["product_id"],
+                        li["print_dual_units"],
                     ),
                 )
 
