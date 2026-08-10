@@ -40,6 +40,11 @@ This document serves as a comprehensive checkpoint for the **Inventory and Invoi
 - **Data Backfill**: Executed a backfill script on the local database (`database.db`) to generate `Initial Stock (Legacy)` history entries for all existing products using their `created_at` dates.
 - **Live Site Instructions**: Provided user with the Python snippet to execute in PythonAnywhere Bash console for live DB backfill.
 
+### C. 4-Decimal Precision for Rates & Prices
+- **Form Inputs**: Updated `step="0.0001"` for cost price, selling price, and invoice item rate input fields across `inventory.html`, `products.html`, and `sales.html`.
+- **Smart Formatting**: Added `format_rate` Jinja filter and JS helper functions to dynamically display rates up to 4 decimal places (e.g. `$0.0022`) when sub-cent precision exists, while retaining standard 2 decimal places (e.g. `$5.00`) for standard prices.
+- **PDF Invoices**: Updated `invoice_generator.py` to render 4-decimal rates accurately on generated PDF invoices and quotes.
+
 ---
 
 ## 4. Pending / Next Tasks
