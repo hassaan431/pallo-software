@@ -64,6 +64,9 @@ from invoice_generator import generate_invoice_pdf
 app = Flask(__name__)
 app.secret_key = "change-this-secret-key-for-local-use"
 
+from public_routes import public_bp
+app.register_blueprint(public_bp)
+
 login_manager = LoginManager()
 login_manager.init_app(app)
 login_manager.login_view = "login"
@@ -104,10 +107,16 @@ def admin_required(f):
         return f(*args, **kwargs)
     return decorated_function
 
+@app.template_filter("format_rate")
+def format_rate_filter(val):
+    try:
+        v = float(val or 0)
+        if abs(v - round(v, 2)) < 1e-5:
+            return f"{v:.2f}"
+        return f"{v:.4f}"
+    except Exception:
+        return "0.00"
 
-@app.route("/")
-def index():
-    return redirect(url_for("login"))
 
 
 
@@ -295,11 +304,13 @@ def inventory():
                 p.selling_price,
                 p.stock_quantity,
                 p.image_url,
+                p.is_public,
                 p.category_id,
                 p.created_at,
                 c.name AS category_name
             FROM products p
             LEFT JOIN categories c ON p.category_id = c.id
+
             WHERE 1=1
         """
         params = []
@@ -453,6 +464,7 @@ def inventory_add():
     unit = (request.form.get("unit") or "Each").strip()
     category_id_raw = (request.form.get("category_id") or "").strip()
     created_at = (request.form.get("created_at") or "").strip()
+    is_public = 1 if request.form.get("is_public") else 0
 
     try:
         category_id = int(category_id_raw)
@@ -535,21 +547,21 @@ def inventory_add():
                 cur = conn.execute(
                     """
                     INSERT INTO products
-                        (name, category_id, brand, unit, cost_price, selling_price, stock_quantity, image_url, created_at)
+                        (name, category_id, brand, unit, cost_price, selling_price, stock_quantity, image_url, created_at, is_public)
                     VALUES
-                        (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     """,
-                    (product_name, category_id, brand or None, unit, cost_price, selling_price, stock_quantity, image_url, created_at),
+                    (product_name, category_id, brand or None, unit, cost_price, selling_price, stock_quantity, image_url, created_at, is_public),
                 )
             else:
                 cur = conn.execute(
                     """
                     INSERT INTO products
-                        (name, category_id, brand, unit, cost_price, selling_price, stock_quantity, image_url)
+                        (name, category_id, brand, unit, cost_price, selling_price, stock_quantity, image_url, is_public)
                     VALUES
-                        (?, ?, ?, ?, ?, ?, ?, ?)
+                        (?, ?, ?, ?, ?, ?, ?, ?, ?)
                     """,
-                    (product_name, category_id, brand or None, unit, cost_price, selling_price, stock_quantity, image_url),
+                    (product_name, category_id, brand or None, unit, cost_price, selling_price, stock_quantity, image_url, is_public),
                 )
             product_id = int(cur.lastrowid)
             
@@ -580,6 +592,7 @@ def inventory_edit(product_id: int):
     unit = (request.form.get("unit") or "Each").strip()
     category_id_raw = (request.form.get("category_id") or "").strip()
     created_at = (request.form.get("created_at") or "").strip()
+    is_public = 1 if request.form.get("is_public") else 0
 
     try:
         category_id = int(category_id_raw)
@@ -634,9 +647,9 @@ def inventory_edit(product_id: int):
         # Otherwise, keep existing image_url.
         update_query = """
             UPDATE products
-            SET name = ?, brand = ?, category_id = ?, unit = ?, cost_price = ?, selling_price = ?, stock_quantity = ?
+            SET name = ?, brand = ?, category_id = ?, unit = ?, cost_price = ?, selling_price = ?, stock_quantity = ?, is_public = ?
         """
-        params = [product_name, brand, category_id, unit, cost_price, selling_price, stock_quantity]
+        params = [product_name, brand, category_id, unit, cost_price, selling_price, stock_quantity, is_public]
         
         if created_at:
             update_query += ", created_at = ?"
@@ -682,8 +695,10 @@ def inventory_delete(product_id: int):
     ok = False
     error = None
     try:
+        # Remove references to avoid FOREIGN KEY constraint error
         conn.execute("UPDATE sale_items SET product_id = NULL WHERE product_id = ?", (product_id,))
-
+        conn.execute("DELETE FROM inventory_history WHERE product_id = ?", (product_id,))
+        
         cur = conn.execute("DELETE FROM products WHERE id = ?", (product_id,))
         conn.commit()
         ok = cur.rowcount > 0
@@ -1572,7 +1587,13 @@ def sales_new():
     error = None
 
     try:
-        customer_id = int(customer_id_raw)
+        is_quote = "generate_quote" in request.form
+        if is_quote and not customer_id_raw:
+            customer_id = None
+        else:
+            if not customer_id_raw:
+                raise ValueError("Customer is required for saving a sale.")
+            customer_id = int(customer_id_raw)
         if not invoice_date:
             raise ValueError("Invoice date is required.")
         discount_amount = float(discount_amount_raw) if discount_amount_raw else 0.0
@@ -1594,16 +1615,17 @@ def sales_new():
             finally:
                 conn_check.close()
 
-        conn_check = get_connection()
-        try:
-            row = conn_check.execute(
-                "SELECT id FROM customers WHERE id = ?",
-                (customer_id,),
-            ).fetchone()
-            if row is None:
-                raise ValueError("Customer not found.")
-        finally:
-            conn_check.close()
+        if customer_id is not None:
+            conn_check = get_connection()
+            try:
+                row = conn_check.execute(
+                    "SELECT id FROM customers WHERE id = ?",
+                    (customer_id,),
+                ).fetchone()
+                if row is None:
+                    raise ValueError("Customer not found.")
+            finally:
+                conn_check.close()
     except ValueError as e:
         error = str(e)
 
@@ -1684,6 +1706,38 @@ def sales_new():
             status = 'unpaid'
             
         print(f"DEBUG sales_new: grand_total={grand_total}, amount_paid={amount_paid}, payment_type={payment_type}, remaining={remaining_amount}, status={status}")
+
+        if "generate_quote" in request.form:
+            from invoice_generator import generate_pdf_from_data
+            conn_quote = get_connection()
+            try:
+                cust_row = conn_quote.execute("SELECT id, name, bill_address, ship_address, phone FROM customers WHERE id = ?", (customer_id,)).fetchone()
+                customer_data = dict(cust_row) if cust_row else {"name": "Unknown", "bill_address": "", "ship_address": "", "phone": ""}
+                
+                for item in parsed_items:
+                    prod = conn_quote.execute("SELECT name, brand FROM products WHERE id = ?", (item["product_id"],)).fetchone()
+                    item["product_name"] = prod["name"] if prod else ""
+                    item["product_brand"] = prod["brand"] if prod else ""
+            finally:
+                conn_quote.close()
+                
+            sale_data = {
+                "invoice_number": f"Q-{invoice_number}",
+                "invoice_date": invoice_date,
+                "due_date": due_date,
+                "terms": terms,
+                "subtotal": subtotal,
+                "discount_amount": discount_amount,
+                "grand_total": grand_total,
+                "payment_type": payment_type,
+                "amount_paid": amount_paid,
+                "remaining_amount": remaining_amount
+            }
+            
+            pdf_bytes = generate_pdf_from_data(sale_data, customer_data, parsed_items, is_quote=True)
+            resp = Response(pdf_bytes, mimetype="application/pdf")
+            resp.headers["Content-Disposition"] = f'attachment; filename="{sale_data["invoice_number"]}.pdf"'
+            return resp
 
         conn = get_connection()
         try:
@@ -1959,7 +2013,13 @@ def sales_update(sale_id: int):
     error = None
 
     try:
-        customer_id = int(customer_id_raw)
+        is_quote = "generate_quote" in request.form
+        if is_quote and not customer_id_raw:
+            customer_id = None
+        else:
+            if not customer_id_raw:
+                raise ValueError("Customer is required for saving a sale.")
+            customer_id = int(customer_id_raw)
         if not invoice_date:
             raise ValueError("Invoice date is required.")
         discount_amount = float(discount_amount_raw) if discount_amount_raw else 0.0
@@ -1981,16 +2041,17 @@ def sales_update(sale_id: int):
             finally:
                 conn_check.close()
 
-        conn_check = get_connection()
-        try:
-            row = conn_check.execute(
-                "SELECT id FROM customers WHERE id = ?",
-                (customer_id,),
-            ).fetchone()
-            if row is None:
-                raise ValueError("Customer not found.")
-        finally:
-            conn_check.close()
+        if customer_id is not None:
+            conn_check = get_connection()
+            try:
+                row = conn_check.execute(
+                    "SELECT id FROM customers WHERE id = ?",
+                    (customer_id,),
+                ).fetchone()
+                if row is None:
+                    raise ValueError("Customer not found.")
+            finally:
+                conn_check.close()
     except ValueError as e:
         error = str(e)
 
@@ -2066,6 +2127,38 @@ def sales_update(sale_id: int):
                 status = 'unpaid'
         else:
             status = 'unpaid'
+
+        if "generate_quote" in request.form:
+            from invoice_generator import generate_pdf_from_data
+            conn_quote = get_connection()
+            try:
+                cust_row = conn_quote.execute("SELECT id, name, bill_address, ship_address, phone FROM customers WHERE id = ?", (customer_id,)).fetchone()
+                customer_data = dict(cust_row) if cust_row else {"name": "Unknown", "bill_address": "", "ship_address": "", "phone": ""}
+                
+                for item in parsed_items:
+                    prod = conn_quote.execute("SELECT name, brand FROM products WHERE id = ?", (item["product_id"],)).fetchone()
+                    item["product_name"] = prod["name"] if prod else ""
+                    item["product_brand"] = prod["brand"] if prod else ""
+            finally:
+                conn_quote.close()
+                
+            sale_data = {
+                "invoice_number": f"Q-{invoice_number}" if invoice_number else f"Q-Sale-{sale_id}",
+                "invoice_date": invoice_date,
+                "due_date": due_date,
+                "terms": terms,
+                "subtotal": subtotal,
+                "discount_amount": discount_amount,
+                "grand_total": grand_total,
+                "payment_type": payment_type,
+                "amount_paid": amount_paid,
+                "remaining_amount": remaining_amount
+            }
+            
+            pdf_bytes = generate_pdf_from_data(sale_data, customer_data, parsed_items, is_quote=True)
+            resp = Response(pdf_bytes, mimetype="application/pdf")
+            resp.headers["Content-Disposition"] = f'attachment; filename="{sale_data["invoice_number"]}.pdf"'
+            return resp
 
         conn = get_connection()
         try:

@@ -420,7 +420,13 @@
     const checkoutBtn = document.getElementById('checkoutBtn');
     
     // Format money
-    const money = (val) => '$' + Number(val).toFixed(2);
+    const money = (val) => {
+      const v = Number(val || 0);
+      if (Math.abs(v - Math.round(v * 100) / 100) < 0.00001) {
+        return '$' + v.toFixed(2);
+      }
+      return '$' + v.toFixed(4);
+    };
 
     // Initialize
     async function init() {
@@ -481,11 +487,17 @@
         const card = document.createElement('div');
         card.className = 'product-card';
         card.onclick = () => addToCart(p.id);
-        const imgSrc = p.image_url ? p.image_url : 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="100%" height="100%" viewBox="0 0 200 140"><rect width="100%" height="100%" fill="%23eee"/><text x="50%" y="50%" fill="%23999" dominant-baseline="middle" text-anchor="middle">No Image</text></svg>';
+        let imageHtml = '';
+        if (p.image_url) {
+          imageHtml = `<img src="${p.image_url}" class="product-image" alt="Img">`;
+        } else {
+          imageHtml = `<div class="product-image" style="display:flex; align-items:center; justify-content:center; background:var(--card-bg, #fff); color:var(--text, #333); font-size:0.9rem; font-weight:bold; text-align:center; padding:10px; line-height:1.2;">${p.name}</div>`;
+        }
+        
         let stockClass = p.stock_quantity > 0 ? 'stock-ok' : 'stock-out';
         let stockText = p.stock_quantity > 0 ? `${p.stock_quantity} in stock` : 'Out of Stock (Warn)';
         card.innerHTML = `
-          <img src="${imgSrc}" class="product-image" alt="Img">
+          ${imageHtml}
           <div class="product-info">
             <h3 title="${p.name}">${p.name}</h3>
             <div class="brand">${p.brand_name || 'Generic'}</div>

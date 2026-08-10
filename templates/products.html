@@ -291,7 +291,7 @@
             <td class="searchable-brand">{{ p.brand or '' }}</td>
             <td>{{ p.category_name or '' }}</td>
 
-            <td>${{ '%.2f' % (p.selling_price|default(0)|float) }}</td>
+            <td>${{ p.selling_price|format_rate }}</td>
             <td>
               {% if p.selling_price and p.selling_price > 0 %}
                 {% set margin = ((p.selling_price - p.cost_price) / p.selling_price * 100) %}
@@ -413,12 +413,12 @@
 
         <div class="modal-field">
           <label for="addCostPrice">Cost Price</label>
-          <input class="form-control sensitive-data" type="number" step="0.01" id="addCostPrice" name="cost_price" required>
+          <input class="form-control sensitive-data" type="number" step="0.0001" id="addCostPrice" name="cost_price" required>
         </div>
 
         <div class="modal-field">
           <label for="addSellingPrice">Selling Price</label>
-          <input class="form-control" type="number" step="0.01" id="addSellingPrice" name="selling_price" required>
+          <input class="form-control" type="number" step="0.0001" id="addSellingPrice" name="selling_price" required>
         </div>
 
         <div class="col-md-6 mb-3">
@@ -510,12 +510,12 @@
 
         <div class="modal-field">
           <label for="editCostPrice">Cost Price</label>
-          <input class="form-control sensitive-data" type="number" step="0.01" id="editCostPrice" name="cost_price" required>
+          <input class="form-control sensitive-data" type="number" step="0.0001" id="editCostPrice" name="cost_price" required>
         </div>
 
         <div class="modal-field">
           <label for="editSellingPrice">Selling Price</label>
-          <input class="form-control" type="number" step="0.01" id="editSellingPrice" name="selling_price" required>
+          <input class="form-control" type="number" step="0.0001" id="editSellingPrice" name="selling_price" required>
         </div>
 
         <div class="col-md-6 mb-3">

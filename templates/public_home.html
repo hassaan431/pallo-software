@@ -1,0 +1,122 @@
+{% extends "public_base.html" %}
+
+{% block content %}
+<style>
+    .hero {
+        padding: 6rem 5%;
+        text-align: center;
+        background-color: var(--bg-dark);
+        border-bottom: none;
+        color: var(--text-light);
+    }
+    .hero h1 {
+        font-size: 3.5rem;
+        font-weight: 800;
+        margin: 0 0 1.5rem 0;
+        line-height: 1.15;
+        color: var(--text-light);
+    }
+    .hero h1 span {
+        color: var(--accent);
+    }
+    .hero p {
+        font-size: 1.25rem;
+        color: var(--text-muted);
+        max-width: 700px;
+        margin: 0 auto 2.5rem auto;
+        line-height: 1.6;
+    }
+    .hero .actions {
+        display: flex;
+        gap: 1rem;
+        justify-content: center;
+        flex-wrap: wrap;
+    }
+    .btn-large {
+        padding: 0.85rem 2rem;
+        font-size: 1.1rem;
+    }
+    
+    .section-heading {
+        text-align: center;
+        margin: 4rem 0 3rem 0;
+        font-size: 2.25rem;
+        font-weight: 800;
+        color: var(--text-main);
+    }
+    .section-heading::after {
+        content: '';
+        display: block;
+        width: 60px;
+        height: 4px;
+        background: var(--accent);
+        margin: 1rem auto 0;
+    }
+
+    .brands-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+        gap: 1.5rem;
+        padding: 0 5%;
+        margin-bottom: 5rem;
+    }
+    .brand-card {
+        background: var(--bg-card);
+        border: 1px solid var(--border);
+        border-radius: 4px;
+        padding: 1rem;
+        text-align: center;
+        transition: transform 0.2s, box-shadow 0.2s;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        min-height: 140px;
+        color: var(--text-main);
+        font-weight: 700;
+        font-size: 1.15rem;
+        text-decoration: none;
+    }
+    .brand-card:hover {
+        transform: translateY(-4px);
+        box-shadow: 0 10px 25px rgba(0,0,0,0.08);
+        border-color: var(--accent);
+        color: var(--accent);
+    }
+    .brand-card img {
+        max-height: 90px;
+        max-width: 90%;
+        margin-bottom: 0.5rem;
+        object-fit: contain;
+    }
+    
+    @media (max-width: 768px) {
+        .hero { padding: 4rem 5%; }
+        .hero h1 { font-size: 2.5rem; }
+    }
+</style>
+
+<div class="hero">
+    <h1>Wholesale Distribution, <span>Elevated.</span></h1>
+    <p>Discover our premium catalog of carefully curated products for your business. Providing the best quality, reliability, and scale.</p>
+    <div class="actions">
+        <a href="{{ url_for('public_bp.catalog') }}" class="btn-primary btn-large">Browse Catalog</a>
+        <a href="{{ url_for('public_bp.about') }}" class="btn-primary btn-large" style="background: transparent; color: var(--text-light) !important; border: 2px solid var(--text-muted);">Contact Sales</a>
+    </div>
+</div>
+
+<h2 class="section-heading">Our Top Brands</h2>
+{% if featured_brands %}
+<div class="brands-grid">
+    {% for brand in featured_brands %}
+    <a href="{{ url_for('public_bp.catalog', brand=brand) }}" class="brand-card">
+        <img src="{{ url_for('static', filename='logos/brands/' ~ brand ~ '.png') }}" alt="{{ brand }}" onerror="this.style.display='none'; this.nextElementSibling.style.display='block';">
+        <span style="display:none;">{{ brand }}</span>
+    </a>
+    {% endfor %}
+</div>
+{% else %}
+<p style="text-align: center; color: var(--text-muted); margin-bottom: 5rem;">Check back soon for our brand partners.</p>
+{% endif %}
+
+{% endblock %}

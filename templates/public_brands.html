@@ -1,0 +1,95 @@
+{% extends "public_base.html" %}
+{% block title %}Brands — AK Distributors{% endblock %}
+
+{% block content %}
+<style>
+    .brands-header {
+        padding: 5rem 5% 4rem 5%;
+        border-bottom: none;
+        background-color: var(--bg-dark);
+        color: var(--text-light);
+        text-align: center;
+    }
+    .brands-header h1 {
+        font-size: 3rem;
+        font-weight: 800;
+        margin: 0 0 1rem 0;
+        color: var(--text-light);
+    }
+    .brands-header p {
+        color: var(--text-muted);
+        font-size: 1.125rem;
+        margin: 0 auto;
+        max-width: 600px;
+    }
+    
+    .brands-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+        gap: 1.5rem;
+        padding: 4rem 5%;
+        margin-bottom: 2rem;
+    }
+    .brand-card {
+        background: var(--bg-card);
+        border: 1px solid var(--border);
+        border-radius: 4px;
+        padding: 1rem;
+        text-align: center;
+        transition: transform 0.2s, box-shadow 0.2s;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        min-height: 140px;
+        color: var(--text-main);
+        font-weight: 700;
+        font-size: 1.15rem;
+        text-decoration: none;
+    }
+    .brand-card:hover {
+        transform: translateY(-4px);
+        box-shadow: 0 10px 25px rgba(0,0,0,0.08);
+        border-color: var(--accent);
+        color: var(--accent);
+    }
+    .brand-card img {
+        max-height: 90px;
+        max-width: 90%;
+        margin-bottom: 0.5rem;
+        object-fit: contain;
+    }
+    
+    .empty-state {
+        text-align: center;
+        padding: 5rem 2rem;
+        color: var(--text-muted);
+    }
+    @media (max-width: 768px) {
+        .brands-header { padding: 3rem 5% 2rem 5%; }
+        .brands-header h1 { font-size: 2.25rem; }
+    }
+</style>
+
+<div class="brands-header">
+    <h1>Our Brands</h1>
+    <p>We partner with top-tier brands to bring you the best products.</p>
+</div>
+
+{% if brands %}
+<div class="brands-grid">
+    {% for brand in brands %}
+    <a href="{{ url_for('public_bp.catalog', brand=brand) }}" class="brand-card">
+        <img src="{{ url_for('static', filename='logos/brands/' ~ brand ~ '.png') }}" alt="{{ brand }}" onerror="this.style.display='none'; this.nextElementSibling.style.display='block';">
+        <span style="display:none;">{{ brand }}</span>
+    </a>
+    {% endfor %}
+</div>
+{% else %}
+<div class="empty-state">
+    <h2>No brands available.</h2>
+    <p>Check back later as we update our catalog.</p>
+</div>
+{% endif %}
+
+{% endblock %}

@@ -147,6 +147,15 @@ def init_db():
         except sqlite3.OperationalError:
             pass
             
+        # Safely add is_public column to products table
+        try:
+            conn.execute(
+                "ALTER TABLE products ADD COLUMN is_public INTEGER DEFAULT 1"
+            )
+        except sqlite3.OperationalError:
+            pass
+
+            
         # Safely add salesman_id column to sales table
         try:
             conn.execute(
@@ -321,3 +330,21 @@ def get_user_by_username(username: str):
         return cur.fetchone()
     finally:
         conn.close()
+
+
+def get_public_products():
+    conn = get_connection()
+    try:
+        cur = conn.execute(
+            """
+            SELECT p.id, p.name, p.brand, p.image_url, c.name as category_name
+            FROM products p
+            LEFT JOIN categories c ON p.category_id = c.id
+            WHERE p.is_public = 1
+            ORDER BY p.name COLLATE NOCASE
+            """
+        )
+        return [dict(row) for row in cur.fetchall()]
+    finally:
+        conn.close()
+

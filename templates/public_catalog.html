@@ -1,0 +1,136 @@
+{% extends "public_base.html" %}
+{% block title %}Catalog — Pure Food Distributors{% endblock %}
+
+{% block content %}
+<style>
+    .catalog-header {
+        padding: 5rem 5% 4rem 5%;
+        border-bottom: none;
+        margin-bottom: 3rem;
+        background-color: var(--bg-dark);
+        color: var(--text-light);
+        text-align: center;
+    }
+    .catalog-header h1 {
+        font-size: 3rem;
+        font-weight: 800;
+        margin: 0 0 1rem 0;
+        color: var(--text-light);
+    }
+    .catalog-header p {
+        color: var(--text-muted);
+        font-size: 1.125rem;
+        margin: 0 auto;
+        max-width: 600px;
+    }
+    
+    .product-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+        gap: 2rem;
+        padding: 0 5%;
+        margin-bottom: 5rem;
+    }
+    .product-card {
+        background: var(--bg-card);
+        border: 1px solid var(--border);
+        border-radius: 4px;
+        overflow: hidden;
+        transition: transform 0.2s, box-shadow 0.2s;
+        display: flex;
+        flex-direction: column;
+    }
+    .product-card:hover {
+        transform: translateY(-4px);
+        box-shadow: 0 10px 25px rgba(0,0,0,0.08);
+        border-color: var(--border-heavy);
+    }
+    .product-image-wrap {
+        height: 220px;
+        background: #fff;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 1.5rem;
+        box-sizing: border-box;
+        border-bottom: 1px solid var(--border);
+    }
+    .product-image {
+        max-width: 100%;
+        max-height: 100%;
+        object-fit: contain;
+    }
+    .product-info {
+        padding: 1.5rem;
+        background: var(--bg-card);
+        flex: 1;
+    }
+    .product-brand {
+        color: var(--accent);
+        font-size: 0.8rem;
+        font-weight: 700;
+        margin-bottom: 0.35rem;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+    }
+    .product-title {
+        font-size: 1.1rem;
+        font-weight: 700;
+        margin: 0;
+        color: var(--text-main);
+        line-height: 1.4;
+    }
+    .empty-state {
+        text-align: center;
+        padding: 5rem 2rem;
+        color: var(--text-muted);
+    }
+    @media (max-width: 768px) {
+        .catalog-header { padding: 3rem 5% 2rem 5%; }
+        .catalog-header h1 { font-size: 2.25rem; }
+        .product-grid { gap: 1.25rem; }
+    }
+</style>
+
+    <div class="catalog-header">
+        {% if selected_brand %}
+            <h1>{{ selected_brand }} Products</h1>
+            <p>Browse our premium selection from {{ selected_brand }}.</p>
+        {% else %}
+            <h1>Product Catalog</h1>
+            <p>Browse our complete selection of premium wholesale products.</p>
+        {% endif %}
+        <div style="margin-top: 1.5rem;">
+            <a href="{{ url_for('public_bp.download_brochure') }}" class="btn-primary" style="background: transparent; color: var(--text-light) !important; border: 2px solid var(--text-muted);">
+                📄 Download PDF Brochure
+            </a>
+        </div>
+    </div>
+
+{% if products %}
+<div class="product-grid">
+    {% for product in products %}
+    <div class="product-card">
+        <div class="product-image-wrap">
+            {% if product.image_url %}
+                <img src="{{ product.image_url }}" alt="{{ product.name }}" class="product-image">
+            {% else %}
+                <div style="width: 100%; height: 100%; min-height: 200px; display: flex; align-items: center; justify-content: center; background-color: var(--card-bg, #f3f4f6); color: var(--text-color, #333); font-size: 1rem; font-weight: bold; text-align: center; padding: 15px; line-height: 1.3;">{{ product.name }}</div>
+            {% endif %}
+        </div>
+        <div class="product-info">
+            {% if product.brand %}
+                <div class="product-brand">{{ product.brand }}</div>
+            {% endif %}
+            <h3 class="product-title">{{ product.name }}</h3>
+        </div>
+    </div>
+    {% endfor %}
+</div>
+{% else %}
+<div class="empty-state">
+    <h2>No products available.</h2>
+    <p>Check back later as we update our catalog.</p>
+</div>
+{% endif %}
+{% endblock %}

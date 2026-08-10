@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+    @page {
+        size: A4;
+        margin: 2cm;
+        @frame footer_frame {
+            -pdf-frame-content: footer_content;
+            left: 50pt; width: 512pt; top: 772pt; height: 20pt;
+        }
+    }
+    body {
+        font-family: Helvetica, Arial, sans-serif;
+        color: #07133B;
+    }
+    h1 {
+        text-align: center;
+        color: #07133B;
+        font-size: 28pt;
+        margin-bottom: 20pt;
+    }
+    h2 {
+        color: #1AD079;
+        font-size: 18pt;
+        border-bottom: 1px solid #E2E8F0;
+        padding-bottom: 5pt;
+        margin-top: 20pt;
+        margin-bottom: 10pt;
+    }
+    .brand-section {
+        margin-bottom: 30pt;
+    }
+    .product-table {
+        width: 100%;
+        border-collapse: collapse;
+    }
+    .product-cell {
+        width: 50%;
+        padding: 10pt;
+        vertical-align: top;
+    }
+    .product-card {
+        border: 1px solid #E2E8F0;
+        padding: 10pt;
+        text-align: center;
+    }
+    .product-image {
+        max-height: 120pt;
+        max-width: 100%;
+        margin-bottom: 10pt;
+    }
+    .product-name {
+        font-weight: bold;
+        font-size: 12pt;
+        margin-bottom: 5pt;
+    }
+    .product-sku {
+        color: #83899D;
+        font-size: 10pt;
+    }
+    #footer_content {
+        text-align: center;
+        font-size: 9pt;
+        color: #83899D;
+    }
+</style>
+</head>
+<body>
+
+<div id="footer_content">
+    Page <pdf:pagenumber> of <pdf:pagecount> | AK Distributors Product Brochure
+</div>
+
+<div style="text-align: center; margin-top: 150pt; margin-bottom: 20pt;">
+    <img src="/static/logos/AK Distributors Logo.jpeg" width="150">
+</div>
+<h1 style="margin-top: 0; font-size: 36pt;">AK Distributors Catalog</h1>
+
+<div style="text-align: center; margin-top: 150pt;">
+    <h3 style="color: #83899D; margin-bottom: 20pt; font-size: 14pt;">Our Partner Brands</h3>
+    <div>
+    {% for b, exists in brand_logos.items() %}
+        {% if exists %}
+            <img src="/static/logos/brands/{{ b }}.png" width="80" style="margin: 10pt;">
+        {% endif %}
+    {% endfor %}
+    </div>
+</div>
+
+{% for brand, brand_products in brands.items() %}
+    <pdf:nextpage />
+    <div class="brand-section">
+        <h2>
+            {% if brand_logos.get(brand) %}
+                <img src="/static/logos/brands/{{ brand }}.png" width="60" style="vertical-align: middle; margin-right: 10pt;">
+            {% endif %}
+            {{ brand }}
+        </h2>
+        <table class="product-table">
+            {% for row in brand_products|batch(2, '&nbsp;') %}
+            <tr>
+                {% for product in row %}
+                    {% if product != '&nbsp;' %}
+                    <td class="product-cell">
+                        <div class="product-card">
+                            {% if product.image_url %}
+                                <img src="{{ product.image_url }}" width="120" style="margin-bottom: 10pt;">
+                            {% else %}
+                                <div style="height: 120pt;"></div>
+                            {% endif %}
+                            <div class="product-name">{{ product.name }}</div>
+                        </div>
+                    </td>
+                    {% else %}
+                    <td class="product-cell"></td>
+                    {% endif %}
+                {% endfor %}
+            </tr>
+            {% endfor %}
+        </table>
+    </div>
+{% endfor %}
+
+</body>
+</html>

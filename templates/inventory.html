@@ -204,8 +204,7 @@
             <th>Product Name</th>
             <th>Brand</th>
             <th>Category</th>
-            
-            
+            <th>Public?</th>
             <th>Selling Price</th>
             <th>MARGIN</th>
             <th>Stock Qty</th>
@@ -240,8 +239,15 @@
             <td class="searchable-name">{{ p.name }}</td>
             <td class="searchable-brand">{{ p.brand or '' }}</td>
             <td>{{ p.category_name or '' }}</td>
+            <td>
+              {% if p.is_public %}
+                <span style="background: #dcfce7; color: #166534; padding: 2px 6px; border-radius: 4px; font-size: 0.75rem; font-weight: 600;">Yes</span>
+              {% else %}
+                <span style="background: #fee2e2; color: #991b1b; padding: 2px 6px; border-radius: 4px; font-size: 0.75rem; font-weight: 600;">No</span>
+              {% endif %}
+            </td>
 
-            <td>${{ '%.2f' % (p.selling_price|default(0)|float) }}</td>
+            <td>${{ p.selling_price|format_rate }}</td>
             <td>
               {% if p.selling_price and p.selling_price > 0 %}
                 {% set margin = ((p.selling_price - p.cost_price) / p.selling_price * 100) %}
@@ -272,6 +278,7 @@
                 data-selling-price="{{ p.selling_price|default(0)|float }}"
                 data-stock-quantity="{{ qty_int }}"
                 data-created-at="{{ (p.created_at or '')[:10] }}"
+                data-is-public="{{ 1 if p.is_public else 0 }}"
                 style="padding: 3px 8px; font-size: 11px; border-radius: 4px; margin: 0 1px;"
               >
                 Edit
@@ -307,7 +314,7 @@
               {% set total_val.value = total_val.value + val %}
           {% endfor %}
           <tr style="background-color: #f1f5f9; font-weight: 700;">
-            <td colspan="6" style="text-align: right; padding-right: 1rem;">TOTALS</td>
+            <td colspan="7" style="text-align: right; padding-right: 1rem;">TOTALS</td>
             <td>{{ total_qty.value }}</td>
             <td style="color: #1e293b;">${{ '%.2f' % total_val.value }}</td>
             <td></td>
@@ -393,12 +400,12 @@
 
         <div class="modal-field">
           <label for="addCostPrice">Cost Price</label>
-          <input class="form-control sensitive-data" type="number" step="0.01" id="addCostPrice" name="cost_price" required>
+          <input class="form-control sensitive-data" type="number" step="0.0001" id="addCostPrice" name="cost_price" required>
         </div>
 
         <div class="modal-field">
           <label for="addSellingPrice">Selling Price</label>
-          <input class="form-control" type="number" step="0.01" id="addSellingPrice" name="selling_price" required>
+          <input class="form-control" type="number" step="0.0001" id="addSellingPrice" name="selling_price" required>
         </div>
 
         <div class="row">
@@ -417,6 +424,11 @@
         <div class="modal-field">
           <label for="addStockQuantity">Stock Quantity</label>
           <input class="form-control" type="number" step="any" min="0" id="addStockQuantity" name="stock_quantity" required>
+        </div>
+
+        <div class="modal-field" style="display: flex; align-items: center; gap: 0.5rem; margin-top: 1rem;">
+          <input type="checkbox" id="addIsPublic" name="is_public" value="1" checked style="width: auto; height: auto;">
+          <label for="addIsPublic" style="margin: 0; cursor: pointer;">Show on Public Website</label>
         </div>
 
         <div class="inline-flex" style="justify-content: flex-end; gap: 0.65rem; margin-top: 0.25rem;">
@@ -499,12 +511,12 @@
 
         <div class="modal-field">
           <label for="editCostPrice">Cost Price</label>
-          <input class="form-control sensitive-data" type="number" step="0.01" id="editCostPrice" name="cost_price" required>
+          <input class="form-control sensitive-data" type="number" step="0.0001" id="editCostPrice" name="cost_price" required>
         </div>
 
         <div class="modal-field">
           <label for="editSellingPrice">Selling Price</label>
-          <input class="form-control" type="number" step="0.01" id="editSellingPrice" name="selling_price" required>
+          <input class="form-control" type="number" step="0.0001" id="editSellingPrice" name="selling_price" required>
         </div>
 
         <div class="row">
@@ -523,6 +535,11 @@
         <div class="modal-field">
           <label for="editStockQuantity">Stock Quantity</label>
           <input class="form-control" type="number" step="any" min="0" id="editStockQuantity" name="stock_quantity" required>
+        </div>
+
+        <div class="modal-field" style="display: flex; align-items: center; gap: 0.5rem; margin-top: 1rem;">
+          <input type="checkbox" id="editIsPublic" name="is_public" value="1" style="width: auto; height: auto;">
+          <label for="editIsPublic" style="margin: 0; cursor: pointer;">Show on Public Website</label>
         </div>
 
         <div class="inline-flex" style="justify-content: flex-end; gap: 0.65rem; margin-top: 0.25rem;">
@@ -1258,6 +1275,12 @@
         } catch (err) {}
         editCategorySelect.value = editBtn.getAttribute('data-category-id') || '';
         document.getElementById('editUnitSelect').value = editBtn.getAttribute('data-unit') || 'Each';
+        
+        const isPublicCheckbox = document.getElementById('editIsPublic');
+        if (isPublicCheckbox) {
+          isPublicCheckbox.checked = editBtn.getAttribute('data-is-public') === '1';
+        }
+
         document.getElementById('editUnitQuantity').value = editBtn.getAttribute('data-unit-quantity') || 0;
         document.getElementById('editCostPrice').value = editBtn.getAttribute('data-cost-price') || 0;
         document.getElementById('editSellingPrice').value = editBtn.getAttribute('data-selling-price') || 0;
