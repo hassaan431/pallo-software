@@ -593,9 +593,10 @@ def generate_pdf_from_data(sale: dict, customer: dict, sale_items: list, is_quot
             cnv.setFont("Helvetica", item_font_size)
             qty_val = float(qty) if qty is not None else 0
             rate_val = float(rate) if rate is not None else 0
-            if row["sale_item"].get("print_dual_units") == 1:
-                qty_str = f"{qty_val:g}g / {qty_val/453.59237:.2f}lb"
-                rate_str = f"${format_rate(rate_val)}/g / ${format_rate(rate_val * 453.59237)}/lb"
+            sale_item_dict = dict(row["sale_item"]) if hasattr(row["sale_item"], 'keys') else row["sale_item"]
+            if sale_item_dict.get("print_dual_units") == 1:
+                qty_str = f"{qty_val:g}g / {qty_val/28.34952:.2f}Oz"
+                rate_str = f"${format_rate(rate_val)}/g / ${format_rate(rate_val * 28.34952)}/Oz"
             else:
                 qty_str = f"{qty_val:g}"
                 rate_str = f"${format_rate(rate_val)}"

@@ -2964,6 +2964,115 @@ def reports_by_product():
     return jsonify(result)
 
 
+@app.route("/reports/inventory-additions", methods=["GET"])
+@admin_required
+def reports_inventory_additions():
+    conditions = [
+        "ih.transaction_type = 'IN'",
+        "ih.reference IN ('Initial Stock', 'Initial Stock (Legacy)', 'Manual Edit', 'Manual Edit (Edit Product)')",
+        "p.brand IS NOT NULL", 
+        "p.brand != ''"
+    ]
+    params = []
+    
+    date_from = request.args.get("date_from", "").strip()
+    date_to = request.args.get("date_to", "").strip()
+    if date_from:
+        conditions.append("date(ih.created_at) >= ?")
+        params.append(date_from)
+    if date_to:
+        conditions.append("date(ih.created_at) <= ?")
+        params.append(date_to)
+
+    brand = request.args.get("brand", "").strip()
+    if brand:
+        conditions.append("p.brand = ?")
+        params.append(brand)
+
+    where_sql = " AND ".join(conditions)
+
+    conn = get_connection()
+    try:
+        summary_rows = conn.execute(
+            f'''
+            SELECT
+                p.brand,
+                COALESCE(SUM(ih.quantity_change), 0) AS total_added,
+                COALESCE(SUM(ih.quantity_change * p.cost_price), 0) AS total_value
+            FROM inventory_history ih
+            JOIN products p ON p.id = ih.product_id
+            WHERE {where_sql}
+            GROUP BY p.brand
+            ORDER BY total_added DESC
+            ''',
+            params,
+        ).fetchall()
+
+        date_rows = conn.execute(
+            f'''
+            SELECT
+                date(ih.created_at) as addition_date,
+                COALESCE(SUM(ih.quantity_change), 0) AS total_added,
+                COALESCE(SUM(ih.quantity_change * p.cost_price), 0) AS total_value
+            FROM inventory_history ih
+            JOIN products p ON p.id = ih.product_id
+            WHERE {where_sql}
+            GROUP BY date(ih.created_at)
+            ORDER BY addition_date DESC
+            ''',
+            params,
+        ).fetchall()
+
+        log_rows = conn.execute(
+            f'''
+            SELECT
+                ih.created_at,
+                p.name AS product_name,
+                p.brand,
+                ih.transaction_type,
+                ih.reference,
+                ih.quantity_change,
+                (ih.quantity_change * p.cost_price) as value_added
+            FROM inventory_history ih
+            JOIN products p ON p.id = ih.product_id
+            WHERE {where_sql}
+            ORDER BY ih.created_at DESC
+            ''',
+            params,
+        ).fetchall()
+    finally:
+        conn.close()
+
+    summary_result = []
+    for r in summary_rows:
+        summary_result.append({
+            "brand": r["brand"],
+            "total_added": float(r["total_added"] or 0),
+            "total_value": float(r["total_value"] or 0)
+        })
+
+    log_result = []
+    for r in log_rows:
+        log_result.append({
+            "created_at": r["created_at"],
+            "product_name": r["product_name"] or "",
+            "brand": r["brand"] or "",
+            "transaction_type": r["transaction_type"],
+            "reference": r["reference"],
+            "quantity_change": float(r["quantity_change"] or 0),
+            "value_added": float(r["value_added"] or 0)
+        })
+
+    date_result = []
+    for r in date_rows:
+        date_result.append({
+            "addition_date": r["addition_date"],
+            "total_added": float(r["total_added"] or 0),
+            "total_value": float(r["total_value"] or 0)
+        })
+
+    return jsonify({"summary": summary_result, "date_summary": date_result, "log": log_result})
+
 def _export_csv_bytes(rows, header):
     import csv
     import io

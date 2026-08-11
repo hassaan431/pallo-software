@@ -68,6 +68,7 @@
   <button type="button" class="tab-btn" data-tab="brand">🏷️ By Brand</button>
   <button type="button" class="tab-btn" data-tab="category">🗂️ By Category</button>
   <button type="button" class="tab-btn" data-tab="product">📦 By Product</button>
+  <button type="button" class="tab-btn" data-tab="inventory-additions">➕ Inventory Additions</button>
 </div>
 
 <!-- CUSTOMER TAB -->
@@ -333,6 +334,98 @@
   </section>
 </div>
 
+<!-- INVENTORY ADDITIONS TAB -->
+<div id="tab-inventory-additions" class="tab-content" style="display:none;">
+  <div class="panel" style="margin-bottom: 1rem;">
+    <div class="panel-body" style="padding: 1rem;">
+      <div style="display:flex; gap:0.9rem; align-items:end; flex-wrap:wrap;">
+        <div><label class="field-label">Date From</label><input type="date" class="form-control" id="ia_date_from"></div>
+        <div><label class="field-label">Date To</label><input type="date" class="form-control" id="ia_date_to"></div>
+        <div>
+          <label class="field-label">Brand</label>
+          <select class="form-control" id="ia_brand">
+            <option value="">All Brands</option>
+            {% for b in brands %}
+              <option value="{{ b }}">{{ b }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div style="display:flex; gap:0.5rem;">
+          <button type="button" class="btn btn-primary" onclick="loadInventoryAdditionsReport()">Apply Filter</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <section class="panel" style="margin-bottom: 2rem;">
+    <div class="panel-header">
+      <h2>Date-wise Summary</h2>
+    </div>
+    <div class="panel-body">
+      <div class="table-wrap">
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>Date</th>
+              <th style="text-align:right">Total Quantity Added</th>
+              <th style="text-align:right">Total Value Added</th>
+            </tr>
+          </thead>
+          <tbody id="iaDateSummaryTbody">
+          </tbody>
+        </table>
+      </div>
+      <div id="iaDateSummaryPagination" style="padding: 1rem; text-align: center; display: flex; justify-content: center; gap: 1rem; align-items: center; border-top: 1px solid #e2e8f0;"></div>
+    </div>
+  </section>
+
+  <section class="panel" style="margin-bottom: 2rem;">
+    <div class="panel-header">
+      <h2>Brand-wise Summary</h2>
+    </div>
+    <div class="panel-body">
+      <div class="table-wrap">
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>Brand</th>
+              <th style="text-align:right">Total Quantity Added</th>
+              <th style="text-align:right">Total Value Added</th>
+            </tr>
+          </thead>
+          <tbody id="iaSummaryTbody">
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <section class="panel">
+    <div class="panel-header">
+      <h2>Detailed Log</h2>
+    </div>
+    <div class="panel-body">
+      <div class="table-wrap">
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>Date</th>
+              <th>Product Name</th>
+              <th>Brand</th>
+              <th>Transaction Type</th>
+              <th style="text-align:right">Quantity Added</th>
+              <th style="text-align:right">Value Added</th>
+            </tr>
+          </thead>
+          <tbody id="iaLogTbody">
+          </tbody>
+        </table>
+      </div>
+      <div id="iaLogPagination" style="padding: 1rem; text-align: center; display: flex; justify-content: center; gap: 1rem; align-items: center; border-top: 1px solid #e2e8f0;"></div>
+    </div>
+  </section>
+</div>
+
 <div id="tab-profit" class="tab-content">
   <section class="panel">
     <div class="panel-header">
@@ -445,7 +538,8 @@
     brand: [],
     category: [],
     product: [],
-    profit: []
+    profit: [],
+    'inventory-additions': { summary: [], log: [] }
   };
 
   let sortState = {
@@ -490,6 +584,10 @@
     } else if (type === 'profit') {
       if (document.getElementById('profit_date_from').value) params.append('from_date', document.getElementById('profit_date_from').value);
       if (document.getElementById('profit_date_to').value) params.append('to_date', document.getElementById('profit_date_to').value);
+    } else if (type === 'inventory-additions') {
+      if (document.getElementById('ia_date_from').value) params.append('date_from', document.getElementById('ia_date_from').value);
+      if (document.getElementById('ia_date_to').value) params.append('date_to', document.getElementById('ia_date_to').value);
+      if (document.getElementById('ia_brand').value) params.append('brand', document.getElementById('ia_brand').value);
     }
     return params;
   }
@@ -503,14 +601,16 @@
   const tabButtons = Array.from(document.querySelectorAll('.tab-btn'));
   function setActiveTab(tabKey) {
     tabButtons.forEach((b) => b.classList.toggle('is-active', b.getAttribute('data-tab') === tabKey));
-    const tabs = ['salesman', 'customer', 'brand', 'category', 'product', 'profit'];
+    const tabs = ['salesman', 'customer', 'brand', 'category', 'product', 'profit', 'inventory-additions'];
     tabs.forEach((k) => {
       const el = document.getElementById('tab-' + k);
       if (el) { el.style.display = (k === tabKey) ? 'block' : 'none'; }
     });
     
     // Load data if empty
-    if (cache[tabKey].length === 0) {
+    if (tabKey === 'inventory-additions' && cache['inventory-additions'].summary.length === 0 && cache['inventory-additions'].log.length === 0) {
+        loadInventoryAdditionsReport();
+    } else if (tabKey !== 'inventory-additions' && cache[tabKey] && cache[tabKey].length === 0) {
         if (tabKey === 'salesman') loadSalesmanReport();
         if (tabKey === 'customer') loadCustomerReport();
         if (tabKey === 'brand') loadBrandReport();
@@ -556,6 +656,104 @@
     const rows = await fetch('/reports/by-product?' + params.toString(), { credentials: 'same-origin' }).then(r => r.json());
     cache.product = rows || [];
     renderProducts();
+  }
+
+  let iaDateSummaryCurrentPage = 1;
+  let iaLogCurrentPage = 1;
+  const IA_PAGE_SIZE = 20;
+
+  async function loadInventoryAdditionsReport() {
+    const params = getFiltersParams('inventory-additions');
+    const data = await fetch('/reports/inventory-additions?' + params.toString(), { credentials: 'same-origin' }).then(r => r.json());
+    cache['inventory-additions'] = data || { summary: [], date_summary: [], log: [] };
+    iaDateSummaryCurrentPage = 1;
+    iaLogCurrentPage = 1;
+    renderInventoryAdditions();
+  }
+
+  function renderInventoryAdditions() {
+    const sumTbody = document.getElementById('iaSummaryTbody');
+    const dateSumTbody = document.getElementById('iaDateSummaryTbody');
+    const logTbody = document.getElementById('iaLogTbody');
+    
+    const summaryData = cache['inventory-additions'].summary || [];
+    const dateSummaryData = cache['inventory-additions'].date_summary || [];
+    const logData = cache['inventory-additions'].log || [];
+
+    // Brand Summary (Not paginated)
+    sumTbody.innerHTML = summaryData.length ? '' : '<tr><td colspan="3" class="empty-state" style="text-align:center;">No additions found for this period.</td></tr>';
+    summaryData.forEach(r => {
+      const tr = document.createElement('tr');
+      tr.innerHTML = `
+        <td style="font-weight:600;">${r.brand || '-'}</td>
+        <td style="text-align:right">${qty(r.total_added)}</td>
+        <td style="text-align:right;font-weight:600;">${money(r.total_value)}</td>
+      `;
+      sumTbody.appendChild(tr);
+    });
+
+    // Date Summary (Paginated)
+    const dateTotalPages = Math.ceil(dateSummaryData.length / IA_PAGE_SIZE) || 1;
+    if (iaDateSummaryCurrentPage > dateTotalPages) iaDateSummaryCurrentPage = dateTotalPages;
+    if (iaDateSummaryCurrentPage < 1) iaDateSummaryCurrentPage = 1;
+
+    const dateStart = (iaDateSummaryCurrentPage - 1) * IA_PAGE_SIZE;
+    const dateSlice = dateSummaryData.slice(dateStart, dateStart + IA_PAGE_SIZE);
+
+    dateSumTbody.innerHTML = dateSlice.length ? '' : '<tr><td colspan="3" class="empty-state" style="text-align:center;">No additions found for this period.</td></tr>';
+    dateSlice.forEach(r => {
+      const tr = document.createElement('tr');
+      const dt = new Date(r.addition_date).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric', timeZone: 'UTC' });
+      tr.innerHTML = `
+        <td style="font-weight:600;">${dt}</td>
+        <td style="text-align:right">${qty(r.total_added)}</td>
+        <td style="text-align:right;font-weight:600;">${money(r.total_value)}</td>
+      `;
+      dateSumTbody.appendChild(tr);
+    });
+
+    document.getElementById('iaDateSummaryPagination').innerHTML = `
+      <button class="btn btn-secondary" onclick="iaDateSummaryCurrentPage--; renderInventoryAdditions();" ${iaDateSummaryCurrentPage === 1 ? 'disabled' : ''}>&laquo; Prev</button>
+      <span style="font-size:0.9rem; color:#64748b;">Page ${iaDateSummaryCurrentPage} of ${dateTotalPages}</span>
+      <button class="btn btn-secondary" onclick="iaDateSummaryCurrentPage++; renderInventoryAdditions();" ${iaDateSummaryCurrentPage === dateTotalPages ? 'disabled' : ''}>Next &raquo;</button>
+    `;
+
+    // Detailed Log (Paginated)
+    const logTotalPages = Math.ceil(logData.length / IA_PAGE_SIZE) || 1;
+    if (iaLogCurrentPage > logTotalPages) iaLogCurrentPage = logTotalPages;
+    if (iaLogCurrentPage < 1) iaLogCurrentPage = 1;
+
+    const logStart = (iaLogCurrentPage - 1) * IA_PAGE_SIZE;
+    const logSlice = logData.slice(logStart, logStart + IA_PAGE_SIZE);
+
+    logTbody.innerHTML = logSlice.length ? '' : '<tr><td colspan="6" class="empty-state" style="text-align:center;">No additions found for this period.</td></tr>';
+    logSlice.forEach(r => {
+      const tr = document.createElement('tr');
+      const dt = new Date(r.created_at).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+      
+      let typeBadge = '';
+      if (r.reference === 'Initial Stock' || r.reference === 'Initial Stock (Legacy)') {
+        typeBadge = `<span class="stock-pill stock-ok" style="font-size:0.7rem;">${r.reference}</span>`;
+      } else {
+        typeBadge = '<span class="stock-pill stock-low" style="font-size:0.7rem;">Manual Add</span>';
+      }
+
+      tr.innerHTML = `
+        <td style="white-space:nowrap;font-size:0.8rem;">${dt}</td>
+        <td><strong>${r.product_name}</strong></td>
+        <td>${r.brand || '-'}</td>
+        <td>${typeBadge}</td>
+        <td style="text-align:right">${qty(r.quantity_change)}</td>
+        <td style="text-align:right">${money(r.value_added)}</td>
+      `;
+      logTbody.appendChild(tr);
+    });
+
+    document.getElementById('iaLogPagination').innerHTML = `
+      <button class="btn btn-secondary" onclick="iaLogCurrentPage--; renderInventoryAdditions();" ${iaLogCurrentPage === 1 ? 'disabled' : ''}>&laquo; Prev</button>
+      <span style="font-size:0.9rem; color:#64748b;">Page ${iaLogCurrentPage} of ${logTotalPages}</span>
+      <button class="btn btn-secondary" onclick="iaLogCurrentPage++; renderInventoryAdditions();" ${iaLogCurrentPage === logTotalPages ? 'disabled' : ''}>Next &raquo;</button>
+    `;
   }
 
   function sortData(type) {
