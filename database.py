@@ -155,6 +155,13 @@ def init_db():
         except sqlite3.OperationalError:
             pass
 
+        try:
+            conn.execute(
+                "ALTER TABLE sale_items ADD COLUMN print_dual_units INTEGER DEFAULT 0"
+            )
+            conn.commit()
+        except sqlite3.OperationalError:
+            pass
             
         # Safely add salesman_id column to sales table
         try:
