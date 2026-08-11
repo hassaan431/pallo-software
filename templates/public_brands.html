@@ -4,70 +4,99 @@
 {% block content %}
 <style>
     .brands-header {
-        padding: 5rem 5% 4rem 5%;
+        padding: 6rem 5% 5rem 5%;
         border-bottom: none;
-        background-color: var(--bg-dark);
+        background: linear-gradient(135deg, rgba(15, 23, 42, 1) 0%, rgba(16, 185, 129, 0.15) 100%);
         color: var(--text-light);
         text-align: center;
     }
     .brands-header h1 {
-        font-size: 3rem;
+        font-size: 3.5rem;
         font-weight: 800;
         margin: 0 0 1rem 0;
         color: var(--text-light);
+        letter-spacing: -0.02em;
     }
     .brands-header p {
-        color: var(--text-muted);
-        font-size: 1.125rem;
+        color: #e2e8f0;
+        font-size: 1.25rem;
         margin: 0 auto;
         max-width: 600px;
+        line-height: 1.6;
     }
     
     .brands-grid {
         display: grid;
-        grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-        gap: 1.5rem;
+        grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+        gap: 2rem;
         padding: 4rem 5%;
-        margin-bottom: 2rem;
+        margin-bottom: 6rem;
+        max-width: 1400px;
+        margin-left: auto;
+        margin-right: auto;
     }
     .brand-card {
-        background: var(--bg-card);
-        border: 1px solid var(--border);
-        border-radius: 4px;
-        padding: 1rem;
+        background: var(--bg-alt);
+        border-radius: 12px;
+        padding: 2rem 1.5rem;
         text-align: center;
-        transition: transform 0.2s, box-shadow 0.2s;
+        transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
         display: flex;
         flex-direction: column;
         align-items: center;
         justify-content: center;
-        min-height: 140px;
+        min-height: 160px;
         color: var(--text-main);
         font-weight: 700;
         font-size: 1.15rem;
         text-decoration: none;
+        border: 1px solid transparent;
+        position: relative;
+        overflow: hidden;
+    }
+    .brand-card::after {
+        content: '';
+        position: absolute;
+        inset: 0;
+        background: radial-gradient(circle at center, rgba(16, 185, 129, 0.1) 0%, transparent 70%);
+        opacity: 0;
+        transition: opacity 0.3s;
     }
     .brand-card:hover {
         transform: translateY(-4px);
-        box-shadow: 0 10px 25px rgba(0,0,0,0.08);
-        border-color: var(--accent);
-        color: var(--accent);
+        background: var(--card-bg);
+        border-color: var(--border-heavy);
+        box-shadow: 0 12px 24px -4px rgba(15, 23, 42, 0.08);
+    }
+    .brand-card:hover::after {
+        opacity: 1;
     }
     .brand-card img {
-        max-height: 90px;
+        max-height: 80px;
         max-width: 90%;
-        margin-bottom: 0.5rem;
+        margin-bottom: 1rem;
         object-fit: contain;
+        position: relative;
+        z-index: 2;
+        transition: transform 0.3s ease;
+    }
+    .brand-card:hover img {
+        transform: scale(1.05);
+    }
+    .brand-name {
+        position: relative;
+        z-index: 2;
+        font-family: 'Outfit', sans-serif;
     }
     
     .empty-state {
         text-align: center;
-        padding: 5rem 2rem;
+        padding: 8rem 2rem;
         color: var(--text-muted);
     }
     @media (max-width: 768px) {
-        .brands-header { padding: 3rem 5% 2rem 5%; }
-        .brands-header h1 { font-size: 2.25rem; }
+        .brands-header { padding: 4rem 5% 3rem 5%; }
+        .brands-header h1 { font-size: 2.5rem; }
     }
 </style>
 
@@ -84,14 +113,14 @@
         {% if logo_name %}
             <img src="{{ url_for('static', filename='logos/brands/' ~ logo_name) }}" alt="{{ brand }}">
         {% else %}
-            <span>{{ brand }}</span>
+            <span class="brand-name">{{ brand }}</span>
         {% endif %}
     </a>
     {% endfor %}
 </div>
 {% else %}
 <div class="empty-state">
-    <h2>No brands available.</h2>
+    <h2 style="font-family: 'Outfit', sans-serif;">No brands available.</h2>
     <p>Check back later as we update our catalog.</p>
 </div>
 {% endif %}

@@ -4,72 +4,93 @@
 {% block content %}
 <style>
     .about-header {
-        padding: 5rem 5% 4rem 5%;
+        padding: 6rem 5% 5rem 5%;
         border-bottom: none;
-        background-color: var(--bg-dark);
+        background: linear-gradient(135deg, rgba(15, 23, 42, 1) 0%, rgba(16, 185, 129, 0.15) 100%);
         color: var(--text-light);
         text-align: center;
     }
     .about-header h1 {
-        font-size: 3rem;
+        font-size: 3.5rem;
         font-weight: 800;
         margin: 0 0 1rem 0;
         color: var(--text-light);
+        letter-spacing: -0.02em;
     }
     .about-header p {
-        color: var(--text-muted);
-        font-size: 1.125rem;
+        color: #e2e8f0;
+        font-size: 1.25rem;
         margin: 0 auto;
         max-width: 700px;
         line-height: 1.6;
     }
     .about-content {
-        padding: 4rem 5%;
+        padding: 6rem 5%;
         max-width: 800px;
         margin: 0 auto;
         color: var(--text-main);
-        font-size: 1.1rem;
-        line-height: 1.7;
+        font-size: 1.15rem;
+        line-height: 1.8;
     }
     .about-content h2 {
-        font-size: 2rem;
+        font-size: 2.25rem;
         font-weight: 800;
-        margin: 3rem 0 1.5rem 0;
+        margin: 4rem 0 1.5rem 0;
         color: var(--text-main);
+        letter-spacing: -0.02em;
+    }
+    .about-content h2:first-child {
+        margin-top: 0;
     }
     .about-content h2::after {
         content: '';
         display: block;
-        width: 40px;
-        height: 3px;
+        width: 48px;
+        height: 4px;
         background: var(--accent);
-        margin-top: 0.75rem;
+        margin-top: 1rem;
+        border-radius: 2px;
     }
     .contact-card {
-        background: var(--bg-card);
-        border: 1px solid var(--border-heavy);
-        border-radius: 4px;
-        padding: 2rem;
-        margin-top: 3rem;
+        background: var(--bg-alt);
+        border: 1px solid transparent;
+        border-radius: 12px;
+        padding: 3rem;
+        margin-top: 5rem;
         text-align: center;
+        transition: transform 0.3s ease, box-shadow 0.3s ease;
+    }
+    .contact-card:hover {
+        transform: translateY(-4px);
+        background: var(--card-bg);
+        border-color: var(--border-heavy);
+        box-shadow: 0 12px 24px -4px rgba(15, 23, 42, 0.08);
     }
     .contact-card h3 {
-        margin: 0 0 1rem 0;
-        font-size: 1.5rem;
+        margin: 0 0 1.25rem 0;
+        font-size: 1.75rem;
+        font-weight: 700;
     }
     .contact-card p {
         margin: 0.5rem 0;
         color: var(--text-muted);
     }
+    .btn-large {
+        padding: 1rem 2.5rem;
+        font-size: 1.125rem;
+        border-radius: 8px;
+        margin-top: 2rem;
+    }
     @media (max-width: 768px) {
-        .about-header { padding: 3rem 5% 2rem 5%; }
-        .about-header h1 { font-size: 2.25rem; }
+        .about-header { padding: 4rem 5% 3rem 5%; }
+        .about-header h1 { font-size: 2.5rem; }
+        .contact-card { padding: 2rem; }
     }
 </style>
 
 <div class="about-header">
     <h1>About AK Distributors</h1>
-    <p>Your trusted partner in wholesale distribution.</p>
+    <p>Your trusted partner in premium wholesale distribution.</p>
 </div>
 
 <div class="about-content">
@@ -78,20 +99,20 @@
     
     <h2>Why Choose Us?</h2>
     <p>We believe in building long-term partnerships rather than just processing transactions. When you partner with AK Distributors, you benefit from:</p>
-    <ul>
-        <li><strong>Curated Selection:</strong> We carefully vet all our brands and products to ensure they meet our high standards.</li>
-        <li><strong>Reliability:</strong> Consistent and timely deliveries so your business never misses a beat.</li>
-        <li><strong>Dedicated Support:</strong> Our team is always here to assist with your custom needs and large-scale orders.</li>
+    <ul style="margin-top: 1.5rem; list-style-type: square; padding-left: 1.5rem;">
+        <li style="margin-bottom: 0.75rem;"><strong>Curated Selection:</strong> We carefully vet all our brands and products to ensure they meet our high standards.</li>
+        <li style="margin-bottom: 0.75rem;"><strong>Reliability:</strong> Consistent and timely deliveries so your business never misses a beat.</li>
+        <li style="margin-bottom: 0.75rem;"><strong>Dedicated Support:</strong> Our team is always here to assist with your custom needs and large-scale orders.</li>
     </ul>
 
     <div class="contact-card">
         <h3>Get in Touch</h3>
         <p>Ready to place an order or looking for custom solutions?</p>
-        <p><strong>Email:</strong> sales@akdistributors.com</p>
-        <p><strong>Phone:</strong> (555) 123-4567</p>
-        <p><strong>Address:</strong> 123 Logistics Way, Suite 100, Distribution City, NY</p>
-        <div style="margin-top: 1.5rem;">
-            <a href="{{ url_for('public_bp.catalog') }}" class="btn-primary" style="display: inline-block;">Browse Our Catalog</a>
+        <p style="margin-top: 1.5rem; color: var(--text-main);"><strong>Email:</strong> sales@akdistributors.com</p>
+        <p style="color: var(--text-main);"><strong>Phone:</strong> (555) 123-4567</p>
+        <p style="color: var(--text-main);"><strong>Address:</strong> 123 Logistics Way, Suite 100, Distribution City, NY</p>
+        <div>
+            <a href="{{ url_for('public_bp.catalog') }}" class="btn-primary btn-large">Browse Our Catalog</a>
         </div>
     </div>
 </div>
