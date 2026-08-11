@@ -597,8 +597,8 @@ def generate_pdf_from_data(sale: dict, customer: dict, sale_items: list, is_quot
             rate_val = float(rate) if rate is not None else 0
             sale_item_dict = dict(row["sale_item"]) if hasattr(row["sale_item"], 'keys') else row["sale_item"]
             if sale_item_dict.get("print_dual_units") == 1:
-                qty_str = f"{qty_val:g}g / {qty_val/28.34952:.2f}Oz"
-                rate_str = f"${format_rate(rate_val)}/g / ${format_rate(rate_val * 28.34952)}/Oz"
+                qty_str = f"{qty_val:g}KG / {qty_val * 35.274:.2f}Oz"
+                rate_str = f"${format_rate(rate_val)}/KG / ${format_rate(rate_val / 35.274)}/Oz"
             else:
                 qty_str = f"{qty_val:g}"
                 rate_str = f"${format_rate(rate_val)}"
