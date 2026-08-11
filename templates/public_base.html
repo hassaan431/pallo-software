@@ -125,20 +125,41 @@
             font-size: 0.95rem;
             color: rgba(255, 255, 255, 0.8);
         }
+        .mobile-menu-btn {
+            display: none;
+            background: none;
+            border: none;
+            font-size: 1.75rem;
+            cursor: pointer;
+            color: var(--text-main);
+            padding: 0;
+        }
         @media (max-width: 768px) {
-            header {
-                flex-direction: column;
-                gap: 1rem;
-                padding: 1rem;
-            }
-            .nav-links {
-                gap: 1rem;
+            .site-header {
                 flex-wrap: wrap;
-                justify-content: center;
+                padding: 1rem 5%;
             }
             .logo {
+                flex-direction: row;
+                text-align: left;
+                font-size: 1.1rem;
+            }
+            .logo img {
+                max-height: 32px;
+            }
+            .mobile-menu-btn {
+                display: block;
+            }
+            .nav-links {
                 flex-direction: column;
-                text-align: center;
+                width: 100%;
+                display: none;
+                margin-top: 1.5rem;
+                gap: 1rem;
+                justify-content: center;
+            }
+            .nav-links.active {
+                display: flex;
             }
         }
     </style>
@@ -150,7 +171,8 @@
             <img src="{{ url_for('static', filename='logos/AK_Distributors_Logo.png') }}" alt="AK Distributors Logo">
             AK Distributors
         </a>
-        <nav class="nav-links">
+        <button class="mobile-menu-btn" onclick="toggleMobileMenu()">☰</button>
+        <nav class="nav-links" id="mobileMenu">
             <a href="{{ url_for('public_bp.home') }}">Home</a>
             <a href="{{ url_for('public_bp.catalog') }}">Products</a>
             <a href="{{ url_for('public_bp.brands') }}">Brands</a>
@@ -175,5 +197,29 @@
         <p style="margin-top: 1rem;">&copy; 2026 AK Distributors. All rights reserved.</p>
     </footer>
 
+<script>
+    function toggleMobileMenu() {
+        const menu = document.getElementById('mobileMenu');
+        menu.classList.toggle('active');
+    }
+
+    // Header hide on scroll for mobile
+    let lastScrollTop = 0;
+    const header = document.querySelector('.site-header');
+
+    window.addEventListener('scroll', () => {
+        let scrollTop = window.pageYOffset || document.documentElement.scrollTop;
+        if (scrollTop > lastScrollTop && scrollTop > header.offsetHeight) {
+            // scroll down
+            header.classList.add('nav-hidden');
+            // also close menu if open
+            document.getElementById('mobileMenu').classList.remove('active');
+        } else {
+            // scroll up
+            header.classList.remove('nav-hidden');
+        }
+        lastScrollTop = scrollTop;
+    });
+</script>
 </body>
 </html>
