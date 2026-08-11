@@ -117,6 +117,42 @@
         padding: 8rem 2rem;
         color: var(--text-muted);
     }
+
+    .brand-tabs-container {
+        padding: 0 5%;
+        margin-bottom: 3rem;
+        display: flex;
+        justify-content: center;
+    }
+    .brand-tabs {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.75rem;
+        justify-content: center;
+        max-width: 1400px;
+    }
+    .brand-tab {
+        padding: 0.6rem 1.25rem;
+        border-radius: 50px;
+        background: var(--bg-alt);
+        color: var(--text-muted);
+        font-weight: 600;
+        font-size: 0.95rem;
+        text-decoration: none;
+        border: 1px solid var(--border-heavy);
+        transition: all 0.2s;
+    }
+    .brand-tab:hover {
+        background: var(--bg-card);
+        color: var(--text-main);
+        border-color: var(--accent);
+    }
+    .brand-tab.active {
+        background: var(--accent);
+        color: white;
+        border-color: var(--accent);
+    }
+
     @media (max-width: 768px) {
         .catalog-header { padding: 4rem 5% 3rem 5%; }
         .catalog-header h1 { font-size: 2.5rem; }
@@ -138,6 +174,15 @@
             </a>
         </div>
     </div>
+
+<div class="brand-tabs-container">
+    <div class="brand-tabs">
+        <a href="{{ url_for('public_bp.catalog') }}" class="brand-tab {% if not selected_brand %}active{% endif %}">All Brands</a>
+        {% for brand in all_brands %}
+        <a href="{{ url_for('public_bp.catalog', brand=brand) }}" class="brand-tab {% if selected_brand == brand %}active{% endif %}">{{ brand }}</a>
+        {% endfor %}
+    </div>
+</div>
 
 {% if products %}
 <div class="product-grid">

@@ -33,10 +33,16 @@ def catalog():
     brand_filter = request.args.get('brand')
     products = get_public_products()
     
+    brands_set = set()
+    for p in products:
+        if p.get('brand'):
+            brands_set.add(p['brand'])
+    all_brands = sorted(list(brands_set))
+    
     if brand_filter:
         products = [p for p in products if p.get('brand') == brand_filter]
         
-    return render_template('public_catalog.html', products=products, selected_brand=brand_filter)
+    return render_template('public_catalog.html', products=products, selected_brand=brand_filter, all_brands=all_brands)
 
 @public_bp.route('/about')
 def about():
