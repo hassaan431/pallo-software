@@ -12,17 +12,23 @@ def fix_bake_parlor():
     conn = sqlite3.connect(db_path)
     cursor = conn.cursor()
     
-    # Check how many products have the misspelled brand
-    cursor.execute("SELECT COUNT(*) FROM products WHERE brand = 'Bake Parlar'")
-    count = cursor.fetchone()[0]
+    # 1. Let's see exactly what's in the database
+    cursor.execute("SELECT DISTINCT brand FROM products WHERE brand LIKE '%Parl%'")
+    brands = cursor.fetchall()
+    print("Found the following brands containing 'Parl':")
+    for b in brands:
+        # Print with brackets so we can see trailing spaces
+        print(f" - [{b[0]}]")
+        
+    # 2. Update anything that looks like the typo
+    cursor.execute("UPDATE products SET brand = 'Bake Parlor' WHERE brand LIKE '%Parlar%'")
+    updated = cursor.rowcount
     
-    if count > 0:
-        print(f"Found {count} products with brand 'Bake Parlar'. Updating to 'Bake Parlor'...")
-        cursor.execute("UPDATE products SET brand = 'Bake Parlor' WHERE brand = 'Bake Parlar'")
+    if updated > 0:
+        print(f"\nSuccess! Updated {updated} products containing 'Parlar' to 'Bake Parlor'.")
         conn.commit()
-        print("Update successful!")
     else:
-        print("No products found with brand 'Bake Parlar'.")
+        print("\nNo rows were updated. If you still see the typo, let me know the exact spelling printed above!")
         
     conn.close()
 
