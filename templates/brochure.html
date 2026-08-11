@@ -81,9 +81,9 @@
 <div style="text-align: center; margin-top: 150pt;">
     <h3 style="color: #83899D; margin-bottom: 20pt; font-size: 14pt;">Our Partner Brands</h3>
     <div>
-    {% for b, exists in brand_logos.items() %}
-        {% if exists %}
-            <img src="/static/logos/brands/{{ b }}.png" width="80" style="margin: 10pt;">
+    {% for b, logo_name in brand_logos.items() %}
+        {% if logo_name %}
+            <img src="/static/logos/brands/{{ logo_name }}" width="80" style="margin: 10pt;">
         {% endif %}
     {% endfor %}
     </div>
@@ -94,7 +94,7 @@
     <div class="brand-section">
         <h2>
             {% if brand_logos.get(brand) %}
-                <img src="/static/logos/brands/{{ brand }}.png" width="60" style="vertical-align: middle; margin-right: 10pt;">
+                <img src="/static/logos/brands/{{ brand_logos.get(brand) }}" width="60" style="vertical-align: middle; margin-right: 10pt;">
             {% endif %}
             {{ brand }}
         </h2>

@@ -10,12 +10,13 @@ def generate_brochure():
     brand_logos = {}
     
     # Group by brand
+    from database import get_brand_logo_filename
     for p in products:
         b = p.get('brand') or 'Other'
         if b not in brands:
             brands[b] = []
-            logo_path = os.path.join('static', 'logos', 'brands', f"{b}.png")
-            brand_logos[b] = os.path.exists(logo_path)
+            logo_file = get_brand_logo_filename(b)
+            brand_logos[b] = logo_file
         brands[b].append(p)
         
     doc = Document()
@@ -45,9 +46,9 @@ def generate_brochure():
     p2.alignment = WD_ALIGN_PARAGRAPH.CENTER
     run = p2.add_run()
     
-    for b, exists in brand_logos.items():
-        if exists:
-            logo_path = os.path.join('static', 'logos', 'brands', f"{b}.png")
+    for b, logo_file in brand_logos.items():
+        if logo_file:
+            logo_path = os.path.join('static', 'logos', 'brands', logo_file)
             run.add_picture(logo_path, width=Inches(0.6))
             run.add_text("  ")
             
@@ -59,7 +60,7 @@ def generate_brochure():
         p = doc.add_heading('', level=1)
         r = p.add_run()
         if brand_logos.get(brand):
-            logo_path = os.path.join('static', 'logos', 'brands', f"{brand}.png")
+            logo_path = os.path.join('static', 'logos', 'brands', brand_logos[brand])
             try:
                 r.add_picture(logo_path, width=Inches(0.3))
                 r.add_text("   ")

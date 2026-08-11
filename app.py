@@ -117,6 +117,12 @@ def format_rate_filter(val):
     except Exception:
         return "0.00"
 
+@app.template_filter("brand_logo_filename")
+def brand_logo_filename_filter(val):
+    from database import get_brand_logo_filename
+    return get_brand_logo_filename(val)
+
+
 
 
 

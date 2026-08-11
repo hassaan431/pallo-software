@@ -334,3 +334,20 @@ def get_public_products():
     finally:
         conn.close()
 
+
+def get_brand_logo_filename(brand_name: str):
+    if not brand_name:
+        return None
+    brands_dir = DB_PATH.parent / "static" / "logos" / "brands"
+    if not brands_dir.exists():
+        return None
+    exact_path = brands_dir / f"{brand_name}.png"
+    if exact_path.exists():
+        return f"{brand_name}.png"
+    brand_lower = brand_name.strip().lower()
+    for f in brands_dir.glob("*.png"):
+        if f.stem.strip().lower() == brand_lower:
+            return f.name
+    return None
+
+

@@ -79,9 +79,13 @@
 {% if brands %}
 <div class="brands-grid">
     {% for brand in brands %}
+    {% set logo_name = brand | brand_logo_filename %}
     <a href="{{ url_for('public_bp.catalog', brand=brand) }}" class="brand-card">
-        <img src="{{ url_for('static', filename='logos/brands/' ~ brand ~ '.png') }}" alt="{{ brand }}" onerror="this.style.display='none'; this.nextElementSibling.style.display='block';">
-        <span style="display:none;">{{ brand }}</span>
+        {% if logo_name %}
+            <img src="{{ url_for('static', filename='logos/brands/' ~ logo_name) }}" alt="{{ brand }}">
+        {% else %}
+            <span>{{ brand }}</span>
+        {% endif %}
     </a>
     {% endfor %}
 </div>

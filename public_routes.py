@@ -59,12 +59,13 @@ def download_brochure():
     # Group by brand
     brands = {}
     brand_logos = {}
+    from database import get_brand_logo_filename
     for p in products:
         b = p.get('brand') or 'Other'
         if b not in brands:
             brands[b] = []
-            logo_path = os.path.join(current_app.root_path, 'static', 'logos', 'brands', f"{b}.png")
-            brand_logos[b] = os.path.exists(logo_path)
+            logo_name = get_brand_logo_filename(b)
+            brand_logos[b] = logo_name if logo_name else False
         brands[b].append(p)
         
     # Render HTML template
