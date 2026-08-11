@@ -278,27 +278,13 @@ def _seed_default_data(conn):
 def get_next_invoice_number():
     conn = get_connection()
     try:
-        row = conn.execute(
-            "SELECT MAX(invoice_number) AS max_invoice FROM sales"
-        ).fetchone()
-
-        max_invoice = None if not row else row["max_invoice"]
-        if not max_invoice:
-            return "AK-000001"
-
-        inv = str(max_invoice).strip()
-        match = re.match(r"(?i)^AK-(\d+)$", inv)
-        if match:
-            next_num = int(match.group(1)) + 1
-            return f"AK-{next_num:06d}"
-
-        # Fallback: extract numeric parts from all AK-* invoice numbers
         rows = conn.execute(
-            "SELECT invoice_number FROM sales WHERE invoice_number LIKE 'AK-%'"
+            "SELECT invoice_number FROM sales WHERE invoice_number LIKE 'AK-%' OR invoice_number LIKE 'Q-%'"
         ).fetchall()
         nums = []
         for r in rows:
-            m = re.match(r"(?i)^AK-(\d+)$", str(r["invoice_number"]).strip())
+            inv = str(r["invoice_number"]).strip()
+            m = re.search(r"(\d+)$", inv)
             if m:
                 nums.append(int(m.group(1)))
 

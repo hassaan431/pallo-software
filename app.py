@@ -1678,68 +1678,49 @@ def sales_new():
         if grand_total < 0:
             grand_total = 0.00
 
+        is_quote = "generate_quote" in request.form
+        
         # Use provided invoice number or generate one
-        if not invoice_number:
-            invoice_number = get_next_invoice_number()
+        if is_quote:
+            status = 'quote'
+            if not invoice_number:
+                invoice_number = f"Q-{get_next_invoice_number().replace('AK-', '')}"
+            elif invoice_number.startswith("AK-"):
+                invoice_number = "Q-" + invoice_number[3:]
+            elif not invoice_number.startswith("Q-"):
+                invoice_number = "Q-" + invoice_number
+            amount_paid = 0
+            remaining_amount = grand_total
+        else:
+            if not invoice_number:
+                invoice_number = get_next_invoice_number()
 
-        # Calculate amount_paid and remaining_amount based on payment_type
-        if payment_type == 'cash':
-            amount_paid = grand_total
-            remaining_amount = 0
-            status = 'paid'
-        elif payment_type == 'cheque':
-            amount_paid = grand_total
-            remaining_amount = 0
-            status = 'paid'
-        elif payment_type == 'credit':
-            # amount_paid comes from form (paid upfront field)
-            # Validate it doesn't exceed grand_total
-            if amount_paid > grand_total:
+            # Calculate amount_paid and remaining_amount based on payment_type
+            if payment_type == 'cash':
                 amount_paid = grand_total
-            remaining_amount = grand_total - amount_paid
-            if remaining_amount <= 0:
                 remaining_amount = 0
                 status = 'paid'
-            elif amount_paid > 0:
-                status = 'partial'
+            elif payment_type == 'cheque':
+                amount_paid = grand_total
+                remaining_amount = 0
+                status = 'paid'
+            elif payment_type == 'credit':
+                # amount_paid comes from form (paid upfront field)
+                # Validate it doesn't exceed grand_total
+                if amount_paid > grand_total:
+                    amount_paid = grand_total
+                remaining_amount = grand_total - amount_paid
+                if remaining_amount <= 0:
+                    remaining_amount = 0
+                    status = 'paid'
+                elif amount_paid > 0:
+                    status = 'partial'
+                else:
+                    status = 'unpaid'
             else:
                 status = 'unpaid'
-        else:
-            status = 'unpaid'
-            
-        print(f"DEBUG sales_new: grand_total={grand_total}, amount_paid={amount_paid}, payment_type={payment_type}, remaining={remaining_amount}, status={status}")
 
-        if "generate_quote" in request.form:
-            from invoice_generator import generate_pdf_from_data
-            conn_quote = get_connection()
-            try:
-                cust_row = conn_quote.execute("SELECT id, name, bill_address, ship_address, phone FROM customers WHERE id = ?", (customer_id,)).fetchone()
-                customer_data = dict(cust_row) if cust_row else {"name": "Unknown", "bill_address": "", "ship_address": "", "phone": ""}
-                
-                for item in parsed_items:
-                    prod = conn_quote.execute("SELECT name, brand FROM products WHERE id = ?", (item["product_id"],)).fetchone()
-                    item["product_name"] = prod["name"] if prod else ""
-                    item["product_brand"] = prod["brand"] if prod else ""
-            finally:
-                conn_quote.close()
-                
-            sale_data = {
-                "invoice_number": f"Q-{invoice_number}",
-                "invoice_date": invoice_date,
-                "due_date": due_date,
-                "terms": terms,
-                "subtotal": subtotal,
-                "discount_amount": discount_amount,
-                "grand_total": grand_total,
-                "payment_type": payment_type,
-                "amount_paid": amount_paid,
-                "remaining_amount": remaining_amount
-            }
-            
-            pdf_bytes = generate_pdf_from_data(sale_data, customer_data, parsed_items, is_quote=True)
-            resp = Response(pdf_bytes, mimetype="application/pdf")
-            resp.headers["Content-Disposition"] = f'attachment; filename="{sale_data["invoice_number"]}.pdf"'
-            return resp
+        print(f"DEBUG sales_new: grand_total={grand_total}, amount_paid={amount_paid}, payment_type={payment_type}, remaining={remaining_amount}, status={status}")
 
         conn = get_connection()
         try:
@@ -1750,18 +1731,19 @@ def sales_new():
                 qty_total_by_product[li["product_id"]] += li["qty"]
 
             # Ensure stock is sufficient (aggregate per product for repeated items)
-            for product_id, qty_total in qty_total_by_product.items():
-                cur = conn.execute(
-                    "SELECT stock_quantity, name FROM products WHERE id = ?",
-                    (product_id,),
-                )
-                row = cur.fetchone()
-                if row is None:
-                    raise ValueError("One or more selected products are invalid.")
-                stock_quantity = float(row["stock_quantity"] or 0)
-                product_name = row["name"] or "Unknown Product"
-                if stock_quantity + 1e-9 < qty_total:
-                    raise ValueError(f"Insufficient stock for {product_name} (requested {qty_total}, available {stock_quantity}).")
+            if not is_quote:
+                for product_id, qty_total in qty_total_by_product.items():
+                    cur = conn.execute(
+                        "SELECT stock_quantity, name FROM products WHERE id = ?",
+                        (product_id,),
+                    )
+                    row = cur.fetchone()
+                    if row is None:
+                        raise ValueError("One or more selected products are invalid.")
+                    stock_quantity = float(row["stock_quantity"] or 0)
+                    product_name = row["name"] or "Unknown Product"
+                    if stock_quantity + 1e-9 < qty_total:
+                        raise ValueError(f"Insufficient stock for {product_name} (requested {qty_total}, available {stock_quantity}).")
 
             try:
                 salesman_id = int(salesman_id_raw) if salesman_id_raw else current_user.id
@@ -1816,33 +1798,34 @@ def sales_new():
                 )
 
             # Deduct stock atomically (per product total)
-            for product_id, qty_total in qty_total_by_product.items():
-                cur = conn.execute("SELECT stock_quantity FROM products WHERE id = ?", (product_id,))
-                row = cur.fetchone()
-                old_stock = float(row["stock_quantity"] or 0) if row else 0
-
-                upd = conn.execute(
-                    """
-                    UPDATE products
-                    SET stock_quantity = stock_quantity - ?
-                    WHERE id = ? AND stock_quantity >= ?
-                    """,
-                    (qty_total, product_id, qty_total),
-                )
-                if upd.rowcount == 0:
-                    cur = conn.execute(
-                        "SELECT name FROM products WHERE id = ?",
-                        (product_id,),
-                    )
+            if not is_quote:
+                for product_id, qty_total in qty_total_by_product.items():
+                    cur = conn.execute("SELECT stock_quantity FROM products WHERE id = ?", (product_id,))
                     row = cur.fetchone()
-                    product_name = row["name"] if row else "Unknown Product"
-                    raise ValueError(f"Insufficient stock for {product_name}.")
-                else:
-                    new_stock = old_stock - qty_total
-                    conn.execute("""
-                        INSERT INTO inventory_history (product_id, transaction_type, quantity_change, previous_stock, new_stock, reference)
-                        VALUES (?, ?, ?, ?, ?, ?)
-                    """, (product_id, 'OUT', -qty_total, old_stock, new_stock, f'Invoice #{invoice_number}'))
+                    old_stock = float(row["stock_quantity"] or 0) if row else 0
+
+                    upd = conn.execute(
+                        """
+                        UPDATE products
+                        SET stock_quantity = stock_quantity - ?
+                        WHERE id = ? AND stock_quantity >= ?
+                        """,
+                        (qty_total, product_id, qty_total),
+                    )
+                    if upd.rowcount == 0:
+                        cur = conn.execute(
+                            "SELECT name FROM products WHERE id = ?",
+                            (product_id,),
+                        )
+                        row = cur.fetchone()
+                        product_name = row["name"] if row else "Unknown Product"
+                        raise ValueError(f"Insufficient stock for {product_name}.")
+                    else:
+                        new_stock = old_stock - qty_total
+                        conn.execute("""
+                            INSERT INTO inventory_history (product_id, transaction_type, quantity_change, previous_stock, new_stock, reference)
+                            VALUES (?, ?, ?, ?, ?, ?)
+                        """, (product_id, 'OUT', -qty_total, old_stock, new_stock, f'Invoice #{invoice_number}'))
 
             conn.commit()
         except Exception as e:
@@ -1855,10 +1838,9 @@ def sales_new():
         flash(error, "error")
         return redirect(url_for("sales"))
 
-    if generate_invoice:
+    if generate_invoice or is_quote:
         return redirect(url_for("sales_invoice_pdf", id=sale_id))
 
-    flash("Sale saved successfully.", "success")
     flash("Sale saved successfully.", "success")
     return redirect(url_for("sales"))
 
@@ -2526,6 +2508,86 @@ def sales_invoice_pdf(id: int):
     return resp
 
 
+@app.route("/sales/<int:sale_id>/mark_sale", methods=["POST"])
+def sales_mark_sale(sale_id: int):
+    conn = get_connection()
+    try:
+        conn.execute("BEGIN")
+        sale = conn.execute("SELECT * FROM sales WHERE id = ?", (sale_id,)).fetchone()
+        if not sale:
+            return jsonify({"success": False, "message": "Sale not found"})
+        
+        if sale["status"] != "quote":
+            return jsonify({"success": False, "message": "Only quotes can be marked as sales."})
+
+        # Generate actual invoice number
+        quote_invoice_num = sale["invoice_number"]
+        if quote_invoice_num and quote_invoice_num.startswith("Q-"):
+            potential_invoice_num = "AK-" + quote_invoice_num[2:]
+            exists = conn.execute("SELECT 1 FROM sales WHERE invoice_number = ?", (potential_invoice_num,)).fetchone()
+            if not exists:
+                invoice_number = potential_invoice_num
+            else:
+                invoice_number = get_next_invoice_number()
+        else:
+            invoice_number = get_next_invoice_number()
+
+        items = conn.execute("SELECT product_id, qty FROM sale_items WHERE sale_id = ?", (sale_id,)).fetchall()
+
+        # Check stock first
+        qty_total_by_product = defaultdict(float)
+        for it in items:
+            qty_total_by_product[it["product_id"]] += it["qty"]
+            
+        for product_id, qty_total in qty_total_by_product.items():
+            row = conn.execute("SELECT stock_quantity, name FROM products WHERE id = ?", (product_id,)).fetchone()
+            if row is None:
+                raise ValueError("Invalid product found in quote.")
+            stock_quantity = float(row["stock_quantity"] or 0)
+            if stock_quantity + 1e-9 < qty_total:
+                raise ValueError(f"Insufficient stock for {row['name']}.")
+
+        # Update stock and write history
+        for product_id, qty_total in qty_total_by_product.items():
+            row = conn.execute("SELECT stock_quantity FROM products WHERE id = ?", (product_id,)).fetchone()
+            old_stock = float(row["stock_quantity"] or 0) if row else 0
+            
+            upd = conn.execute(
+                """
+                UPDATE products
+                SET stock_quantity = stock_quantity - ?
+                WHERE id = ? AND stock_quantity >= ?
+                """,
+                (qty_total, product_id, qty_total)
+            )
+            if upd.rowcount == 0:
+                raise ValueError("Stock became insufficient during update.")
+            
+            new_stock = old_stock - qty_total
+            conn.execute("""
+                INSERT INTO inventory_history (product_id, transaction_type, quantity_change, previous_stock, new_stock, reference)
+                VALUES (?, ?, ?, ?, ?, ?)
+            """, (product_id, 'OUT', -qty_total, old_stock, new_stock, f'Invoice #{invoice_number}'))
+            
+        # Update sale record to unpaid and new invoice number
+        conn.execute(
+            """
+            UPDATE sales
+            SET status = 'unpaid', invoice_number = ?
+            WHERE id = ?
+            """,
+            (invoice_number, sale_id)
+        )
+
+        conn.commit()
+        return jsonify({"success": True, "new_invoice_number": invoice_number, "remaining_amount": sale["remaining_amount"]})
+    except Exception as e:
+        conn.rollback()
+        return jsonify({"success": False, "message": str(e)})
+    finally:
+        conn.close()
+
+
 @app.route("/sales/delete/<int:id>", methods=["POST"])
 @admin_required
 def sales_delete(id: int):
@@ -2604,9 +2666,9 @@ def record_payment(sale_id):
         new_status = 'paid' if new_remaining <= 0.01 else 'partial'
 
         conn.execute('''UPDATE sales 
-                      SET amount_paid = ?, remaining_amount = ?, status = ?
+                      SET amount_paid = ?, remaining_amount = ?, status = ?, payment_type = ?
                       WHERE id = ?''',
-                   (new_amount_paid, new_remaining, new_status, sale_id))
+                   (new_amount_paid, new_remaining, new_status, payment_method.lower(), sale_id))
 
         conn.commit()
         return jsonify({'success': True})

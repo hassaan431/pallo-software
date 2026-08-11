@@ -481,6 +481,7 @@
               <th style="white-space: nowrap;">Profit Margin</th>
               <th style="white-space: nowrap;">Profit Amount</th>
               <th style="white-space: nowrap;">Remaining</th>
+              <th style="white-space: nowrap;">Status</th>
               <th style="white-space: nowrap;">Salesman</th>
               <th style="width: 200px;">Actions</th>
             </tr>
@@ -1179,6 +1180,16 @@
       tdRemaining.textContent = money(remaining);
       tr.appendChild(tdRemaining);
 
+      const tdStatus = document.createElement('td');
+      const st = (s.status || 'unpaid').toLowerCase();
+      let badgeStyle = 'padding: 4px 8px; border-radius: 4px; font-size: 0.75rem; font-weight: 600; text-transform: uppercase;';
+      if (st === 'paid') badgeStyle += 'background-color: #d1fae5; color: #065f46;';
+      else if (st === 'partial') badgeStyle += 'background-color: #fef3c7; color: #92400e;';
+      else if (st === 'quote') badgeStyle += 'background-color: #dbeafe; color: #1e40af;';
+      else badgeStyle += 'background-color: #fee2e2; color: #991b1b;';
+      tdStatus.innerHTML = `<span style="${badgeStyle}">${st}</span>`;
+      tr.appendChild(tdStatus);
+
       const tdSalesman = document.createElement('td');
       tdSalesman.textContent = s.salesman_name || 'Admin';
       tr.appendChild(tdSalesman);
@@ -1191,7 +1202,7 @@
       pdfLink.className = 'btn btn-pdf';
       pdfLink.target = '_blank';
       pdfLink.href = '/sales/' + s.id + '/invoice/pdf';
-      pdfLink.textContent = 'Invoice';
+      pdfLink.textContent = s.status === 'quote' ? 'Quotation' : 'Invoice';
       pdfLink.style.padding = '6px 14px';
       pdfLink.style.fontSize = '14px';
       pdfLink.onclick = (e) => e.stopPropagation();
@@ -1626,7 +1637,15 @@
         </tr>` : '';
 
       let recordPaymentHtml = '';
-      if ((data.payment_type === 'credit' || data.payment_type === 'Credit') && parseFloat(data.remaining_amount) > 0) {
+      if (data.status === 'quote') {
+        recordPaymentHtml = `
+          <div style="margin-top: 16px; text-align: right;">
+            <button type="button" class="btn btn-primary" onclick="markAsSale(${data.id})" style="background:#2563eb; border:none; padding:8px 16px; color:white; border-radius:6px; cursor:pointer; font-weight: 600;">
+              Mark as Sale
+            </button>
+          </div>
+        `;
+      } else if (parseFloat(data.remaining_amount) > 0) {
         recordPaymentHtml = `
           <div style="margin-top: 16px; text-align: right;">
             <button type="button" class="btn btn-primary" onclick="closeViewSale(); openRecordPaymentModal(${data.id}, '${data.invoice_number}', ${data.remaining_amount});" style="background:#16a34a; border:none; padding:8px 16px; color:white; border-radius:6px; cursor:pointer; font-weight: 600;">
@@ -1636,11 +1655,13 @@
         `;
       }
 
+      const titleLabel = data.status === 'quote' ? 'Quotation' : 'Invoice';
+
       document.getElementById(
         'viewSaleContent').innerHTML = `
         <h2 style="margin:0 0 8px; 
           color:#1a2332;">
-          Invoice #${data.invoice_number}
+          ${titleLabel} #${data.invoice_number}
         </h2>
         <p style="color:#6b7280; margin:0 0 24px;">
           ${data.customer_name}</p>
@@ -1653,7 +1674,7 @@
             padding:16px; border-radius:8px;">
             <div style="margin-bottom:8px;">
               <span style="color:#6b7280; 
-                font-size:12px;">INVOICE #</span>
+                font-size:12px; text-transform:uppercase;">${titleLabel} #</span>
               <div style="font-weight:bold;">
                 ${data.invoice_number}</div>
             </div>
@@ -1798,6 +1819,28 @@ function closeViewSale() {
     'viewSaleModal').style.display = 'none';
 }
 
+function markAsSale(saleId) {
+  if (!confirm('Are you sure you want to mark this quotation as a sale? This will deduct inventory and assign a new invoice number.')) return;
+  fetch('/sales/' + saleId + '/mark_sale', { method: 'POST' })
+    .then(r => r.json())
+    .then(res => {
+      if(res.success) {
+        closeViewSale();
+        refreshSalesTable();
+        // Automatically open the payment prompt
+        setTimeout(() => {
+          openRecordPaymentModal(saleId, res.new_invoice_number, res.remaining_amount);
+        }, 300);
+      } else {
+        alert('Error: ' + res.message);
+      }
+    })
+    .catch(err => {
+      console.error(err);
+      alert('Network error while marking as sale.');
+    });
+}
+
 // Close modal when clicking outside
 document.getElementById(
   'viewSaleModal')?.addEventListener(
@@ -1859,16 +1902,16 @@ document.getElementById(
     <p>Invoice: <strong id="rpInvoiceNumber"></strong></p>
     <p>Remaining: <strong id="rpRemaining"></strong></p>
     <div style="margin:1rem 0;">
-      <label>Amount Received</label>
-      <input type="number" id="rpAmount" step="0.01" min="0.01" class="form-control" placeholder="Enter amount">
-    </div>
-    <div style="margin:1rem 0;">
       <label>Payment Method</label>
-      <select id="rpMethod" class="form-control">
+      <select id="rpMethod" class="form-control" onchange="toggleRpAmount()">
         <option value="Cash">Cash</option>
         <option value="Cheque">Cheque</option>
-        <option value="Bank Transfer">Bank Transfer</option>
+        <option value="Credit">Credit</option>
       </select>
+    </div>
+    <div id="rpAmountContainer" style="margin:1rem 0; display:none;">
+      <label>Amount Received</label>
+      <input type="number" id="rpAmount" step="0.01" min="0.00" class="form-control" placeholder="Enter amount">
     </div>
     <div style="margin:1rem 0;">
       <label>Notes (optional)</label>
@@ -1885,14 +1928,27 @@ document.getElementById(
 let currentSaleId = null;
 let currentRemaining = 0;
 
+function toggleRpAmount() {
+    const method = document.getElementById('rpMethod').value;
+    const amountContainer = document.getElementById('rpAmountContainer');
+    if (method === 'Credit') {
+        amountContainer.style.display = 'block';
+    } else {
+        amountContainer.style.display = 'none';
+        document.getElementById('rpAmount').value = currentRemaining.toFixed(2);
+    }
+}
+
 function openRecordPaymentModal(saleId, invoiceNumber, remaining) {
     currentSaleId = saleId;
     currentRemaining = remaining;
     document.getElementById('rpInvoiceNumber').textContent = invoiceNumber;
     document.getElementById('rpRemaining').textContent = '$' + parseFloat(remaining).toFixed(2);
-    document.getElementById('rpAmount').value = '';
+    document.getElementById('rpMethod').value = 'Cash';
+    document.getElementById('rpAmount').value = parseFloat(remaining).toFixed(2);
     document.getElementById('rpAmount').max = remaining;
     document.getElementById('rpNotes').value = '';
+    toggleRpAmount();
     document.getElementById('recordPaymentModal').style.display = 'flex';
 }
 
@@ -1902,11 +1958,15 @@ function closeRecordPaymentModal() {
 }
 
 async function submitRecordPayment() {
-    const amount = parseFloat(document.getElementById('rpAmount').value);
     const method = document.getElementById('rpMethod').value;
+    let amount = parseFloat(document.getElementById('rpAmount').value);
     const notes = document.getElementById('rpNotes').value;
+    
+    if (method !== 'Credit') {
+        amount = currentRemaining;
+    }
 
-    if (!amount || amount <= 0) {
+    if (isNaN(amount) || amount < 0) {
         alert('Please enter a valid amount');
         return;
     }

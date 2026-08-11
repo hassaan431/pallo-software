@@ -154,7 +154,8 @@ def generate_invoice_pdf(sale_id: int) -> bytes:
                 s.customer_id,
                 s.payment_type,
                 s.amount_paid,
-                s.remaining_amount
+                s.remaining_amount,
+                s.status
             FROM sales s
             WHERE s.id = ?
             """,
@@ -201,7 +202,8 @@ def generate_invoice_pdf(sale_id: int) -> bytes:
     finally:
         conn.close()
 
-    return generate_pdf_from_data(sale, customer, sale_items)
+    status = sale["status"] if "status" in sale.keys() else None
+    return generate_pdf_from_data(sale, customer, sale_items, is_quote=(status == "quote"))
 
 def generate_pdf_from_data(sale: dict, customer: dict, sale_items: list, is_quote: bool = False) -> bytes:
     # Page setup
