@@ -335,19 +335,35 @@ def get_public_products():
         conn.close()
 
 
+import string
+
 def get_brand_logo_filename(brand_name: str):
     if not brand_name:
         return None
     brands_dir = DB_PATH.parent / "static" / "logos" / "brands"
     if not brands_dir.exists():
         return None
+    
+    # Fast exact match check
     exact_path = brands_dir / f"{brand_name}.png"
     if exact_path.exists():
         return f"{brand_name}.png"
-    brand_lower = brand_name.strip().lower()
+        
+    def normalize(s):
+        if not s: return ""
+        return s.strip().lower().replace(" ", "").translate(str.maketrans('', '', string.punctuation))
+
+    b = normalize(brand_name)
+    if not b:
+        return None
+        
+    # Iterate through available files and use robust substring matching
     for f in brands_dir.glob("*.png"):
-        if f.stem.strip().lower() == brand_lower:
+        f_norm = normalize(f.stem)
+        if not f_norm: continue
+        if b == f_norm or f_norm in b or b in f_norm:
             return f.name
+            
     return None
 
 
