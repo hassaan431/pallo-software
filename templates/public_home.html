@@ -3,109 +3,167 @@
 {% block content %}
 <style>
     .hero {
-        padding: 6rem 5%;
+        position: relative;
+        min-height: 80vh;
+        display: flex;
+        align-items: center;
+        justify-content: center;
         text-align: center;
-        background-color: var(--bg-dark);
-        border-bottom: none;
+        background: url("{{ url_for('static', filename='images/hero_bg.png') }}") center/cover no-repeat;
         color: var(--text-light);
+        padding: 4rem 5%;
+    }
+    .hero::before {
+        content: '';
+        position: absolute;
+        inset: 0;
+        background: linear-gradient(135deg, rgba(15, 23, 42, 0.85) 0%, rgba(16, 185, 129, 0.4) 100%);
+        z-index: 1;
+    }
+    .hero-content {
+        position: relative;
+        z-index: 2;
+        max-width: 800px;
     }
     .hero h1 {
-        font-size: 3.5rem;
+        font-size: 4rem;
         font-weight: 800;
         margin: 0 0 1.5rem 0;
-        line-height: 1.15;
-        color: var(--text-light);
+        line-height: 1.1;
+        letter-spacing: -0.02em;
     }
     .hero h1 span {
-        color: var(--accent);
+        color: #34d399; /* Lighter emerald for contrast */
     }
     .hero p {
         font-size: 1.25rem;
-        color: var(--text-muted);
-        max-width: 700px;
+        color: #e2e8f0;
         margin: 0 auto 2.5rem auto;
         line-height: 1.6;
+        font-weight: 400;
     }
     .hero .actions {
         display: flex;
-        gap: 1rem;
+        gap: 1.25rem;
         justify-content: center;
         flex-wrap: wrap;
     }
     .btn-large {
-        padding: 0.85rem 2rem;
-        font-size: 1.1rem;
+        padding: 1rem 2.5rem;
+        font-size: 1.125rem;
+        border-radius: 8px;
+    }
+    .btn-outline {
+        background: rgba(255, 255, 255, 0.1);
+        backdrop-filter: blur(8px);
+        color: var(--text-light) !important;
+        border: 1px solid rgba(255, 255, 255, 0.3);
+    }
+    .btn-outline:hover {
+        background: rgba(255, 255, 255, 0.2);
+        border-color: rgba(255, 255, 255, 0.5);
     }
     
     .section-heading {
         text-align: center;
-        margin: 4rem 0 3rem 0;
-        font-size: 2.25rem;
+        margin: 5rem 0 3rem 0;
+        font-size: 2.5rem;
         font-weight: 800;
         color: var(--text-main);
+        letter-spacing: -0.02em;
     }
     .section-heading::after {
         content: '';
         display: block;
-        width: 60px;
+        width: 48px;
         height: 4px;
         background: var(--accent);
         margin: 1rem auto 0;
+        border-radius: 2px;
     }
 
     .brands-grid {
         display: grid;
-        grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-        gap: 1.5rem;
+        grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+        gap: 2rem;
         padding: 0 5%;
-        margin-bottom: 5rem;
+        margin-bottom: 6rem;
+        max-width: 1400px;
+        margin-left: auto;
+        margin-right: auto;
     }
     .brand-card {
-        background: var(--bg-card);
-        border: 1px solid var(--border);
-        border-radius: 4px;
-        padding: 1rem;
+        background: var(--bg-alt);
+        border-radius: 12px;
+        padding: 2rem 1.5rem;
         text-align: center;
-        transition: transform 0.2s, box-shadow 0.2s;
+        transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
         display: flex;
         flex-direction: column;
         align-items: center;
         justify-content: center;
-        min-height: 140px;
+        min-height: 160px;
         color: var(--text-main);
         font-weight: 700;
         font-size: 1.15rem;
         text-decoration: none;
+        border: 1px solid transparent;
+        position: relative;
+        overflow: hidden;
+    }
+    .brand-card::after {
+        content: '';
+        position: absolute;
+        inset: 0;
+        background: radial-gradient(circle at center, rgba(16, 185, 129, 0.1) 0%, transparent 70%);
+        opacity: 0;
+        transition: opacity 0.3s;
     }
     .brand-card:hover {
         transform: translateY(-4px);
-        box-shadow: 0 10px 25px rgba(0,0,0,0.08);
-        border-color: var(--accent);
-        color: var(--accent);
+        background: var(--card-bg);
+        border-color: var(--border-heavy);
+        box-shadow: 0 12px 24px -4px rgba(15, 23, 42, 0.08);
+    }
+    .brand-card:hover::after {
+        opacity: 1;
     }
     .brand-card img {
-        max-height: 90px;
+        max-height: 80px;
         max-width: 90%;
-        margin-bottom: 0.5rem;
+        margin-bottom: 1rem;
         object-fit: contain;
+        position: relative;
+        z-index: 2;
+        transition: transform 0.3s ease;
+    }
+    .brand-card:hover img {
+        transform: scale(1.05);
+    }
+    .brand-name {
+        position: relative;
+        z-index: 2;
+        font-family: 'Outfit', sans-serif;
     }
     
     @media (max-width: 768px) {
-        .hero { padding: 4rem 5%; }
-        .hero h1 { font-size: 2.5rem; }
+        .hero { min-height: 60vh; padding: 4rem 5%; }
+        .hero h1 { font-size: 2.75rem; }
     }
 </style>
 
 <div class="hero">
-    <h1>Wholesale Distribution, <span>Elevated.</span></h1>
-    <p>Discover our premium catalog of carefully curated products for your business. Providing the best quality, reliability, and scale.</p>
-    <div class="actions">
-        <a href="{{ url_for('public_bp.catalog') }}" class="btn-primary btn-large">Browse Catalog</a>
-        <a href="{{ url_for('public_bp.about') }}" class="btn-primary btn-large" style="background: transparent; color: var(--text-light) !important; border: 2px solid var(--text-muted);">Contact Sales</a>
+    <div class="hero-content">
+        <h1>Wholesale Distribution, <span>Refined.</span></h1>
+        <p>Your trusted partner for premium B2B supplies. Direct inventory access, seamless ordering, and reliable fulfillment for modern vendors.</p>
+        <div class="actions">
+            <a href="{{ url_for('public_bp.catalog') }}" class="btn-primary btn-large">View Live Inventory</a>
+            <a href="{{ url_for('public_bp.brands') }}" class="btn-primary btn-large btn-outline">Explore Brands</a>
+        </div>
     </div>
 </div>
 
-<h2 class="section-heading">Our Top Brands</h2>
+<h2 class="section-heading">Our Featured Partners</h2>
 {% if featured_brands %}
 <div class="brands-grid">
     {% for brand in featured_brands %}
@@ -114,7 +172,7 @@
         {% if logo_name %}
             <img src="{{ url_for('static', filename='logos/brands/' ~ logo_name) }}" alt="{{ brand }}">
         {% else %}
-            <span>{{ brand }}</span>
+            <span class="brand-name">{{ brand }}</span>
         {% endif %}
     </a>
     {% endfor %}

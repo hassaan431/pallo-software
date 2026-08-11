@@ -8,31 +8,34 @@
     <!-- Google Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Outfit:wght@500;700;800&display=swap" rel="stylesheet">
     <link rel="icon" type="image/x-icon" href="{{ url_for('static', filename='favicon.ico') }}">
     <link rel="shortcut icon" type="image/x-icon" href="{{ url_for('static', filename='favicon.ico') }}">
     <style>
         :root {
             --bg-main: #ffffff;
             --bg-alt: #f8f9fb;
-            --bg-dark: #07133B;
+            --bg-dark: #0f172a;
             --bg-card: #ffffff;
-            --text-main: #07133B;
-            --text-muted: #83899D;
+            --text-main: #0f172a;
+            --text-muted: #64748b;
             --text-light: #ffffff;
-            --accent: #1AD079;
-            --accent-hover: #15a861;
-            --border: #e9ecef;
-            --border-heavy: #dee2e6;
+            --accent: #10b981;
+            --accent-hover: #059669;
+            --border: #e2e8f0;
+            --border-heavy: #cbd5e1;
         }
         body {
             margin: 0;
-            font-family: 'Poppins', sans-serif;
+            font-family: 'Inter', sans-serif;
             background-color: var(--bg-main);
             color: var(--text-main);
             display: flex;
             flex-direction: column;
             min-height: 100vh;
+        }
+        h1, h2, h3, h4, h5, h6, .brand-font {
+            font-family: 'Outfit', sans-serif;
         }
         header {
             display: flex;
