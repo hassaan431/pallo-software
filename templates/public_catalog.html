@@ -7,9 +7,10 @@
         padding: 6rem 5% 5rem 5%;
         border-bottom: none;
         margin-bottom: 3rem;
-        background: linear-gradient(135deg, rgba(15, 23, 42, 1) 0%, rgba(16, 185, 129, 0.15) 100%);
+        background: linear-gradient(135deg, rgba(15, 23, 42, 0.9) 0%, rgba(16, 185, 129, 0.5) 100%), url("{{ url_for('static', filename='images/hero_bg.png') }}") center/cover no-repeat;
         color: var(--text-light);
         text-align: center;
+        position: relative;
     }
     .catalog-header h1 {
         font-size: 3.5rem;
