@@ -11,4 +11,4 @@ __pycache__/
 .DS_Store
 
 # Logos (business assets)
-static/logos/
+# static/logos/
