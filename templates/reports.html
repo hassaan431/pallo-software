@@ -342,11 +342,11 @@
         <div><label class="field-label">Date From</label><input type="date" class="form-control" id="ia_date_from"></div>
         <div><label class="field-label">Date To</label><input type="date" class="form-control" id="ia_date_to"></div>
         <div>
-          <label class="field-label">Brand</label>
-          <select class="form-control" id="ia_brand">
-            <option value="">All Brands</option>
-            {% for b in brands %}
-              <option value="{{ b }}">{{ b }}</option>
+          <label class="field-label">Supplier</label>
+          <select class="form-control" id="ia_supplier">
+            <option value="">All Suppliers</option>
+            {% for s in suppliers %}
+              <option value="{{ s.id }}">{{ s.name }}</option>
             {% endfor %}
           </select>
         </div>
@@ -356,6 +356,28 @@
       </div>
     </div>
   </div>
+
+  <section class="panel" style="margin-bottom: 2rem;">
+    <div class="panel-header">
+      <h2>Supplier-wise Summary</h2>
+    </div>
+    <div class="panel-body">
+      <div class="table-wrap">
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>Supplier</th>
+              <th style="text-align:right">Total Quantity Added</th>
+              <th style="text-align:right">Total Value Added</th>
+              <th style="text-align:right">Quantity Remaining</th>
+            </tr>
+          </thead>
+          <tbody id="iaSummaryTbody">
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </section>
 
   <section class="panel" style="margin-bottom: 2rem;">
     <div class="panel-header">
@@ -379,27 +401,6 @@
     </div>
   </section>
 
-  <section class="panel" style="margin-bottom: 2rem;">
-    <div class="panel-header">
-      <h2>Brand-wise Summary</h2>
-    </div>
-    <div class="panel-body">
-      <div class="table-wrap">
-        <table class="data-table">
-          <thead>
-            <tr>
-              <th>Brand</th>
-              <th style="text-align:right">Total Quantity Added</th>
-              <th style="text-align:right">Total Value Added</th>
-            </tr>
-          </thead>
-          <tbody id="iaSummaryTbody">
-          </tbody>
-        </table>
-      </div>
-    </div>
-  </section>
-
   <section class="panel">
     <div class="panel-header">
       <h2>Detailed Log</h2>
@@ -411,10 +412,11 @@
             <tr>
               <th>Date</th>
               <th>Product Name</th>
-              <th>Brand</th>
+              <th>Supplier</th>
               <th>Transaction Type</th>
               <th style="text-align:right">Quantity Added</th>
               <th style="text-align:right">Value Added</th>
+              <th style="text-align:right">Quantity Remaining</th>
             </tr>
           </thead>
           <tbody id="iaLogTbody">
@@ -587,7 +589,7 @@
     } else if (type === 'inventory-additions') {
       if (document.getElementById('ia_date_from').value) params.append('date_from', document.getElementById('ia_date_from').value);
       if (document.getElementById('ia_date_to').value) params.append('date_to', document.getElementById('ia_date_to').value);
-      if (document.getElementById('ia_brand').value) params.append('brand', document.getElementById('ia_brand').value);
+      if (document.getElementById('ia_supplier').value) params.append('supplier_id', document.getElementById('ia_supplier').value);
     }
     return params;
   }
@@ -680,14 +682,15 @@
     const dateSummaryData = cache['inventory-additions'].date_summary || [];
     const logData = cache['inventory-additions'].log || [];
 
-    // Brand Summary (Not paginated)
-    sumTbody.innerHTML = summaryData.length ? '' : '<tr><td colspan="3" class="empty-state" style="text-align:center;">No additions found for this period.</td></tr>';
+    // Supplier Summary (Not paginated)
+    sumTbody.innerHTML = summaryData.length ? '' : '<tr><td colspan="4" class="empty-state" style="text-align:center;">No additions found for this period.</td></tr>';
     summaryData.forEach(r => {
       const tr = document.createElement('tr');
       tr.innerHTML = `
-        <td style="font-weight:600;">${r.brand || '-'}</td>
+        <td style="font-weight:600;">${r.supplier_name || '-'}</td>
         <td style="text-align:right">${qty(r.total_added)}</td>
         <td style="text-align:right;font-weight:600;">${money(r.total_value)}</td>
+        <td style="text-align:right">${qty(r.quantity_remaining)}</td>
       `;
       sumTbody.appendChild(tr);
     });
@@ -726,7 +729,7 @@
     const logStart = (iaLogCurrentPage - 1) * IA_PAGE_SIZE;
     const logSlice = logData.slice(logStart, logStart + IA_PAGE_SIZE);
 
-    logTbody.innerHTML = logSlice.length ? '' : '<tr><td colspan="6" class="empty-state" style="text-align:center;">No additions found for this period.</td></tr>';
+    logTbody.innerHTML = logSlice.length ? '' : '<tr><td colspan="7" class="empty-state" style="text-align:center;">No additions found for this period.</td></tr>';
     logSlice.forEach(r => {
       const tr = document.createElement('tr');
       const dt = new Date(r.created_at).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
@@ -741,10 +744,11 @@
       tr.innerHTML = `
         <td style="white-space:nowrap;font-size:0.8rem;">${dt}</td>
         <td><strong>${r.product_name}</strong></td>
-        <td>${r.brand || '-'}</td>
+        <td>${r.supplier_name || '-'}</td>
         <td>${typeBadge}</td>
         <td style="text-align:right">${qty(r.quantity_change)}</td>
         <td style="text-align:right">${money(r.value_added)}</td>
+        <td style="text-align:right">${qty(r.quantity_remaining)}</td>
       `;
       logTbody.appendChild(tr);
     });

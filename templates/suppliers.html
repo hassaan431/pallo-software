@@ -37,6 +37,7 @@
             <td>{{ s.products_count }}</td>
             <td style="text-align: right;">
               <div style="display: flex; gap: 0.25rem; justify-content: flex-end; align-items: center;">
+                <button class="btn btn-secondary btn-sm" onclick="openSupplierHistoryModal({{ s.id }}, '{{ s.name | escape }}')">History</button>
                 <button class="btn btn-secondary btn-sm" onclick='openEditSupplierModal({{ s|tojson }})'>Edit</button>
                 <form action="/suppliers/delete/{{ s.id }}" method="POST" style="margin:0;" onsubmit="return confirm('Delete this supplier?');">
                   <button type="submit" class="btn btn-danger btn-sm">Delete</button>
@@ -186,6 +187,34 @@
   </div>
 </div>
 
+<!-- Supplier History Modal -->
+<div id="supplierHistoryModal" class="modal-backdrop" aria-hidden="true">
+  <div class="modal" role="dialog" aria-modal="true" style="max-width: 650px;">
+    <div class="modal-header">
+      <h3 style="margin:0;">Supplier History: <span id="shSupplierName"></span></h3>
+      <button type="button" class="modal-close" data-close-modal="supplierHistoryModal" aria-label="Close">&times;</button>
+    </div>
+    <div class="modal-body" style="max-height: 60vh; overflow-y: auto;">
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th>Date</th>
+            <th>Product Name</th>
+            <th style="text-align: right;">Quantity Added</th>
+            <th style="text-align: right;">Value Added</th>
+          </tr>
+        </thead>
+        <tbody id="shTableBody">
+          <tr><td colspan="4" style="text-align:center;">Loading...</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="modal-footer" style="padding: 1rem; border-top: 1px solid var(--color-border); display: flex; justify-content: flex-end;">
+      <button type="button" class="btn btn-secondary" data-close-modal="supplierHistoryModal">Close</button>
+    </div>
+  </div>
+</div>
+
 <script>
 function openModal(modalEl) {
   if (!modalEl) return;
@@ -226,10 +255,44 @@ function openEditBrandModal(b) {
   openModal(document.getElementById('editBrandModal'));
 }
 
+async function openSupplierHistoryModal(supplierId, supplierName) {
+  document.getElementById('shSupplierName').textContent = supplierName;
+  const tbody = document.getElementById('shTableBody');
+  tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;">Loading...</td></tr>';
+  openModal(document.getElementById('supplierHistoryModal'));
+  
+  try {
+    const response = await fetch(`/suppliers/${supplierId}/history`);
+    const data = await response.json();
+    
+    if (data && data.length > 0) {
+      tbody.innerHTML = '';
+      data.forEach(r => {
+        const tr = document.createElement('tr');
+        const dt = new Date(r.addition_date).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric', timeZone: 'UTC' });
+        tr.innerHTML = `
+          <td>${dt}</td>
+          <td style="font-weight: 500;">${r.product_name}</td>
+          <td style="text-align: right;">${r.total_added}</td>
+          <td style="text-align: right; font-weight: 600;">$${r.total_value.toFixed(2)}</td>
+        `;
+        tbody.appendChild(tr);
+      });
+    } else {
+      tbody.innerHTML = '<tr><td colspan="4" style="text-align:center; color: var(--color-text-muted);">No additions found for this supplier.</td></tr>';
+    }
+  } catch (err) {
+    tbody.innerHTML = '<tr><td colspan="4" style="text-align:center; color: var(--color-danger);">Failed to load history.</td></tr>';
+    console.error(err);
+  }
+}
+
+
 [
   document.getElementById('addSupplierModal'), 
   document.getElementById('editSupplierModal'), 
-  document.getElementById('editBrandModal')
+  document.getElementById('editBrandModal'),
+  document.getElementById('supplierHistoryModal')
 ].forEach((modalEl) => {
   if (!modalEl) return;
   modalEl.addEventListener('click', (e) => {

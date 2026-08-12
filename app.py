@@ -1042,6 +1042,39 @@ def suppliers_delete(supplier_id):
         conn.close()
     return redirect(url_for("suppliers_page"))
 
+@app.route("/suppliers/<int:supplier_id>/history", methods=["GET"])
+@admin_required
+def supplier_history(supplier_id):
+    conn = get_connection()
+    try:
+        rows = conn.execute(
+            '''
+            SELECT
+                date(ih.created_at) as addition_date,
+                p.name AS product_name,
+                COALESCE(SUM(ih.quantity_change), 0) AS total_added,
+                COALESCE(SUM(ih.quantity_change * p.cost_price), 0) AS total_value
+            FROM inventory_history ih
+            JOIN products p ON p.id = ih.product_id
+            WHERE p.supplier_id = ? AND ih.transaction_type = 'IN'
+              AND ih.reference IN ('Initial Stock', 'Initial Stock (Legacy)', 'Manual Edit', 'Manual Edit (Edit Product)')
+            GROUP BY date(ih.created_at), p.id
+            ORDER BY addition_date DESC, p.name ASC
+            ''', (supplier_id,)
+        ).fetchall()
+        
+        result = []
+        for r in rows:
+            result.append({
+                "addition_date": r["addition_date"],
+                "product_name": r["product_name"],
+                "total_added": float(r["total_added"] or 0),
+                "total_value": float(r["total_value"] or 0)
+            })
+        return jsonify(result)
+    finally:
+        conn.close()
+
 @app.route("/brands/edit/<int:brand_id>", methods=["POST"])
 @admin_required
 def brands_edit(brand_id):
@@ -2877,6 +2910,9 @@ def reports():
 
         cur_b = conn.execute("SELECT DISTINCT brand FROM products WHERE brand IS NOT NULL AND brand != '' ORDER BY brand COLLATE NOCASE")
         brands = [r["brand"] for r in cur_b.fetchall()]
+
+        cur_s = conn.execute("SELECT id, name FROM suppliers ORDER BY name COLLATE NOCASE")
+        suppliers = [dict(r) for r in cur_s.fetchall()]
     finally:
         conn.close()
 
@@ -2884,7 +2920,8 @@ def reports():
         "reports.html",
         customers=customers,
         products=products,
-        brands=brands
+        brands=brands,
+        suppliers=suppliers
     )
 
 
@@ -3219,8 +3256,6 @@ def reports_inventory_additions():
     conditions = [
         "ih.transaction_type = 'IN'",
         "ih.reference IN ('Initial Stock', 'Initial Stock (Legacy)', 'Manual Edit', 'Manual Edit (Edit Product)')",
-        "p.brand IS NOT NULL", 
-        "p.brand != ''"
     ]
     params = []
     
@@ -3233,10 +3268,10 @@ def reports_inventory_additions():
         conditions.append("date(ih.created_at) <= ?")
         params.append(date_to)
 
-    brand = request.args.get("brand", "").strip()
-    if brand:
-        conditions.append("p.brand = ?")
-        params.append(brand)
+    supplier_id = request.args.get("supplier_id", "").strip()
+    if supplier_id:
+        conditions.append("p.supplier_id = ?")
+        params.append(supplier_id)
 
     where_sql = " AND ".join(conditions)
 
@@ -3245,13 +3280,24 @@ def reports_inventory_additions():
         summary_rows = conn.execute(
             f'''
             SELECT
-                p.brand,
-                COALESCE(SUM(ih.quantity_change), 0) AS total_added,
-                COALESCE(SUM(ih.quantity_change * p.cost_price), 0) AS total_value
-            FROM inventory_history ih
-            JOIN products p ON p.id = ih.product_id
-            WHERE {where_sql}
-            GROUP BY p.brand
+                supplier_name,
+                SUM(total_added) as total_added,
+                SUM(total_value) as total_value,
+                SUM(current_stock) as total_remaining
+            FROM (
+                SELECT
+                    p.id,
+                    COALESCE(s.name, 'Untagged') AS supplier_name,
+                    COALESCE(SUM(ih.quantity_change), 0) AS total_added,
+                    COALESCE(SUM(ih.quantity_change * p.cost_price), 0) AS total_value,
+                    p.stock_quantity AS current_stock
+                FROM inventory_history ih
+                JOIN products p ON p.id = ih.product_id
+                LEFT JOIN suppliers s ON s.id = p.supplier_id
+                WHERE {where_sql}
+                GROUP BY p.id, COALESCE(s.name, 'Untagged'), p.stock_quantity
+            )
+            GROUP BY supplier_name
             ORDER BY total_added DESC
             ''',
             params,
@@ -3277,13 +3323,15 @@ def reports_inventory_additions():
             SELECT
                 ih.created_at,
                 p.name AS product_name,
-                p.brand,
+                COALESCE(s.name, 'Untagged') AS supplier_name,
                 ih.transaction_type,
                 ih.reference,
                 ih.quantity_change,
-                (ih.quantity_change * p.cost_price) as value_added
+                (ih.quantity_change * p.cost_price) as value_added,
+                p.stock_quantity AS quantity_remaining
             FROM inventory_history ih
             JOIN products p ON p.id = ih.product_id
+            LEFT JOIN suppliers s ON s.id = p.supplier_id
             WHERE {where_sql}
             ORDER BY ih.created_at DESC
             ''',
@@ -3295,9 +3343,10 @@ def reports_inventory_additions():
     summary_result = []
     for r in summary_rows:
         summary_result.append({
-            "brand": r["brand"],
+            "supplier_name": r["supplier_name"],
             "total_added": float(r["total_added"] or 0),
-            "total_value": float(r["total_value"] or 0)
+            "total_value": float(r["total_value"] or 0),
+            "quantity_remaining": float(r["total_remaining"] or 0)
         })
 
     log_result = []
@@ -3305,11 +3354,12 @@ def reports_inventory_additions():
         log_result.append({
             "created_at": r["created_at"],
             "product_name": r["product_name"] or "",
-            "brand": r["brand"] or "",
+            "supplier_name": r["supplier_name"],
             "transaction_type": r["transaction_type"],
             "reference": r["reference"],
             "quantity_change": float(r["quantity_change"] or 0),
-            "value_added": float(r["value_added"] or 0)
+            "value_added": float(r["value_added"] or 0),
+            "quantity_remaining": float(r["quantity_remaining"] or 0)
         })
 
     date_result = []
