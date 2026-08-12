@@ -190,6 +190,7 @@ def generate_invoice_pdf(sale_id: int) -> bytes:
                 si.rate,
                 si.amount,
                 si.print_dual_units,
+                si.packing_multiplier,
                 p.name AS product_name,
                 p.brand AS product_brand
             FROM sale_items si
@@ -604,7 +605,7 @@ def generate_pdf_from_data(sale: dict, customer: dict, sale_items: list, is_quot
             if sale_item_dict.get("print_dual_units") == 1:
                 # Use smaller font for dual units
                 cnv.setFont("Helvetica", item_font_size - 1.5)
-                qty_str = f"{actual_qty:g}KG / {actual_qty * 35.274:.1f}Oz"
+                qty_str = f"{qty_val:g} ({actual_qty:g}KG / {actual_qty * 35.274:.1f}Oz)"
                 rate_str = f"${format_rate(rate_val)}/KG / ${format_rate(rate_val / 35.274)}/Oz"
             else:
                 cnv.setFont("Helvetica", item_font_size)
