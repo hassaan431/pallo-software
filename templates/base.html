@@ -84,6 +84,10 @@
             <span class="nav-emoji" aria-hidden="true">👤</span>
             <span class="nav-label">Users</span>
           </a>
+          <a href="{{ url_for('suppliers_page') }}" class="{{ 'is-active' if request.endpoint == 'suppliers_page' else '' }}">
+            <span class="nav-emoji" aria-hidden="true">🏭</span>
+            <span class="nav-label">Suppliers & Brands</span>
+          </a>
           <a href="{{ url_for('pos') }}" target="_blank">
             <span class="nav-emoji" aria-hidden="true">📱</span>
             <span class="nav-label">POS Catalogue</span>

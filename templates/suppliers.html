@@ -1,0 +1,240 @@
+{% extends "base.html" %}
+{% block page_heading %}Suppliers & Brands{% endblock %}
+{% block content %}
+<div class="page-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem;">
+  <h2 style="margin:0; font-size:1.25rem; font-weight:700;">Suppliers & Brands</h2>
+  <div>
+    <button type="button" class="btn btn-primary" onclick="openAddSupplierModal()">Add Supplier</button>
+  </div>
+</div>
+
+<section class="panel">
+  <div class="panel-header">
+    <h3 style="margin: 0;">Suppliers</h3>
+  </div>
+  <div class="panel-body">
+    <div class="table-wrap">
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th>ID</th>
+            <th>Business Name</th>
+            <th>Contact Name</th>
+            <th>Phone</th>
+            <th>Address</th>
+            <th>Products</th>
+            <th style="width: 150px; text-align: right;">Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for s in suppliers %}
+          <tr>
+            <td>{{ s.id }}</td>
+            <td style="font-weight: 500;">{{ s.name }}</td>
+            <td>{{ s.contact_name or '-' }}</td>
+            <td>{{ s.phone or '-' }}</td>
+            <td>{{ s.address or '-' }}</td>
+            <td>{{ s.products_count }}</td>
+            <td style="text-align: right;">
+              <div style="display: flex; gap: 0.25rem; justify-content: flex-end; align-items: center;">
+                <button class="btn btn-secondary btn-sm" onclick='openEditSupplierModal({{ s|tojson }})'>Edit</button>
+                <form action="/suppliers/delete/{{ s.id }}" method="POST" style="margin:0;" onsubmit="return confirm('Delete this supplier?');">
+                  <button type="submit" class="btn btn-danger btn-sm">Delete</button>
+                </form>
+              </div>
+            </td>
+          </tr>
+          {% else %}
+          <tr>
+            <td colspan="6" style="text-align: center; color: var(--color-text-muted);">No suppliers found.</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</section>
+
+<section class="panel" style="margin-top: 2rem;">
+  <div class="panel-header" style="display: flex; justify-content: space-between; align-items: center;">
+    <h3 style="margin: 0;">Brands</h3>
+  </div>
+  <div class="panel-body">
+    <div class="table-wrap">
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th>ID</th>
+            <th>Name</th>
+            <th>Products</th>
+            <th style="width: 150px; text-align: right;">Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for b in brands %}
+          <tr>
+            <td>{{ b.id }}</td>
+            <td style="font-weight: 500;">{{ b.name }}</td>
+            <td>{{ b.products_count }}</td>
+            <td style="text-align: right;">
+              <div style="display: flex; gap: 0.25rem; justify-content: flex-end; align-items: center;">
+                <button class="btn btn-secondary btn-sm" onclick='openEditBrandModal({{ b|tojson }})'>Edit</button>
+                <form action="/brands/delete/{{ b.id }}" method="POST" style="margin:0;" onsubmit="return confirm('Delete this brand? This will remove the brand from all associated products.');">
+                  <button type="submit" class="btn btn-danger btn-sm">Delete</button>
+                </form>
+              </div>
+            </td>
+          </tr>
+          {% else %}
+          <tr>
+            <td colspan="3" style="text-align: center; color: var(--color-text-muted);">No brands found.</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</section>
+
+<!-- Add Supplier Modal -->
+<div id="addSupplierModal" class="modal-backdrop" aria-hidden="true">
+  <div class="modal" role="dialog" aria-modal="true" style="max-width: 400px;">
+    <div class="modal-header">
+      <h3 style="margin:0;">Add Supplier</h3>
+      <button type="button" class="modal-close" data-close-modal="addSupplierModal" aria-label="Close">&times;</button>
+    </div>
+    <div class="modal-body">
+      <form action="/suppliers/add" method="POST">
+        <div class="form-group" style="margin-bottom:1rem;">
+          <label class="field-label" style="display:block; margin-bottom:0.25rem;">Business Name *</label>
+          <input type="text" name="name" class="form-control" required style="width:100%;">
+        </div>
+        <div class="form-group" style="margin-bottom:1rem;">
+          <label class="field-label" style="display:block; margin-bottom:0.25rem;">Contact Name</label>
+          <input type="text" name="contact_name" class="form-control" style="width:100%;">
+        </div>
+        <div class="form-group" style="margin-bottom:1rem;">
+          <label class="field-label" style="display:block; margin-bottom:0.25rem;">Phone</label>
+          <input type="text" name="phone" class="form-control" style="width:100%;">
+        </div>
+        <div class="form-group" style="margin-bottom:1rem;">
+          <label class="field-label" style="display:block; margin-bottom:0.25rem;">Address</label>
+          <input type="text" name="address" class="form-control" style="width:100%;">
+        </div>
+        <div style="display: flex; justify-content: flex-end; gap: 0.5rem; margin-top: 1.5rem;">
+          <button type="button" class="btn btn-secondary" data-close-modal="addSupplierModal">Cancel</button>
+          <button type="submit" class="btn btn-primary">Save Supplier</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<!-- Edit Supplier Modal -->
+<div id="editSupplierModal" class="modal-backdrop" aria-hidden="true">
+  <div class="modal" role="dialog" aria-modal="true" style="max-width: 400px;">
+    <div class="modal-header">
+      <h3 style="margin:0;">Edit Supplier</h3>
+      <button type="button" class="modal-close" data-close-modal="editSupplierModal" aria-label="Close">&times;</button>
+    </div>
+    <div class="modal-body">
+      <form id="editSupplierForm" method="POST">
+        <div class="form-group" style="margin-bottom:1rem;">
+          <label class="field-label" style="display:block; margin-bottom:0.25rem;">Business Name *</label>
+          <input type="text" id="editSupplierName" name="name" class="form-control" required style="width:100%;">
+        </div>
+        <div class="form-group" style="margin-bottom:1rem;">
+          <label class="field-label" style="display:block; margin-bottom:0.25rem;">Contact Name</label>
+          <input type="text" id="editSupplierContactName" name="contact_name" class="form-control" style="width:100%;">
+        </div>
+        <div class="form-group" style="margin-bottom:1rem;">
+          <label class="field-label" style="display:block; margin-bottom:0.25rem;">Phone</label>
+          <input type="text" id="editSupplierPhone" name="phone" class="form-control" style="width:100%;">
+        </div>
+        <div class="form-group" style="margin-bottom:1rem;">
+          <label class="field-label" style="display:block; margin-bottom:0.25rem;">Address</label>
+          <input type="text" id="editSupplierAddress" name="address" class="form-control" style="width:100%;">
+        </div>
+        <div style="display: flex; justify-content: flex-end; gap: 0.5rem; margin-top: 1.5rem;">
+          <button type="button" class="btn btn-secondary" data-close-modal="editSupplierModal">Cancel</button>
+          <button type="submit" class="btn btn-primary">Update Supplier</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<!-- Edit Brand Modal -->
+<div id="editBrandModal" class="modal-backdrop" aria-hidden="true">
+  <div class="modal" role="dialog" aria-modal="true" style="max-width: 400px;">
+    <div class="modal-header">
+      <h3 style="margin:0;">Edit Brand</h3>
+      <button type="button" class="modal-close" data-close-modal="editBrandModal" aria-label="Close">&times;</button>
+    </div>
+    <div class="modal-body">
+      <form id="editBrandForm" method="POST">
+        <div class="form-group" style="margin-bottom:1rem;">
+          <label class="field-label" style="display:block; margin-bottom:0.25rem;">Name *</label>
+          <input type="text" id="editBrandName" name="name" class="form-control" required style="width:100%;">
+        </div>
+        <div style="display: flex; justify-content: flex-end; gap: 0.5rem; margin-top: 1.5rem;">
+          <button type="button" class="btn btn-secondary" data-close-modal="editBrandModal">Cancel</button>
+          <button type="submit" class="btn btn-primary">Update Brand</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<script>
+function openModal(modalEl) {
+  if (!modalEl) return;
+  modalEl.classList.add('is-open');
+  modalEl.setAttribute('aria-hidden', 'false');
+}
+
+function closeModal(modalEl) {
+  if (!modalEl) return;
+  modalEl.classList.remove('is-open');
+  modalEl.setAttribute('aria-hidden', 'true');
+}
+
+// Close buttons
+document.querySelectorAll('[data-close-modal]').forEach(btn => {
+  btn.addEventListener('click', () => {
+    const modalId = btn.getAttribute('data-close-modal');
+    closeModal(document.getElementById(modalId));
+  });
+});
+
+function openAddSupplierModal() {
+  openModal(document.getElementById('addSupplierModal'));
+}
+
+function openEditSupplierModal(s) {
+  document.getElementById('editSupplierForm').action = '/suppliers/edit/' + s.id;
+  document.getElementById('editSupplierName').value = s.name;
+  document.getElementById('editSupplierContactName').value = s.contact_name || '';
+  document.getElementById('editSupplierPhone').value = s.phone || '';
+  document.getElementById('editSupplierAddress').value = s.address || '';
+  openModal(document.getElementById('editSupplierModal'));
+}
+
+function openEditBrandModal(b) {
+  document.getElementById('editBrandForm').action = '/brands/edit/' + b.id;
+  document.getElementById('editBrandName').value = b.name;
+  openModal(document.getElementById('editBrandModal'));
+}
+
+[
+  document.getElementById('addSupplierModal'), 
+  document.getElementById('editSupplierModal'), 
+  document.getElementById('editBrandModal')
+].forEach((modalEl) => {
+  if (!modalEl) return;
+  modalEl.addEventListener('click', (e) => {
+    if (e.target === modalEl) closeModal(modalEl);
+  });
+});
+</script>
+{% endblock %}

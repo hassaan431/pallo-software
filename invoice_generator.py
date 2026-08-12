@@ -594,13 +594,21 @@ def generate_pdf_from_data(sale: dict, customer: dict, sale_items: list, is_quot
             cnv.setFillColor(colors.black)
             cnv.setFont("Helvetica", item_font_size)
             qty_val = float(qty) if qty is not None else 0
-            rate_val = float(rate) if rate is not None else 0
             sale_item_dict = dict(row["sale_item"]) if hasattr(row["sale_item"], 'keys') else row["sale_item"]
+            packing_multiplier = float(sale_item_dict.get("packing_multiplier", 1.0))
+            
+            # For variants, actual qty is physical packets * package size
+            actual_qty = qty_val * packing_multiplier
+            rate_val = float(rate) if rate is not None else 0
+            
             if sale_item_dict.get("print_dual_units") == 1:
-                qty_str = f"{qty_val:g}KG / {qty_val * 35.274:.2f}Oz"
+                # Use smaller font for dual units
+                cnv.setFont("Helvetica", item_font_size - 1.5)
+                qty_str = f"{actual_qty:g}KG / {actual_qty * 35.274:.1f}Oz"
                 rate_str = f"${format_rate(rate_val)}/KG / ${format_rate(rate_val / 35.274)}/Oz"
             else:
-                qty_str = f"{qty_val:g}"
+                cnv.setFont("Helvetica", item_font_size)
+                qty_str = f"{actual_qty:g}"
                 rate_str = f"${format_rate(rate_val)}"
             # Align right with padding
             qty_x_right = x_qty_right - 6
@@ -608,6 +616,7 @@ def generate_pdf_from_data(sale: dict, customer: dict, sale_items: list, is_quot
             amt_x_right = x_amt_right - 6
             cnv.drawRightString(qty_x_right, row_bottom + row_padding_y + 2, qty_str)
             cnv.drawRightString(rate_x_right, row_bottom + row_padding_y + 2, rate_str)
+            cnv.setFont("Helvetica", item_font_size)
             cnv.drawRightString(amt_x_right, row_bottom + row_padding_y + 2, f"${float(amount or 0):.2f}")
 
             # Move cursor down

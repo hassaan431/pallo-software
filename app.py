@@ -177,7 +177,7 @@ def dashboard():
             (today,)
         ).fetchone()
         daily_cost_row = conn.execute(
-            '''SELECT COALESCE(SUM(si.qty * si.cost_price), 0) as total_cost 
+            '''SELECT COALESCE(SUM(si.qty * COALESCE(si.packing_multiplier, 1.0) * si.cost_price), 0) as total_cost 
                FROM sale_items si 
                JOIN sales s ON si.sale_id = s.id 
                WHERE s.invoice_date = ?''', 
@@ -197,7 +197,7 @@ def dashboard():
             (f"{current_month:02d}", str(current_year))
         ).fetchone()
         monthly_cost_row = conn.execute(
-            '''SELECT COALESCE(SUM(si.qty * si.cost_price), 0) as total_cost 
+            '''SELECT COALESCE(SUM(si.qty * COALESCE(si.packing_multiplier, 1.0) * si.cost_price), 0) as total_cost 
                FROM sale_items si 
                JOIN sales s ON si.sale_id = s.id 
                WHERE strftime('%m', s.invoice_date) = ? AND strftime('%Y', s.invoice_date) = ?''',
@@ -220,7 +220,7 @@ def dashboard():
                 s.grand_total,
                 s.payment_type,
                 s.status,
-                (SELECT COALESCE(SUM(si.qty * si.cost_price), 0) FROM sale_items si WHERE si.sale_id = s.id) as total_cost
+                (SELECT COALESCE(SUM(si.qty * COALESCE(si.packing_multiplier, 1.0) * si.cost_price), 0) FROM sale_items si WHERE si.sale_id = s.id) as total_cost
             FROM sales s
             LEFT JOIN customers c ON c.id = s.customer_id
             ORDER BY s.id DESC
@@ -313,6 +313,8 @@ def inventory():
                 p.is_public,
                 p.category_id,
                 p.created_at,
+                p.supplier_id,
+                p.is_open,
                 c.name AS category_name
             FROM products p
             LEFT JOIN categories c ON p.category_id = c.id
@@ -357,6 +359,9 @@ def inventory():
 
         cur = conn.execute("SELECT id, name FROM categories ORDER BY name COLLATE NOCASE")
         categories = [dict(row) for row in cur.fetchall()]
+
+        cur = conn.execute("SELECT id, name FROM suppliers ORDER BY name COLLATE NOCASE")
+        suppliers = [dict(row) for row in cur.fetchall()]
     finally:
         conn.close()
 
@@ -364,6 +369,7 @@ def inventory():
         "inventory.html",
         products=products,
         categories=categories,
+        suppliers=suppliers,
         total_products=total_products,
         total_stock_value=total_stock_value,
         low_stock_count=low_stock_count,
@@ -471,6 +477,7 @@ def inventory_add():
     category_id_raw = (request.form.get("category_id") or "").strip()
     created_at = (request.form.get("created_at") or "").strip()
     is_public = 1 if request.form.get("is_public") else 0
+    is_open = 1 if request.form.get("is_open") else 0
 
     try:
         category_id = int(category_id_raw)
@@ -514,6 +521,22 @@ def inventory_add():
     try:
         conn.execute("BEGIN")
         
+        # Determine supplier
+        if supplier_id:
+            try:
+                supplier_id = int(supplier_id)
+            except ValueError:
+                supplier_id = None
+        
+        if not supplier_id and brand:
+            cur_sup = conn.execute("SELECT id FROM suppliers WHERE name = ?", (brand,))
+            sup_row = cur_sup.fetchone()
+            if sup_row:
+                supplier_id = sup_row["id"]
+            else:
+                conn.execute("INSERT INTO suppliers (name) VALUES (?)", (brand,))
+                supplier_id = conn.execute("SELECT last_insert_rowid()").fetchone()[0]
+        
         # Check if product already exists
         cur = conn.execute("SELECT id, stock_quantity FROM products WHERE LOWER(name) = LOWER(?)", (product_name,))
         existing = cur.fetchone()
@@ -525,9 +548,9 @@ def inventory_add():
             
             update_query = """
                 UPDATE products
-                SET category_id = ?, brand = ?, unit = ?, cost_price = ?, selling_price = ?, stock_quantity = ?
+                SET category_id = ?, brand = ?, unit = ?, cost_price = ?, selling_price = ?, stock_quantity = ?, supplier_id = ?, is_open = ?
             """
-            params = [category_id, brand or None, unit, cost_price, selling_price, new_stock]
+            params = [category_id, brand or None, unit, cost_price, selling_price, new_stock, supplier_id, is_open]
             
             if created_at:
                 update_query += ", created_at = ?"
@@ -545,37 +568,37 @@ def inventory_add():
                 diff = new_stock - old_stock
                 t_type = 'IN' if diff > 0 else 'ADJUSTMENT'
                 conn.execute("""
-                    INSERT INTO inventory_history (product_id, transaction_type, quantity_change, previous_stock, new_stock, reference)
-                    VALUES (?, ?, ?, ?, ?, ?)
-                """, (product_id, t_type, diff, old_stock, new_stock, 'Manual Edit (Add Product)'))
+                    INSERT INTO inventory_history (product_id, transaction_type, quantity_change, previous_stock, new_stock, reference, supplier_id)
+                    VALUES (?, ?, ?, ?, ?, ?, ?)
+                """, (product_id, t_type, diff, old_stock, new_stock, 'Manual Edit (Add Product)', supplier_id))
         else:
             if created_at:
                 cur = conn.execute(
                     """
                     INSERT INTO products
-                        (name, category_id, brand, unit, cost_price, selling_price, stock_quantity, image_url, created_at, is_public)
+                        (name, category_id, brand, unit, cost_price, selling_price, stock_quantity, image_url, created_at, is_public, supplier_id, is_open)
                     VALUES
-                        (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     """,
-                    (product_name, category_id, brand or None, unit, cost_price, selling_price, stock_quantity, image_url, created_at, is_public),
+                    (product_name, category_id, brand or None, unit, cost_price, selling_price, stock_quantity, image_url, created_at, is_public, supplier_id, is_open),
                 )
             else:
                 cur = conn.execute(
                     """
                     INSERT INTO products
-                        (name, category_id, brand, unit, cost_price, selling_price, stock_quantity, image_url, is_public)
+                        (name, category_id, brand, unit, cost_price, selling_price, stock_quantity, image_url, is_public, supplier_id, is_open)
                     VALUES
-                        (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     """,
-                    (product_name, category_id, brand or None, unit, cost_price, selling_price, stock_quantity, image_url, is_public),
+                    (product_name, category_id, brand or None, unit, cost_price, selling_price, stock_quantity, image_url, is_public, supplier_id, is_open),
                 )
             product_id = int(cur.lastrowid)
             
             if stock_quantity != 0:
                 conn.execute("""
-                    INSERT INTO inventory_history (product_id, transaction_type, quantity_change, previous_stock, new_stock, reference)
-                    VALUES (?, ?, ?, ?, ?, ?)
-                """, (product_id, 'IN', stock_quantity, 0, stock_quantity, 'Initial Stock'))
+                    INSERT INTO inventory_history (product_id, transaction_type, quantity_change, previous_stock, new_stock, reference, supplier_id)
+                    VALUES (?, ?, ?, ?, ?, ?, ?)
+                """, (product_id, 'IN', stock_quantity, 0, stock_quantity, 'Initial Stock', supplier_id))
 
         # Keep brands table in sync for the Brand dropdown.
         if brand:
@@ -599,6 +622,8 @@ def inventory_edit(product_id: int):
     category_id_raw = (request.form.get("category_id") or "").strip()
     created_at = (request.form.get("created_at") or "").strip()
     is_public = 1 if request.form.get("is_public") else 0
+    is_open = 1 if request.form.get("is_open") else 0
+    supplier_id = request.form.get("supplier_id")
 
     try:
         category_id = int(category_id_raw)
@@ -644,6 +669,22 @@ def inventory_edit(product_id: int):
     try:
         conn.execute("BEGIN")
         
+        # Determine supplier
+        if supplier_id:
+            try:
+                supplier_id = int(supplier_id)
+            except ValueError:
+                supplier_id = None
+        
+        if not supplier_id and brand:
+            cur_sup = conn.execute("SELECT id FROM suppliers WHERE name = ?", (brand,))
+            sup_row = cur_sup.fetchone()
+            if sup_row:
+                supplier_id = sup_row["id"]
+            else:
+                conn.execute("INSERT INTO suppliers (name) VALUES (?)", (brand,))
+                supplier_id = conn.execute("SELECT last_insert_rowid()").fetchone()[0]
+        
         cur = conn.execute("SELECT stock_quantity FROM products WHERE id = ?", (product_id,))
         old_stock_row = cur.fetchone()
         old_stock = float(old_stock_row["stock_quantity"] or 0) if old_stock_row else 0
@@ -653,9 +694,9 @@ def inventory_edit(product_id: int):
         # Otherwise, keep existing image_url.
         update_query = """
             UPDATE products
-            SET name = ?, brand = ?, category_id = ?, unit = ?, cost_price = ?, selling_price = ?, stock_quantity = ?, is_public = ?
+            SET name = ?, brand = ?, category_id = ?, unit = ?, cost_price = ?, selling_price = ?, stock_quantity = ?, is_public = ?, supplier_id = ?, is_open = ?
         """
-        params = [product_name, brand, category_id, unit, cost_price, selling_price, stock_quantity, is_public]
+        params = [product_name, brand, category_id, unit, cost_price, selling_price, stock_quantity, is_public, supplier_id, is_open]
         
         if created_at:
             update_query += ", created_at = ?"
@@ -676,9 +717,9 @@ def inventory_edit(product_id: int):
             diff = new_stock - old_stock
             t_type = 'IN' if diff > 0 else 'ADJUSTMENT'
             conn.execute("""
-                INSERT INTO inventory_history (product_id, transaction_type, quantity_change, previous_stock, new_stock, reference)
-                VALUES (?, ?, ?, ?, ?, ?)
-            """, (product_id, t_type, diff, old_stock, new_stock, 'Manual Edit (Edit Product)'))
+                INSERT INTO inventory_history (product_id, transaction_type, quantity_change, previous_stock, new_stock, reference, supplier_id)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+            """, (product_id, t_type, diff, old_stock, new_stock, 'Manual Edit (Edit Product)', supplier_id))
 
 
         # Keep brands table in sync for the Brand dropdown.
@@ -731,10 +772,18 @@ def api_inventory_history(product_id):
     try:
         cur = conn.execute(
             """
-            SELECT transaction_type, quantity_change, previous_stock, new_stock, reference, created_at
-            FROM inventory_history
-            WHERE product_id = ?
-            ORDER BY created_at DESC
+            SELECT 
+                h.transaction_type, 
+                h.quantity_change, 
+                h.previous_stock, 
+                h.new_stock, 
+                h.reference, 
+                h.created_at,
+                s.name as supplier_name
+            FROM inventory_history h
+            LEFT JOIN suppliers s ON h.supplier_id = s.id
+            WHERE h.product_id = ?
+            ORDER BY h.created_at DESC
             """,
             (product_id,)
         )
@@ -913,6 +962,121 @@ def brands_add():
     finally:
         conn.close()
 
+
+
+@app.route("/suppliers", methods=["GET"])
+@admin_required
+def suppliers_page():
+    conn = get_connection()
+    try:
+        cur_suppliers = conn.execute("""
+            SELECT s.*, COUNT(p.id) as products_count
+            FROM suppliers s
+            LEFT JOIN products p ON s.id = p.supplier_id
+            GROUP BY s.id
+            ORDER BY s.name COLLATE NOCASE
+        """)
+        suppliers = [dict(r) for r in cur_suppliers.fetchall()]
+        
+        cur_brands = conn.execute("""
+            SELECT b.*, COUNT(p.id) as products_count
+            FROM brands b
+            LEFT JOIN products p ON b.name = p.brand
+            GROUP BY b.id
+            ORDER BY b.name COLLATE NOCASE
+        """)
+        brands = [dict(r) for r in cur_brands.fetchall()]
+        
+        return render_template("suppliers.html", suppliers=suppliers, brands=brands)
+    finally:
+        conn.close()
+
+@app.route("/suppliers/add", methods=["POST"])
+@admin_required
+def suppliers_add():
+    name = request.form.get("name", "").strip()
+    contact_name = request.form.get("contact_name", "").strip()
+    phone = request.form.get("phone", "").strip()
+    address = request.form.get("address", "").strip()
+    
+    if not name:
+        return "Supplier Business Name is required.", 400
+        
+    conn = get_connection()
+    try:
+        conn.execute("INSERT INTO suppliers (name, contact_name, phone, address) VALUES (?, ?, ?, ?)", (name, contact_name, phone, address))
+        conn.commit()
+    finally:
+        conn.close()
+    return redirect(url_for("suppliers_page"))
+
+@app.route("/suppliers/edit/<int:supplier_id>", methods=["POST"])
+@admin_required
+def suppliers_edit(supplier_id):
+    name = request.form.get("name", "").strip()
+    contact_name = request.form.get("contact_name", "").strip()
+    phone = request.form.get("phone", "").strip()
+    address = request.form.get("address", "").strip()
+    
+    if not name:
+        return "Supplier Business Name is required.", 400
+        
+    conn = get_connection()
+    try:
+        conn.execute("UPDATE suppliers SET name = ?, contact_name = ?, phone = ?, address = ? WHERE id = ?", (name, contact_name, phone, address, supplier_id))
+        conn.commit()
+    finally:
+        conn.close()
+    return redirect(url_for("suppliers_page"))
+
+@app.route("/suppliers/delete/<int:supplier_id>", methods=["POST"])
+@admin_required
+def suppliers_delete(supplier_id):
+    conn = get_connection()
+    try:
+        conn.execute("DELETE FROM suppliers WHERE id = ?", (supplier_id,))
+        conn.execute("UPDATE products SET supplier_id = NULL WHERE supplier_id = ?", (supplier_id,))
+        conn.execute("UPDATE inventory_history SET supplier_id = NULL WHERE supplier_id = ?", (supplier_id,))
+        conn.commit()
+    finally:
+        conn.close()
+    return redirect(url_for("suppliers_page"))
+
+@app.route("/brands/edit/<int:brand_id>", methods=["POST"])
+@admin_required
+def brands_edit(brand_id):
+    name = request.form.get("name", "").strip()
+    if not name:
+        return "Brand name is required.", 400
+        
+    conn = get_connection()
+    try:
+        # Get old brand name
+        old_brand_name = conn.execute("SELECT name FROM brands WHERE id = ?", (brand_id,)).fetchone()
+        if old_brand_name:
+            old_name = old_brand_name["name"]
+            conn.execute("UPDATE brands SET name = ? WHERE id = ?", (name, brand_id))
+            conn.execute("UPDATE products SET brand = ? WHERE brand = ?", (name, old_name))
+        conn.commit()
+    finally:
+        conn.close()
+    return redirect(url_for("suppliers_page"))
+
+@app.route("/brands/delete/<int:brand_id>", methods=["POST"])
+@admin_required
+def brands_delete(brand_id):
+    conn = get_connection()
+    try:
+        # Get old brand name
+        old_brand_name = conn.execute("SELECT name FROM brands WHERE id = ?", (brand_id,)).fetchone()
+        if old_brand_name:
+            old_name = old_brand_name["name"]
+            conn.execute("DELETE FROM brands WHERE id = ?", (brand_id,))
+            conn.execute("UPDATE products SET brand = NULL WHERE brand = ?", (old_name,))
+        conn.commit()
+    finally:
+        conn.close()
+    return redirect(url_for("suppliers_page"))
 
 @app.route("/products/list", methods=["GET"])
 @login_required
@@ -1265,7 +1429,7 @@ def sales():
                 s.status,
                 COALESCE(s.amount_paid, 0) AS amount_paid,
                 COALESCE(s.remaining_amount, 0) AS remaining_amount,
-                COALESCE(SUM(si.qty * si.cost_price), 0) AS total_cost,
+                COALESCE(SUM(si.qty * COALESCE(si.packing_multiplier, 1.0) * si.cost_price), 0) AS total_cost,
                 u.username AS salesman_name
             FROM sales s
             LEFT JOIN customers c ON c.id = s.customer_id
@@ -1320,7 +1484,8 @@ def products_search():
                     selling_price,
                     cost_price,
                     unit,
-                    stock_quantity
+                    stock_quantity,
+                    is_open
                 FROM products
                 ORDER BY name COLLATE NOCASE
                 LIMIT 20
@@ -1336,7 +1501,8 @@ def products_search():
                     selling_price,
                     cost_price,
                     unit,
-                    stock_quantity
+                    stock_quantity,
+                    is_open
                 FROM products
                 WHERE name LIKE ? OR brand LIKE ?
                 ORDER BY name COLLATE NOCASE
@@ -1355,6 +1521,7 @@ def products_search():
                     "cost_price": r["cost_price"],
                     "unit": r["unit"],
                     "stock_quantity": r["stock_quantity"],
+                    "is_open": r["is_open"],
                 }
             )
         return jsonify(results)
@@ -1439,7 +1606,7 @@ def sales_data():
                 c.name as customer_name,
                 c.terms as customer_terms,
                 u.username as salesman_name,
-                (SELECT COALESCE(SUM(si.qty * si.cost_price), 0) FROM sale_items si WHERE si.sale_id = s.id) as total_cost
+                (SELECT COALESCE(SUM(si.qty * COALESCE(si.packing_multiplier, 1.0) * si.cost_price), 0) FROM sale_items si WHERE si.sale_id = s.id) as total_cost
             FROM sales s
             LEFT JOIN customers c ON c.id = s.customer_id
             LEFT JOIN users u ON u.id = s.salesman_id
@@ -1521,7 +1688,7 @@ def sales_export():
                 s.remaining_amount,
                 c.name as customer_name,
                 (SELECT COUNT(si.id) FROM sale_items si WHERE si.sale_id = s.id) as item_count,
-                (SELECT COALESCE(SUM(si.qty * si.cost_price), 0) FROM sale_items si WHERE si.sale_id = s.id) as total_cost
+                (SELECT COALESCE(SUM(si.qty * COALESCE(si.packing_multiplier, 1.0) * si.cost_price), 0) FROM sale_items si WHERE si.sale_id = s.id) as total_cost
             FROM sales s
             LEFT JOIN customers c ON c.id = s.customer_id
             {where_sql}
@@ -1652,6 +1819,7 @@ def sales_new():
                 qty = float(it.get("qty"))
                 rate = float(it.get("rate"))
                 print_dual_units = int(it.get("print_dual_units") or 0)
+                packing_multiplier = float(it.get("packing_multiplier") or 1.0)
             except Exception:
                 error = f"Invalid values in item row {idx + 1}."
                 break
@@ -1662,11 +1830,14 @@ def sales_new():
             if rate < 0:
                 error = f"Rate cannot be negative in item row {idx + 1}."
                 break
+            if packing_multiplier <= 0:
+                error = f"Packing multiplier must be greater than 0 in item row {idx + 1}."
+                break
             if not description:
                 error = f"Description is required in item row {idx + 1}."
                 break
 
-            amount = round(qty * rate, 2)
+            amount = round(qty * rate * packing_multiplier, 2)
             parsed_items.append(
                 {
                     "product_id": product_id,
@@ -1675,6 +1846,7 @@ def sales_new():
                     "rate": rate,
                     "amount": amount,
                     "print_dual_units": print_dual_units,
+                    "packing_multiplier": packing_multiplier,
                 }
             )
 
@@ -1734,7 +1906,7 @@ def sales_new():
 
             qty_total_by_product = defaultdict(float)
             for li in parsed_items:
-                qty_total_by_product[li["product_id"]] += li["qty"]
+                qty_total_by_product[li["product_id"]] += li["qty"] * li["packing_multiplier"]
 
             # Ensure stock is sufficient (aggregate per product for repeated items)
             if not is_quote:
@@ -1787,9 +1959,9 @@ def sales_new():
                 conn.execute(
                     """
                     INSERT INTO sale_items
-                        (sale_id, product_id, description, qty, rate, amount, cost_price, print_dual_units)
+                        (sale_id, product_id, description, qty, rate, amount, cost_price, print_dual_units, packing_multiplier)
                     VALUES
-                        (?, ?, ?, ?, ?, ?, COALESCE((SELECT cost_price FROM products WHERE id = ?), 0), ?)
+                        (?, ?, ?, ?, ?, ?, COALESCE((SELECT cost_price FROM products WHERE id = ?), 0), ?, ?)
                     """,
                     (
                         sale_id,
@@ -1800,6 +1972,7 @@ def sales_new():
                         li["amount"],
                         li["product_id"],
                         li["print_dual_units"],
+                        li["packing_multiplier"],
                     ),
                 )
 
@@ -1921,6 +2094,7 @@ def sales_edit(sale_id: int):
                 si.rate,
                 si.amount,
                 si.print_dual_units,
+                COALESCE(si.packing_multiplier, 1.0) as packing_multiplier,
                 p.stock_quantity
             FROM sale_items si
             LEFT JOIN products p ON p.id = si.product_id
@@ -2065,6 +2239,7 @@ def sales_update(sale_id: int):
                 qty = float(it.get("qty"))
                 rate = float(it.get("rate"))
                 print_dual_units = int(it.get("print_dual_units") or 0)
+                packing_multiplier = float(it.get("packing_multiplier") or 1.0)
             except Exception:
                 error = f"Invalid values in item row {idx + 1}."
                 break
@@ -2075,11 +2250,14 @@ def sales_update(sale_id: int):
             if rate < 0:
                 error = f"Rate cannot be negative in item row {idx + 1}."
                 break
+            if packing_multiplier <= 0:
+                error = f"Packing multiplier must be greater than 0 in item row {idx + 1}."
+                break
             if not description:
                 error = f"Description is required in item row {idx + 1}."
                 break
 
-            amount = round(qty * rate, 2)
+            amount = round(qty * rate * packing_multiplier, 2)
             parsed_items.append(
                 {
                     "product_id": product_id,
@@ -2088,6 +2266,7 @@ def sales_update(sale_id: int):
                     "rate": rate,
                     "amount": amount,
                     "print_dual_units": print_dual_units,
+                    "packing_multiplier": packing_multiplier,
                 }
             )
 
@@ -2161,7 +2340,7 @@ def sales_update(sale_id: int):
             # Get old sale items to restore stock
             old_items = conn.execute(
                 """
-                SELECT product_id, qty
+                SELECT product_id, qty, COALESCE(packing_multiplier, 1.0) as packing_multiplier
                 FROM sale_items
                 WHERE sale_id = ?
                 """,
@@ -2171,7 +2350,7 @@ def sales_update(sale_id: int):
             # Restore old stock
             old_qty_by_product = defaultdict(float)
             for item in old_items:
-                old_qty_by_product[item["product_id"]] += float(item["qty"])
+                old_qty_by_product[item["product_id"]] += float(item["qty"]) * float(item["packing_multiplier"])
 
             for product_id, qty_total in old_qty_by_product.items():
                 cur = conn.execute("SELECT stock_quantity FROM products WHERE id = ?", (product_id,))
@@ -2192,7 +2371,7 @@ def sales_update(sale_id: int):
             # Calculate new stock requirements
             new_qty_by_product = defaultdict(float)
             for li in parsed_items:
-                new_qty_by_product[li["product_id"]] += li["qty"]
+                new_qty_by_product[li["product_id"]] += li["qty"] * li["packing_multiplier"]
 
             # Check new stock availability
             for product_id, qty_total in new_qty_by_product.items():
@@ -2249,9 +2428,9 @@ def sales_update(sale_id: int):
                 conn.execute(
                     """
                     INSERT INTO sale_items
-                        (sale_id, product_id, description, qty, rate, amount, cost_price, print_dual_units)
+                        (sale_id, product_id, description, qty, rate, amount, cost_price, print_dual_units, packing_multiplier)
                     VALUES
-                        (?, ?, ?, ?, ?, ?, COALESCE((SELECT cost_price FROM products WHERE id = ?), 0), ?)
+                        (?, ?, ?, ?, ?, ?, COALESCE((SELECT cost_price FROM products WHERE id = ?), 0), ?, ?)
                     """,
                     (
                         sale_id,
@@ -2262,6 +2441,7 @@ def sales_update(sale_id: int):
                         li["amount"],
                         li["product_id"],
                         li["print_dual_units"],
+                        li["packing_multiplier"],
                     ),
                 )
 
@@ -2335,7 +2515,7 @@ def sale_details(sale_id: int):
                 s.remaining_amount,
                 c.name as customer_name,
                 u.username as salesman_name,
-                (SELECT COALESCE(SUM(si.qty * si.cost_price), 0) FROM sale_items si WHERE si.sale_id = s.id) as total_cost
+                (SELECT COALESCE(SUM(si.qty * COALESCE(si.packing_multiplier, 1.0) * si.cost_price), 0) FROM sale_items si WHERE si.sale_id = s.id) as total_cost
             FROM sales s
             LEFT JOIN customers c ON c.id = s.customer_id
             LEFT JOIN users u ON u.id = s.salesman_id
@@ -2603,7 +2783,7 @@ def sales_delete(id: int):
 
         items = conn.execute(
             """
-            SELECT product_id, qty
+            SELECT product_id, qty, COALESCE(packing_multiplier, 1.0) as packing_multiplier
             FROM sale_items
             WHERE sale_id = ?
             """,
@@ -2621,7 +2801,8 @@ def sales_delete(id: int):
             cur = conn.execute("SELECT stock_quantity FROM products WHERE id = ?", (it["product_id"],))
             row = cur.fetchone()
             old_stock = float(row["stock_quantity"] or 0) if row else 0
-            new_stock = old_stock + it["qty"]
+            restored_qty = float(it["qty"]) * float(it["packing_multiplier"])
+            new_stock = old_stock + restored_qty
             
             conn.execute(
                 """
@@ -2635,7 +2816,7 @@ def sales_delete(id: int):
             conn.execute("""
                 INSERT INTO inventory_history (product_id, transaction_type, quantity_change, previous_stock, new_stock, reference)
                 VALUES (?, ?, ?, ?, ?, ?)
-            """, (it["product_id"], 'IN', it["qty"], old_stock, new_stock, f'Invoice #{invoice_number} Deleted'))
+            """, (it["product_id"], 'IN', restored_qty, old_stock, new_stock, f'Invoice #{invoice_number} Deleted'))
 
         conn.commit()
     except Exception:
@@ -2755,7 +2936,7 @@ def reports_by_customer():
               c.area,
               COUNT(DISTINCT s.id) as invoice_count,
               COALESCE(SUM(si.amount), 0) as total_revenue,
-              COALESCE(SUM(si.qty * si.cost_price), 0) as total_cost,
+              COALESCE(SUM(si.qty * COALESCE(si.packing_multiplier, 1.0) * si.cost_price), 0) as total_cost,
               (SELECT COALESCE(SUM(remaining_amount), 0) FROM sales WHERE customer_id = c.id) as outstanding,
               MAX(s.invoice_date) as last_sale_date
             FROM customers c
@@ -2842,7 +3023,7 @@ def reports_by_brand():
                 p.brand,
                 COALESCE(SUM(si.qty), 0) AS units_sold,
                 COALESCE(SUM(si.amount), 0) AS total_revenue,
-                COALESCE(SUM(si.qty * si.cost_price), 0) as total_cost
+                COALESCE(SUM(si.qty * COALESCE(si.packing_multiplier, 1.0) * si.cost_price), 0) as total_cost
             FROM sale_items si
             JOIN products p ON p.id = si.product_id
             JOIN sales s ON s.id = si.sale_id
@@ -2891,7 +3072,7 @@ def reports_by_category():
                 COALESCE(cat.name, 'Uncategorized') AS category_name,
                 COALESCE(SUM(si.qty), 0) AS qty_sold,
                 COALESCE(SUM(si.amount), 0) AS total_revenue,
-                COALESCE(SUM(si.qty * si.cost_price), 0) as total_cost,
+                COALESCE(SUM(si.qty * COALESCE(si.packing_multiplier, 1.0) * si.cost_price), 0) as total_cost,
                 SUM(p.stock_quantity) as current_stock
             FROM sale_items si
             JOIN products p ON p.id = si.product_id
@@ -2939,7 +3120,7 @@ def reports_by_salesman():
               LOWER(COALESCE(u.username, 'admin')) as salesman_name,
               COUNT(DISTINCT s.id) as invoice_count,
               COALESCE(SUM(si.amount), 0) as total_revenue,
-              COALESCE(SUM(si.qty * si.cost_price), 0) as total_cost,
+              COALESCE(SUM(si.qty * COALESCE(si.packing_multiplier, 1.0) * si.cost_price), 0) as total_cost,
               (SELECT COALESCE(SUM(remaining_amount), 0) FROM sales s2 
                LEFT JOIN users u2 ON u2.id = s2.salesman_id 
                WHERE LOWER(COALESCE(u2.username, 'admin')) = LOWER(COALESCE(u.username, 'admin'))) as outstanding
@@ -2999,7 +3180,7 @@ def reports_by_product():
                 COALESCE(cat.name, 'Uncategorized') as category,
                 COALESCE(SUM(si.qty), 0) as units_sold,
                 COALESCE(SUM(si.amount), 0) as total_revenue,
-                COALESCE(SUM(si.qty * si.cost_price), 0) as total_cost,
+                COALESCE(SUM(si.qty * COALESCE(si.packing_multiplier, 1.0) * si.cost_price), 0) as total_cost,
                 p.stock_quantity as current_stock
             FROM sale_items si
             JOIN products p ON p.id = si.product_id
@@ -3167,7 +3348,7 @@ def reports_profit():
                 s.invoice_date,
                 COUNT(DISTINCT s.id) as invoice_count,
                 COALESCE(SUM(si.qty * si.rate), 0) as total_revenue,
-                COALESCE(SUM(si.qty * si.cost_price), 0) as total_cost
+                COALESCE(SUM(si.qty * COALESCE(si.packing_multiplier, 1.0) * si.cost_price), 0) as total_cost
             FROM sales s
             JOIN sale_items si ON si.sale_id = s.id
             JOIN products p ON si.product_id = p.id
@@ -3243,7 +3424,7 @@ def reports_export(type: str):
                   c.area,
                   COUNT(DISTINCT s.id) as invoice_count,
                   COALESCE(SUM(si.amount), 0) as total_revenue,
-                  COALESCE(SUM(si.qty * si.cost_price), 0) as total_cost,
+                  COALESCE(SUM(si.qty * COALESCE(si.packing_multiplier, 1.0) * si.cost_price), 0) as total_cost,
                   (SELECT COALESCE(SUM(remaining_amount), 0) FROM sales WHERE customer_id = c.id) as outstanding,
                   MAX(s.invoice_date) as last_sale_date
                 FROM customers c
@@ -3288,7 +3469,7 @@ def reports_export(type: str):
                     p.brand,
                     COALESCE(SUM(si.qty), 0) AS units_sold,
                     COALESCE(SUM(si.amount), 0) AS total_revenue,
-                    COALESCE(SUM(si.qty * si.cost_price), 0) as total_cost
+                    COALESCE(SUM(si.qty * COALESCE(si.packing_multiplier, 1.0) * si.cost_price), 0) as total_cost
                 FROM sale_items si
                 JOIN products p ON p.id = si.product_id
                 JOIN sales s ON s.id = si.sale_id
@@ -3325,7 +3506,7 @@ def reports_export(type: str):
                     COALESCE(cat.name, 'Uncategorized') AS category_name,
                     COALESCE(SUM(si.qty), 0) AS qty_sold,
                     COALESCE(SUM(si.amount), 0) AS total_revenue,
-                    COALESCE(SUM(si.qty * si.cost_price), 0) as total_cost,
+                    COALESCE(SUM(si.qty * COALESCE(si.packing_multiplier, 1.0) * si.cost_price), 0) as total_cost,
                     SUM(p.stock_quantity) as current_stock
                 FROM sale_items si
                 JOIN products p ON p.id = si.product_id
@@ -3367,7 +3548,7 @@ def reports_export(type: str):
                     COALESCE(cat.name, 'Uncategorized') as category,
                     COALESCE(SUM(si.qty), 0) as units_sold,
                     COALESCE(SUM(si.amount), 0) as total_revenue,
-                    COALESCE(SUM(si.qty * si.cost_price), 0) as total_cost,
+                    COALESCE(SUM(si.qty * COALESCE(si.packing_multiplier, 1.0) * si.cost_price), 0) as total_cost,
                     p.stock_quantity as current_stock
                 FROM sale_items si
                 JOIN products p ON p.id = si.product_id

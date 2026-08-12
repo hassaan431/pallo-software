@@ -697,7 +697,8 @@
       const qty = qtyInput ? Number(qtyInput.value || 0) : 0;
       const cpStr = r.dataset.costPrice || "0";
       const cp = Number(cpStr);
-      totalCost += (qty * cp);
+      const multiplier = parseFloat(r.dataset.packingMultiplier) || 1.0;
+      totalCost += (qty * multiplier * cp);
     });
 
     subtotal = Math.round(subtotal * 100) / 100;
@@ -734,15 +735,20 @@
     let qty = Number(qtyEl.value || 0);
     const stockVal = row.dataset.stockQuantity;
     const availableStock = stockVal && stockVal !== "" ? Number(stockVal) : null;
+    const multiplier = parseFloat(row.dataset.packingMultiplier) || 1.0;
 
-    if (!editMode && availableStock !== null && qty > availableStock) {
-      alert(`Cannot exceed available stock (${availableStock}).`);
-      qty = availableStock;
+    if (!editMode && availableStock !== null && (qty * multiplier) > availableStock) {
+      alert(`Cannot exceed available stock (${availableStock}). Note: Packing multiplier is ${multiplier}.`);
+      if (multiplier > 0) {
+        qty = Math.floor(availableStock / multiplier);
+      } else {
+        qty = 0;
+      }
       qtyEl.value = qty;
     }
 
     const rate = Number(rateEl.value || 0);
-    const amount = Math.round((qty * rate) * 100) / 100;
+    const amount = Math.round((qty * multiplier * rate) * 100) / 100;
 
     amountEl.dataset.amount = String(amount);
     amountEl.textContent = money(amount);
@@ -751,7 +757,7 @@
 
   function fetchProductResults(q) {
     const url = '/products/search?q=' + encodeURIComponent(q);
-    return fetch(url, { credentials: 'same-origin' })
+    return fetch(url, { credentials: 'same-origin', cache: 'no-store' })
       .then((res) => res.json());
   }
 
@@ -772,19 +778,26 @@
     ? (product.cost_price || 0)
     : (product ? (product.cost_price || 0) : 0);
   const displayPrintDualUnits = product ? (product.print_dual_units ? 'checked' : '') : '';
+  const displayPackingMultiplier = product ? (product.packing_multiplier || 1.0) : 1.0;
 
   return `
-    <tr class="line-item-row" data-row-index="${index}" data-cost-price="${displayCp}">
+    <tr class="line-item-row" data-row-index="${index}" data-cost-price="${displayCp}" data-packing-multiplier="${displayPackingMultiplier}">
       <td class="line-no">${index + 1}</td>
       <td>
         <div class="search-wrap" style="position: relative; margin-bottom:0.6rem;">
-          <input
-            type="text"
-            class="form-control product-search-input description-input"
-            placeholder="Search product or enter description..."
-            autocomplete="off"
-            value="${displayName}"
-            />
+          <div style="display: flex; gap: 4px; align-items: flex-start;">
+            <input
+              type="text"
+              class="form-control product-search-input description-input"
+              placeholder="Search product or enter description..."
+              autocomplete="off"
+              value="${displayName}"
+              style="flex: 1;"
+              />
+            <div class="custom-variant-container" style="display: none; align-items: center; gap: 4px;">
+              <input type="text" class="form-control custom-size-input" placeholder="Size" style="width: 100px; padding: 4px; font-size: 12px; height: 32px;">
+            </div>
+          </div>
           <div class="suggestions product-suggestions" style="display:none;"></div>
           ${stockBadge}
           <label style="font-size: 0.8em; margin-top: 4px; display: flex; align-items: center; gap: 4px; cursor: pointer; color: var(--color-text);">
@@ -806,7 +819,7 @@
     document.querySelectorAll('.product-suggestions').forEach(el => hideEl(el));
   }
 
-  function selectProduct(row, product) {
+  function selectProduct(row, product, productSuggestions = null) {
     const searchInput = row.querySelector('.product-search-input');
     const rateInput = row.querySelector('.rate-input');
     const qtyInput = row.querySelector('.qty-input');
@@ -822,9 +835,6 @@
     rateInput.value = Number(product.selling_price || 0);
     
     hideProductSuggestions();
-    qtyInput.focus();
-
-    if (!qtyInput.value) qtyInput.value = 1;
     
     // Update stock badge
     const existingBadge = row.querySelector('.stock-badge');
@@ -835,8 +845,30 @@
     stockBadge.className = `stock-badge ${product.stock_quantity >= 5 ? 'green' : product.stock_quantity > 0 ? 'orange' : 'red'}`;
     stockBadge.textContent = 'In stock: ' + (product.stock_quantity || 0);
     searchInput.parentNode.appendChild(stockBadge);
+
+    if (!productSuggestions) {
+      productSuggestions = row.querySelector('.product-suggestions');
+    }
+    if (product.is_open) {
+      if (!qtyInput.value) qtyInput.value = '';
+      
+      const variantContainer = row.querySelector('.custom-variant-container');
+      const customInput = row.querySelector('.custom-size-input');
+      if (variantContainer && customInput) {
+        variantContainer.style.display = 'flex';
+        customInput.placeholder = 'Size (e.g., ' + (product.unit || 'g') + ')';
+        row.dataset.productUnit = product.unit || '';
+        setTimeout(() => customInput.focus(), 50);
+      }
+    } else {
+      const variantContainer = row.querySelector('.custom-variant-container');
+      if (variantContainer) {
+          variantContainer.style.display = 'none';
+      }
+      if (!qtyInput.value) qtyInput.value = 1;
+      qtyInput.focus();
+    }
     
-    hideProductSuggestions(row);
     updateRowAmount(row);
   }
 
@@ -853,6 +885,22 @@
         renumberRows();
         recalcTotals();
       });
+    }
+
+    const customInput = row.querySelector('.custom-size-input');
+    const variantContainer = row.querySelector('.custom-variant-container');
+
+    if (customInput) {
+        customInput.addEventListener('input', () => {
+            const val = customInput.value.trim();
+            const numMatch = val.match(/[\d.]+/);
+            if (numMatch) {
+                row.dataset.packingMultiplier = parseFloat(numMatch[0]);
+            } else {
+                row.dataset.packingMultiplier = 1;
+            }
+            updateRowAmount(row);
+        });
     }
 
     if (qtyEl) qtyEl.addEventListener('input', () => updateRowAmount(row));
@@ -899,8 +947,9 @@
                 item.className = 'suggestion-item';
                 const brandPart = p.brand ? (' - ' + p.brand) : '';
                 item.textContent = (p.name || '') + brandPart;
-                item.addEventListener('click', () => {
-                  selectProduct(row, p);
+                item.addEventListener('click', (e) => {
+                  e.stopPropagation();
+                  selectProduct(row, p, productSuggestions);
                 });
                 productSuggestions.appendChild(item);
               });
@@ -948,7 +997,7 @@
       if (p.brand) {
         const brand = document.createElement('div');
         brand.style.fontSize = '12px';
-        brand.style.color = '#6b7280';
+        brand.style.color = '#9ca3af';
         brand.style.marginTop = '2px';
         brand.textContent = p.brand;
         item.appendChild(brand);
@@ -959,11 +1008,10 @@
       item.addEventListener('mouseleave', () => {
         item.style.background = 'white';
       });
-      item.addEventListener('mousedown', (e) => {
-        e.preventDefault();
+      item.addEventListener('click', (e) => {
+        e.stopPropagation();
         // Use selectProduct function to fill row
-        selectProduct(row, p);
-        hideEl(suggestionsEl);
+        selectProduct(row, p, suggestionsEl);
       });
       suggestionsEl.appendChild(item);
     });
@@ -1017,6 +1065,7 @@
     row.dataset.stockQuantity = product ? String(product.stock_quantity || 0) : '';
     row.dataset.baseSellingPrice = product ? String(product.rate || product.selling_price || 0) : '';
     row.dataset.costPrice = product ? String(product.cost_price || 0) : '';
+    row.dataset.packingMultiplier = product ? String(product.packing_multiplier || 1.0) : '1.0';
     initRowBehaviors(row);
     updateRowAmount(row);
   }
@@ -1372,14 +1421,33 @@
       if (!productId) return;
 
       if (!desc) return;
+      
+      const packingMultiplier = parseFloat(row.dataset.packingMultiplier) || 1.0;
+      let finalDesc = desc;
+      
+      const variantContainer = row.querySelector('.custom-variant-container');
+      const customInput = row.querySelector('.custom-size-input');
+      if (variantContainer && variantContainer.style.display !== 'none' && customInput) {
+          const val = customInput.value.trim();
+          if (val) {
+              let displayVal = val;
+              const unit = row.dataset.productUnit;
+              if (!/[a-zA-Z]$/.test(val) && unit) {
+                  displayVal += ' (' + unit + ')';
+              }
+              finalDesc += ' - ' + displayVal;
+          }
+      }
+      
       items.push({
         product_id: productId,
-        description: desc,
+        description: finalDesc,
         qty: qty,
         rate: rate,
         cost_price: Number(cpStr),
-        amount: Math.round((qty * rate) * 100) / 100,
+        amount: Math.round((qty * rate * packingMultiplier) * 100) / 100,
         print_dual_units: dualUnit,
+        packing_multiplier: packingMultiplier,
       });
     });
 

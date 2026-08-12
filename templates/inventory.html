@@ -200,8 +200,7 @@
         <thead>
           <tr>
             <th>#</th>
-            <th>Image</th>
-            <th>Product Name</th>
+            <th>Product Details</th>
             <th>Brand</th>
             <th>Category</th>
             <th>Public?</th>
@@ -230,13 +229,25 @@
           <tr id="product-row-{{ p.id }}" class="{{ row_class }}">
             <td>{{ loop.index }}</td>
             <td>
-              {% if p.image_url %}
-                <img src="{{ p.image_url }}" alt="Product" style="width: 40px; height: 40px; object-fit: cover; border-radius: 4px; cursor: pointer; border: 1px solid var(--border);" onclick="openImagePreview('{{ p.image_url }}')">
-              {% else %}
-                <div style="width: 40px; height: 40px; background: #eee; border-radius: 4px; display: flex; align-items: center; justify-content: center; color: #999; font-size: 0.8rem; border: 1px solid var(--border);">None</div>
-              {% endif %}
+              <div style="display: flex; align-items: center; gap: 0.75rem;">
+                {% if p.image_url %}
+                  <img src="{{ p.image_url }}" alt="Product Image" style="width: 40px; height: 40px; object-fit: cover; border-radius: 4px; border: 1px solid var(--color-border); cursor: pointer;" onclick="openImagePreview('{{ p.image_url }}')">
+                {% else %}
+                  <div style="width: 40px; height: 40px; border-radius: 4px; background: #e5e7eb; display: flex; align-items: center; justify-content: center; border: 1px solid var(--color-border);">
+                    <i class="fas fa-image" style="color: #9ca3af; font-size: 1.1rem;"></i>
+                  </div>
+                {% endif %}
+                <div>
+                  <div class="searchable-name" style="font-weight: 600; color: #111827;">
+                    {{ p.name|e }}
+                    {% if p.is_open %}
+                      <span style="margin-left: 6px; background: #e0e7ff; color: #4338ca; padding: 2px 6px; border-radius: 4px; font-size: 0.7rem; font-weight: 600; text-transform: uppercase;">Open Item</span>
+                    {% endif %}
+                  </div>
+                  <div style="font-size: 0.8rem; color: #6b7280; margin-top: 0.1rem;">ID: {{ p.id }}</div>
+                </div>
+              </div>
             </td>
-            <td class="searchable-name">{{ p.name }}</td>
             <td class="searchable-brand">{{ p.brand or '' }}</td>
             <td>{{ p.category_name or '' }}</td>
             <td>
@@ -279,6 +290,8 @@
                 data-stock-quantity="{{ qty_int }}"
                 data-created-at="{{ (p.created_at or '')[:10] }}"
                 data-is-public="{{ 1 if p.is_public else 0 }}"
+                data-is-open="{{ 1 if p.is_open else 0 }}"
+                data-supplier-id="{{ p.supplier_id or '' }}"
                 style="padding: 3px 8px; font-size: 11px; border-radius: 4px; margin: 0 1px;"
               >
                 Edit
@@ -368,6 +381,16 @@
         </div>
 
         <div class="modal-field">
+          <label for="addSupplierSelect">Supplier (Defaults to Brand if empty)</label>
+          <select class="form-control" id="addSupplierSelect" name="supplier_id">
+            <option value="">-- Select Supplier --</option>
+            {% for s in suppliers %}
+            <option value="{{ s.id }}">{{ s.name }}</option>
+            {% endfor %}
+          </select>
+        </div>
+
+        <div class="modal-field">
           <label for="addCategorySelect">Category</label>
           <select class="form-control" id="addCategorySelect" name="category_id" required>
             <option value="" disabled selected>Select a category</option>
@@ -431,6 +454,11 @@
           <label for="addIsPublic" style="margin: 0; cursor: pointer;">Show on Public Website</label>
         </div>
 
+        <div class="modal-field" style="display: flex; align-items: center; gap: 0.5rem; margin-top: 0.5rem;">
+          <input type="checkbox" id="addIsOpen" name="is_open" value="1" style="width: auto; height: auto;">
+          <label for="addIsOpen" style="margin: 0; cursor: pointer;">Is Open Product (Custom Weight Packings)</label>
+        </div>
+
         <div class="inline-flex" style="justify-content: flex-end; gap: 0.65rem; margin-top: 0.25rem;">
           <button type="button" class="btn btn-secondary" data-close-modal="addProductModal">Cancel</button>
           <button type="submit" class="btn btn-primary">Save Product</button>
@@ -476,6 +504,16 @@
             <input class="form-control" type="text" id="editNewBrandName" placeholder="Brand name">
             <button type="button" class="btn btn-primary" id="editNewBrandCreateBtn">Create</button>
           </div>
+        </div>
+
+        <div class="modal-field">
+          <label for="editSupplierSelect">Supplier</label>
+          <select class="form-control" id="editSupplierSelect" name="supplier_id">
+            <option value="">-- Select Supplier --</option>
+            {% for s in suppliers %}
+            <option value="{{ s.id }}">{{ s.name }}</option>
+            {% endfor %}
+          </select>
         </div>
 
         <div class="modal-field">
@@ -542,6 +580,11 @@
           <label for="editIsPublic" style="margin: 0; cursor: pointer;">Show on Public Website</label>
         </div>
 
+        <div class="modal-field" style="display: flex; align-items: center; gap: 0.5rem; margin-top: 0.5rem;">
+          <input type="checkbox" id="editIsOpen" name="is_open" value="1" style="width: auto; height: auto;">
+          <label for="editIsOpen" style="margin: 0; cursor: pointer;">Is Open Product (Custom Weight Packings)</label>
+        </div>
+
         <div class="inline-flex" style="justify-content: flex-end; gap: 0.65rem; margin-top: 0.25rem;">
           <button type="button" class="btn btn-secondary" data-close-modal="editProductModal">Cancel</button>
           <button type="submit" class="btn btn-primary">Save Changes</button>
@@ -569,6 +612,7 @@
               <th>Prev</th>
               <th>New</th>
               <th>Ref</th>
+              <th>Supplier</th>
             </tr>
           </thead>
           <tbody id="historyTbody"></tbody>
@@ -1281,6 +1325,16 @@
           isPublicCheckbox.checked = editBtn.getAttribute('data-is-public') === '1';
         }
 
+        const isOpenCheckbox = document.getElementById('editIsOpen');
+        if (isOpenCheckbox) {
+          isOpenCheckbox.checked = editBtn.getAttribute('data-is-open') === '1';
+        }
+
+        const supplierSelect = document.getElementById('editSupplierSelect');
+        if (supplierSelect) {
+          supplierSelect.value = editBtn.getAttribute('data-supplier-id') || '';
+        }
+
         document.getElementById('editUnitQuantity').value = editBtn.getAttribute('data-unit-quantity') || 0;
         document.getElementById('editCostPrice').value = editBtn.getAttribute('data-cost-price') || 0;
         document.getElementById('editSellingPrice').value = editBtn.getAttribute('data-selling-price') || 0;
@@ -1316,7 +1370,7 @@
         document.getElementById('historyProductName').textContent = `History: ${productName}`;
         
         const historyTbody = document.getElementById('historyTbody');
-        historyTbody.innerHTML = '<tr><td colspan="6" class="empty-state">Loading...</td></tr>';
+        historyTbody.innerHTML = '<tr><th colspan="7" class="empty-state">Loading...</th></tr>';
         openModal(document.getElementById('historyProductModal'));
         
         try {
@@ -1324,7 +1378,7 @@
           const data = await res.json();
           if (data.ok) {
             if (data.history.length === 0) {
-              historyTbody.innerHTML = '<tr><td colspan="6" class="empty-state">No history available for this product.</td></tr>';
+              historyTbody.innerHTML = '<tr><th colspan="7" class="empty-state">No history available for this product.</th></tr>';
             } else {
               historyTbody.innerHTML = data.history.map(h => {
                 let badge = '';
@@ -1341,14 +1395,15 @@
                   <td>${h.previous_stock}</td>
                   <td>${h.new_stock}</td>
                   <td>${h.reference || '-'}</td>
+                  <td>${h.supplier_name || '-'}</td>
                 </tr>`;
               }).join('');
             }
           } else {
-            historyTbody.innerHTML = `<tr><td colspan="6" class="empty-state">Error: ${data.error}</td></tr>`;
+            historyTbody.innerHTML = `<tr><th colspan="7" class="empty-state">Error: ${data.error}</th></tr>`;
           }
         } catch (err) {
-            historyTbody.innerHTML = `<tr><td colspan="6" class="empty-state">Failed to load history.</td></tr>`;
+            historyTbody.innerHTML = `<tr><th colspan="7" class="empty-state">Failed to load history.</th></tr>`;
         }
         return;
       }

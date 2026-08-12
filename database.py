@@ -113,8 +113,31 @@ def init_db():
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             );
 
+            CREATE TABLE IF NOT EXISTS suppliers (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name TEXT NOT NULL,
+                contact_name TEXT,
+                phone TEXT,
+                address TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            );
+
             """
         )
+        
+        # Safely add supplier_id column to products table
+        try:
+            conn.execute("ALTER TABLE products ADD COLUMN supplier_id INTEGER REFERENCES suppliers(id)")
+            conn.commit()
+        except sqlite3.OperationalError:
+            pass
+
+        # Safely add supplier_id column to inventory_history table
+        try:
+            conn.execute("ALTER TABLE inventory_history ADD COLUMN supplier_id INTEGER REFERENCES suppliers(id)")
+            conn.commit()
+        except sqlite3.OperationalError:
+            pass
         
         # Safely add brand column to products table
         try:
