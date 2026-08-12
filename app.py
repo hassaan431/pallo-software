@@ -57,6 +57,7 @@ fix_existing_sales_data()
 from flask import Flask, Response, flash, jsonify, redirect, render_template, request, url_for
 from flask_login import LoginManager, UserMixin, current_user, login_required, login_user, logout_user
 from werkzeug.security import check_password_hash, generate_password_hash
+from werkzeug.exceptions import HTTPException
 from functools import wraps
 
 from invoice_generator import generate_invoice_pdf
@@ -164,6 +165,17 @@ def logout():
     logout_user()
     return redirect(url_for("login"))
 
+
+import traceback
+
+@app.errorhandler(Exception)
+def handle_exception(e):
+    # pass through HTTP errors
+    if isinstance(e, HTTPException):
+        return e
+    # now you're handling non-HTTP exceptions only
+    tb = traceback.format_exc()
+    return f"<h1>Internal Server Error</h1><pre>{tb}</pre>", 500
 
 @app.route("/dashboard")
 @admin_required
