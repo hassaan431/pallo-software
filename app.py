@@ -490,6 +490,7 @@ def inventory_add():
     created_at = (request.form.get("created_at") or "").strip()
     is_public = 1 if request.form.get("is_public") else 0
     is_open = 1 if request.form.get("is_open") else 0
+    supplier_id = request.form.get("supplier_id")
 
     try:
         category_id = int(category_id_raw)
