@@ -1190,7 +1190,7 @@
       tr.appendChild(tdDate);
 
       const tdCustomer = document.createElement('td');
-      tdCustomer.textContent = s.customer_name || '';
+      tdCustomer.textContent = s.customer_name || (s.status === 'quote' ? 'Quotation' : 'Walk-in');
       tr.appendChild(tdCustomer);
 
       // Grand Total

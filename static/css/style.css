@@ -583,3 +583,9 @@ table.data-table tbody tr:last-child td {
     display: none;
   }
 }
+
+.badge { display: inline-block; padding: 0.35rem 0.75rem; border-radius: 4px; font-size: 0.85rem; font-weight: 600; }
+.badge-success { background: #e8f5e9; color: #2e7d32; }
+.badge-warning { background: #fff3e0; color: #ef6c00; }
+.badge-danger { background: #ffebee; color: #c62828; }
+

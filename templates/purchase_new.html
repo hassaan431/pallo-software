@@ -1,0 +1,261 @@
+{% extends "base.html" %}
+{% block page_heading %}Receive Shipment / Add Inventory{% endblock %}
+{% block content %}
+<div class="page-header" style="margin-bottom: 1.5rem;">
+  <h2 style="margin:0; font-size:1.25rem; font-weight:700;">Receive Shipment</h2>
+  <p style="color: var(--text-muted); margin-top: 0.25rem;">Log incoming inventory from suppliers and record payment details.</p>
+</div>
+
+<div class="panel">
+  <div class="panel-body" style="padding: 2rem;">
+    <form id="purchase-form" onsubmit="submitPurchase(event)">
+      
+      <!-- Top Meta Info -->
+      <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem; margin-bottom: 2rem;">
+        <div>
+          <label class="form-label" for="supplier_id">Supplier *</label>
+          <select id="supplier_id" class="form-control" required>
+            <option value="">-- Select Supplier --</option>
+            {% for s in suppliers %}
+            <option value="{{ s.id }}">{{ s.name }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div>
+          <label class="form-label" for="purchase_date">Purchase Date *</label>
+          <input type="date" id="purchase_date" class="form-control" required>
+        </div>
+        <div>
+          <label class="form-label" for="reference_number">Reference / Bill #</label>
+          <input type="text" id="reference_number" class="form-control" placeholder="e.g. INV-9923">
+        </div>
+      </div>
+
+      <!-- Items Table -->
+      <div class="table-wrap" style="margin-bottom: 2rem; border-radius: 8px; overflow: hidden; border: 1px solid var(--border-color);">
+        <table class="data-table" id="purchase-items-table" style="margin: 0; width: 100%;">
+          <thead style="background-color: #f8fafc;">
+            <tr>
+              <th style="width: 45%; padding: 1rem;">Product</th>
+              <th style="width: 15%; padding: 1rem;">Qty Received</th>
+              <th style="width: 15%; padding: 1rem;">Cost Price ($)</th>
+              <th style="width: 15%; padding: 1rem; text-align: right;">Amount ($)</th>
+              <th style="width: 10%; padding: 1rem; text-align: center;">Action</th>
+            </tr>
+          </thead>
+          <tbody id="items-tbody">
+            <!-- First row added by JS -->
+          </tbody>
+        </table>
+        <div style="padding: 1rem; background-color: #f8fafc; border-top: 1px solid var(--border-color);">
+          <button type="button" class="btn btn-outline btn-sm" onclick="addPurchaseRow()">+ Add Row</button>
+        </div>
+      </div>
+
+      <!-- Payment & Totals -->
+      <div style="display: flex; gap: 3rem; justify-content: space-between; border-top: 1px solid var(--border-color); padding-top: 2.5rem; flex-wrap: wrap;">
+        
+        <!-- Payment Details -->
+        <div style="flex: 1; min-width: 250px; max-width: 400px;">
+          <h4 style="margin-bottom: 1.5rem; font-weight: 600;">Payment Details</h4>
+          <div style="margin-bottom: 1.25rem;">
+            <label class="form-label">Payment Amount</label>
+            <div style="position: relative; display: flex; align-items: center;">
+              <span style="position: absolute; left: 12px; color: var(--text-muted); font-weight: 500;">$</span>
+              <input type="number" id="payment_amount" class="form-control" style="padding-left: 28px;" step="0.01" min="0" placeholder="0.00">
+            </div>
+            <small style="color: var(--text-muted); display: block; margin-top: 0.25rem;">Leave as 0 if adding to unpaid balance.</small>
+          </div>
+          <div style="margin-bottom: 1.25rem;">
+            <label class="form-label">Payment Method</label>
+            <select id="payment_method" class="form-control">
+              <option value="cash">Cash</option>
+              <option value="cheque">Cheque</option>
+              <option value="bank">Bank Transfer</option>
+            </select>
+          </div>
+        </div>
+
+        <!-- Totals -->
+        <div style="flex: 1; min-width: 250px; max-width: 320px; background-color: #f8fafc; padding: 1.5rem; border-radius: 8px; border: 1px solid var(--border-color);">
+          <div style="display: grid; grid-template-columns: 1fr auto; row-gap: 1rem; align-items: center; font-size: 1.1rem;">
+            <span style="color: var(--text-muted);">Subtotal:</span>
+            <span id="display-subtotal" style="font-weight: 600; text-align: right;">$0.00</span>
+            
+            <label for="other_charges" style="color: var(--text-muted); margin: 0; font-weight: normal; cursor: pointer;">Other Charges:</label>
+            <div style="position: relative; display: flex; align-items: center; justify-self: end; width: 100px;">
+              <span style="position: absolute; left: 8px; color: var(--text-muted); font-weight: 500;">$</span>
+              <input type="number" id="other_charges" class="form-control" style="padding-left: 20px; padding-right: 0.5rem; text-align: right; height: 32px;" step="0.01" min="0" value="0.00">
+            </div>
+
+            <span style="color: var(--text-muted);">Amount Paid:</span>
+            <span id="display-paid" style="color: var(--success-text); font-weight: 600; text-align: right;">$0.00</span>
+            
+            <div style="grid-column: 1 / -1; height: 1px; background: var(--border-color); margin: 0.25rem 0;"></div>
+            
+            <span style="font-weight: 700; color: var(--text-color);">Balance Due:</span>
+            <span id="display-balance" style="color: var(--danger-text); font-weight: 700; font-size: 1.25rem; text-align: right;">$0.00</span>
+          </div>
+        </div>
+        
+      </div>
+
+      <div style="margin-top: 3.5rem; text-align: right; border-top: 1px solid var(--border-color); padding-top: 1.5rem;">
+        <a href="/purchases" class="btn btn-outline" style="margin-right: 0.75rem;">Cancel</a>
+        <button type="submit" class="btn btn-primary" id="save-purchase-btn">Save Shipment</button>
+      </div>
+
+    </form>
+  </div>
+</div>
+
+<!-- Product Data JSON -->
+<script>
+  const products = {{ products|tojson }};
+</script>
+
+<script>
+  // Setup date
+  document.getElementById('purchase_date').valueAsDate = new Date();
+
+  const tbody = document.getElementById('items-tbody');
+
+  function addPurchaseRow() {
+    const tr = document.createElement('tr');
+    
+    // Product select options
+    let productOptions = '<option value="">-- Select Product --</option>';
+    products.forEach(p => {
+      productOptions += `<option value="${p.id}" data-cost="${p.cost_price || 0}">${p.name}</option>`;
+    });
+
+    tr.innerHTML = `
+      <td style="padding: 1rem;">
+        <select class="form-control prod-select" required onchange="handleProductSelect(this)">
+          ${productOptions}
+        </select>
+      </td>
+      <td style="padding: 1rem;">
+        <input type="number" class="form-control qty-input" min="0.01" step="0.01" value="1" required oninput="calcRow(this)">
+      </td>
+      <td style="padding: 1rem;">
+        <input type="number" class="form-control cost-input" min="0" step="0.01" value="0" required oninput="calcRow(this)">
+      </td>
+      <td style="padding: 1rem; text-align: right; vertical-align: middle; font-weight: 500;">
+        $<span class="row-amount">0.00</span>
+      </td>
+      <td style="padding: 1rem; text-align: center;">
+        <button type="button" class="btn btn-danger" style="padding: 0.25rem 0.5rem; line-height: 1; border-radius: 4px;" onclick="removeRow(this)">&times;</button>
+      </td>
+    `;
+    tbody.appendChild(tr);
+  }
+
+  function handleProductSelect(selectEl) {
+    const option = selectEl.options[selectEl.selectedIndex];
+    const cost = option.getAttribute('data-cost');
+    const tr = selectEl.closest('tr');
+    if (cost) {
+      tr.querySelector('.cost-input').value = parseFloat(cost).toFixed(2);
+    }
+    calcRow(selectEl);
+  }
+
+  function removeRow(btn) {
+    btn.closest('tr').remove();
+    calcTotals();
+  }
+
+  function calcRow(el) {
+    const tr = el.closest('tr');
+    const qty = parseFloat(tr.querySelector('.qty-input').value) || 0;
+    const cost = parseFloat(tr.querySelector('.cost-input').value) || 0;
+    const amount = qty * cost;
+    tr.querySelector('.row-amount').textContent = amount.toFixed(2);
+    tr.dataset.amount = amount;
+    calcTotals();
+  }
+
+  function calcTotals() {
+    let subtotal = 0;
+    document.querySelectorAll('#items-tbody tr').forEach(tr => {
+      subtotal += parseFloat(tr.dataset.amount || 0);
+    });
+    
+    const paid = parseFloat(document.getElementById('payment_amount').value) || 0;
+    const other_charges = parseFloat(document.getElementById('other_charges').value) || 0;
+    const grand_total = subtotal + other_charges;
+    const balance = grand_total - paid;
+
+    document.getElementById('display-subtotal').textContent = '$' + subtotal.toFixed(2);
+    document.getElementById('display-paid').textContent = '$' + paid.toFixed(2);
+    document.getElementById('display-balance').textContent = '$' + balance.toFixed(2);
+  }
+
+  document.getElementById('payment_amount').addEventListener('input', calcTotals);
+  document.getElementById('other_charges').addEventListener('input', calcTotals);
+
+  // Initialize with one row
+  addPurchaseRow();
+
+  async function submitPurchase(e) {
+    e.preventDefault();
+    
+    const items = [];
+    let valid = true;
+
+    document.querySelectorAll('#items-tbody tr').forEach(tr => {
+      const pid = tr.querySelector('.prod-select').value;
+      const qty = parseFloat(tr.querySelector('.qty-input').value) || 0;
+      const cost = parseFloat(tr.querySelector('.cost-input').value) || 0;
+      
+      if (!pid) {
+        alert("Please select a product for all rows.");
+        valid = false;
+        return;
+      }
+      items.push({ product_id: pid, qty, cost_price: cost });
+    });
+
+    if (!valid) return;
+    if (items.length === 0) {
+      alert("Please add at least one item.");
+      return;
+    }
+
+    const payload = {
+      supplier_id: document.getElementById('supplier_id').value,
+      purchase_date: document.getElementById('purchase_date').value,
+      reference_number: document.getElementById('reference_number').value,
+      payment_amount: document.getElementById('payment_amount').value,
+      payment_method: document.getElementById('payment_method').value,
+      other_charges: document.getElementById('other_charges').value,
+      items: items
+    };
+
+    const btn = document.getElementById('save-purchase-btn');
+    btn.disabled = true;
+    btn.textContent = 'Saving...';
+
+    try {
+      const res = await fetch('/purchases/new', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+      const data = await res.json();
+      if (data.ok) {
+        window.location.href = `/purchases/${data.purchase_id}`;
+      } else {
+        alert(data.error || "Failed to save purchase");
+        btn.disabled = false;
+        btn.textContent = 'Save Shipment';
+      }
+    } catch (err) {
+      alert("Network error");
+      btn.disabled = false;
+      btn.textContent = 'Save Shipment';
+    }
+  }
+</script>
+{% endblock %}

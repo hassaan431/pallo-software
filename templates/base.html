@@ -88,6 +88,10 @@
             <span class="nav-emoji" aria-hidden="true">🏭</span>
             <span class="nav-label">Suppliers & Brands</span>
           </a>
+          <a href="/purchases" class="{{ 'is-active' if request.path.startswith('/purchases') else '' }}">
+            <span class="nav-emoji" aria-hidden="true">📦</span>
+            <span class="nav-label">Purchases (Shipments)</span>
+          </a>
           <a href="{{ url_for('pos') }}" target="_blank">
             <span class="nav-emoji" aria-hidden="true">📱</span>
             <span class="nav-label">POS Catalogue</span>

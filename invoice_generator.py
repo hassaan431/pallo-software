@@ -178,7 +178,9 @@ def generate_invoice_pdf(sale_id: int) -> bytes:
             (sale["customer_id"],),
         ).fetchone()
         if customer is None:
-            raise ValueError(f"Customer not found for sale: {sale_id}")
+            customer = {"id": None, "name": "Quotation", "bill_address": "", "ship_address": "", "phone": ""}
+        else:
+            customer = dict(customer)
 
         sale_items = conn.execute(
             """

@@ -1,0 +1,95 @@
+{% extends "base.html" %}
+{% block page_heading %}Shipments & Purchases{% endblock %}
+{% block content %}
+<div class="page-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem;">
+  <h2 style="margin:0; font-size:1.25rem; font-weight:700;">Purchase History</h2>
+  <div>
+    <a href="/purchases/new" class="btn btn-primary">Receive Shipment</a>
+  </div>
+</div>
+
+<section class="panel" style="margin-bottom: 1.5rem;">
+  <div class="panel-body" style="padding: 1rem 1.5rem;">
+    <form method="GET" action="/purchases" style="display: flex; gap: 1rem; flex-wrap: wrap; align-items: flex-end;">
+      <div style="flex: 1; min-width: 200px;">
+        <label class="form-label">Search Invoice / ID</label>
+        <input type="text" name="search" class="form-control" placeholder="Partial or full match..." value="{{ filters.search }}">
+      </div>
+      <div style="flex: 1; min-width: 200px;">
+        <label class="form-label">Supplier</label>
+        <select name="supplier_id" class="form-control">
+          <option value="">All Suppliers</option>
+          {% for s in suppliers %}
+          <option value="{{ s.id }}" {% if filters.supplier_id == s.id|string %}selected{% endif %}>{{ s.name }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div style="flex: 1; min-width: 150px;">
+        <label class="form-label">Start Date</label>
+        <input type="date" name="start_date" class="form-control" value="{{ filters.start_date }}">
+      </div>
+      <div style="flex: 1; min-width: 150px;">
+        <label class="form-label">End Date</label>
+        <input type="date" name="end_date" class="form-control" value="{{ filters.end_date }}">
+      </div>
+      <div>
+        <button type="submit" class="btn btn-primary">Filter</button>
+        <a href="/purchases" class="btn btn-outline" style="margin-left: 0.5rem;">Clear</a>
+      </div>
+    </form>
+  </div>
+</section>
+
+<section class="panel">
+  <div class="panel-body">
+    <div class="table-wrap">
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th>ID</th>
+            <th>Date</th>
+            <th>Supplier</th>
+            <th>Reference #</th>
+            <th style="text-align: right;">Total</th>
+            <th style="text-align: right;">Paid</th>
+            <th style="text-align: right;">Balance</th>
+            <th style="text-align: center;">Status</th>
+            <th style="text-align: right;">Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for p in purchases %}
+          <tr>
+            <td>{{ p.id }}</td>
+            <td>{{ p.purchase_date }}</td>
+            <td style="font-weight: 500;">{{ p.supplier_name or 'Unknown' }}</td>
+            <td>{{ p.reference_number }}</td>
+            <td style="text-align: right;">${{ "%.2f"|format(p.grand_total) }}</td>
+            <td style="text-align: right; color: var(--success-text);">${{ "%.2f"|format(p.amount_paid) }}</td>
+            <td style="text-align: right; color: var(--danger-text); font-weight: 500;">${{ "%.2f"|format(p.remaining_amount) }}</td>
+            <td style="text-align: center;">
+              {% if p.status == 'paid' %}
+                <span class="badge badge-success">Paid</span>
+              {% elif p.status == 'partial' %}
+                <span class="badge badge-warning">Partial</span>
+              {% else %}
+                <span class="badge badge-danger">Unpaid</span>
+              {% endif %}
+            </td>
+            <td style="text-align: right;">
+              <a href="/purchases/{{ p.id }}" class="btn btn-sm btn-outline">View Details</a>
+            </td>
+          </tr>
+          {% else %}
+          <tr>
+            <td colspan="9" style="text-align: center; padding: 2rem; color: var(--text-muted);">
+              No purchases found. Receive a shipment to add inventory.
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</section>
+{% endblock %}

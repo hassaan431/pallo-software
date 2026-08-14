@@ -48,6 +48,61 @@ def migrate():
     add_column("sale_items", "cost_price REAL DEFAULT 0")
     add_column("sale_items", "print_dual_units INTEGER DEFAULT 0")
     add_column("sale_items", "packing_multiplier REAL DEFAULT 1.0")
+    add_column("purchases", "other_charges REAL DEFAULT 0")
+
+    try:
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS purchases (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                supplier_id INTEGER REFERENCES suppliers(id),
+                reference_number TEXT,
+                purchase_date TEXT NOT NULL,
+                subtotal REAL DEFAULT 0,
+                discount_amount REAL DEFAULT 0,
+                other_charges REAL DEFAULT 0,
+                grand_total REAL DEFAULT 0,
+                amount_paid REAL DEFAULT 0,
+                remaining_amount REAL DEFAULT 0,
+                status TEXT DEFAULT 'unpaid',
+                notes TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        ''')
+        print("Purchases table checked/created.")
+    except Exception as e:
+        print("Purchases table error:", e)
+
+    try:
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS purchase_items (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                purchase_id INTEGER REFERENCES purchases(id),
+                product_id INTEGER REFERENCES products(id),
+                qty REAL DEFAULT 1,
+                cost_price REAL DEFAULT 0,
+                amount REAL DEFAULT 0
+            )
+        ''')
+        print("Purchase_items table checked/created.")
+    except Exception as e:
+        print("Purchase_items table error:", e)
+
+    try:
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS supplier_payments (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                supplier_id INTEGER REFERENCES suppliers(id),
+                purchase_id INTEGER REFERENCES purchases(id),
+                amount REAL NOT NULL,
+                payment_date TEXT NOT NULL,
+                payment_method TEXT,
+                notes TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        ''')
+        print("Supplier_payments table checked/created.")
+    except Exception as e:
+        print("Supplier_payments table error:", e)
 
     conn.commit()
     conn.close()

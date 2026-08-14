@@ -23,6 +23,8 @@
             <th>Phone</th>
             <th>Address</th>
             <th>Products</th>
+            <th style="text-align: right;">Total Paid</th>
+            <th style="text-align: right;">Balance Due</th>
             <th style="width: 150px; text-align: right;">Actions</th>
           </tr>
         </thead>
@@ -35,6 +37,8 @@
             <td>{{ s.phone or '-' }}</td>
             <td>{{ s.address or '-' }}</td>
             <td>{{ s.products_count }}</td>
+            <td style="text-align: right; color: var(--success-text);">${{ "%.2f"|format(s.total_paid or 0) }}</td>
+            <td style="text-align: right; color: var(--danger-text); font-weight: 500;">${{ "%.2f"|format(s.total_balance or 0) }}</td>
             <td style="text-align: right;">
               <div style="display: flex; gap: 0.25rem; justify-content: flex-end; align-items: center;">
                 <button class="btn btn-secondary btn-sm" onclick="openSupplierHistoryModal({{ s.id }}, '{{ s.name | escape }}')">History</button>
