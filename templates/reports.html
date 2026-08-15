@@ -1,6 +1,128 @@
 {% extends "base.html" %}
-{% block title %}Reports — AK Distributors{% endblock %}
-{% block page_heading %}Reports{% endblock %}
+{% block title %}Reports — AK Distributors
+<!-- Supplier Purchases Modal -->
+<div id="supplierModal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); z-index:9999; align-items:center; justify-content:center; padding: 1rem;">
+  <div style="background:white; padding:1.5rem; border-radius:8px; width:90%; max-width:800px; max-height:90vh; overflow-y:auto; position:relative; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);">
+    <button onclick="document.getElementById('supplierModal').style.display='none'" style="position:absolute; top:1rem; right:1rem; background:none; border:none; font-size:1.5rem; cursor:pointer;">&times;</button>
+    <h2 id="supplierModalTitle" style="margin-top:0;">Purchases from Supplier</h2>
+    <div class="table-wrap" style="margin-top: 1rem;">
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th>Date</th>
+            <th>Ref #</th>
+            <th style="text-align:right">Total Qty</th>
+            <th style="text-align:right">Num Products</th>
+            <th style="text-align:right">Total Value</th>
+            <th style="text-align:right">Balance Remaining</th>
+            <th>Status</th>
+          </tr>
+        </thead>
+        <tbody id="supplierModalBody">
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<script>
+  async function openSupplierModal(supplierId, supplierName) {
+    if (!supplierId) return;
+    document.getElementById('supplierModalTitle').innerText = 'Purchases from ' + supplierName;
+    document.getElementById('supplierModalBody').innerHTML = '<tr><td colspan="7" style="text-align:center;">Loading...</td></tr>';
+    document.getElementById('supplierModal').style.display = 'flex';
+    
+    const params = getFiltersParams('inventory-additions');
+    const res = await fetch(`/reports/supplier-purchases/${supplierId}?${params.toString()}`);
+    const data = await res.json();
+    
+    const tbody = document.getElementById('supplierModalBody');
+    if (data.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;">No purchases found in this period.</td></tr>';
+      return;
+    }
+    
+    tbody.innerHTML = '';
+    data.forEach(p => {
+      const tr = document.createElement('tr');
+      const dt = new Date(p.purchase_date).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric', timeZone: 'UTC' });
+      tr.innerHTML = `
+        <td>${dt}</td>
+        <td>${p.reference_number || '-'}</td>
+        <td style="text-align:right">${qty(p.total_qty)}</td>
+        <td style="text-align:right">${p.num_products}</td>
+        <td style="text-align:right">${money(p.grand_total)}</td>
+        <td style="text-align:right">${money(p.remaining_amount)}</td>
+        <td><span class="stock-pill ${p.status === 'paid' ? 'stock-ok' : (p.status === 'partial' ? 'stock-low' : 'stock-zero')}" style="font-size:0.7rem;">${p.status}</span></td>
+      `;
+      tbody.appendChild(tr);
+    });
+  }
+</script>
+
+{% endblock %}
+{% block page_heading %}Reports
+<!-- Supplier Purchases Modal -->
+<div id="supplierModal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); z-index:9999; align-items:center; justify-content:center; padding: 1rem;">
+  <div style="background:white; padding:1.5rem; border-radius:8px; width:90%; max-width:800px; max-height:90vh; overflow-y:auto; position:relative; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);">
+    <button onclick="document.getElementById('supplierModal').style.display='none'" style="position:absolute; top:1rem; right:1rem; background:none; border:none; font-size:1.5rem; cursor:pointer;">&times;</button>
+    <h2 id="supplierModalTitle" style="margin-top:0;">Purchases from Supplier</h2>
+    <div class="table-wrap" style="margin-top: 1rem;">
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th>Date</th>
+            <th>Ref #</th>
+            <th style="text-align:right">Total Qty</th>
+            <th style="text-align:right">Num Products</th>
+            <th style="text-align:right">Total Value</th>
+            <th style="text-align:right">Balance Remaining</th>
+            <th>Status</th>
+          </tr>
+        </thead>
+        <tbody id="supplierModalBody">
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<script>
+  async function openSupplierModal(supplierId, supplierName) {
+    if (!supplierId) return;
+    document.getElementById('supplierModalTitle').innerText = 'Purchases from ' + supplierName;
+    document.getElementById('supplierModalBody').innerHTML = '<tr><td colspan="7" style="text-align:center;">Loading...</td></tr>';
+    document.getElementById('supplierModal').style.display = 'flex';
+    
+    const params = getFiltersParams('inventory-additions');
+    const res = await fetch(`/reports/supplier-purchases/${supplierId}?${params.toString()}`);
+    const data = await res.json();
+    
+    const tbody = document.getElementById('supplierModalBody');
+    if (data.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;">No purchases found in this period.</td></tr>';
+      return;
+    }
+    
+    tbody.innerHTML = '';
+    data.forEach(p => {
+      const tr = document.createElement('tr');
+      const dt = new Date(p.purchase_date).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric', timeZone: 'UTC' });
+      tr.innerHTML = `
+        <td>${dt}</td>
+        <td>${p.reference_number || '-'}</td>
+        <td style="text-align:right">${qty(p.total_qty)}</td>
+        <td style="text-align:right">${p.num_products}</td>
+        <td style="text-align:right">${money(p.grand_total)}</td>
+        <td style="text-align:right">${money(p.remaining_amount)}</td>
+        <td><span class="stock-pill ${p.status === 'paid' ? 'stock-ok' : (p.status === 'partial' ? 'stock-low' : 'stock-zero')}" style="font-size:0.7rem;">${p.status}</span></td>
+      `;
+      tbody.appendChild(tr);
+    });
+  }
+</script>
+
+{% endblock %}
 
 {% block content %}
 <style>
@@ -367,9 +489,10 @@
           <thead>
             <tr>
               <th>Supplier</th>
+              <th style="text-align:right">Quantity Remaining</th>
               <th style="text-align:right">Total Quantity Added</th>
               <th style="text-align:right">Total Value Added</th>
-              <th style="text-align:right">Quantity Remaining</th>
+              <th style="text-align:right">Balance Remaining</th>
             </tr>
           </thead>
           <tbody id="iaSummaryTbody">
@@ -414,9 +537,10 @@
               <th>Product Name</th>
               <th>Supplier</th>
               <th>Transaction Type</th>
+              <th style="text-align:right">Quantity Remaining</th>
               <th style="text-align:right">Quantity Added</th>
               <th style="text-align:right">Value Added</th>
-              <th style="text-align:right">Quantity Remaining</th>
+              <th style="text-align:right">Balance Remaining</th>
             </tr>
           </thead>
           <tbody id="iaLogTbody">
@@ -683,14 +807,22 @@
     const logData = cache['inventory-additions'].log || [];
 
     // Supplier Summary (Not paginated)
-    sumTbody.innerHTML = summaryData.length ? '' : '<tr><td colspan="4" class="empty-state" style="text-align:center;">No additions found for this period.</td></tr>';
+    sumTbody.innerHTML = summaryData.length ? '' : '<tr><td colspan="5" class="empty-state" style="text-align:center;">No additions found for this period.</td></tr>';
     summaryData.forEach(r => {
       const tr = document.createElement('tr');
+      if(r.supplier_id) {
+        tr.style.cursor = 'pointer';
+        tr.onclick = () => openSupplierModal(r.supplier_id, r.supplier_name);
+        tr.title = 'Click to view purchases';
+        tr.onmouseover = () => tr.style.background = '#f1f5f9';
+        tr.onmouseout = () => tr.style.background = '';
+      }
       tr.innerHTML = `
-        <td style="font-weight:600;">${r.supplier_name || '-'}</td>
+        <td style="font-weight:600; color:var(--color-primary);">${r.supplier_name || '-'}</td>
+        <td style="text-align:right">${qty(r.quantity_remaining)}</td>
         <td style="text-align:right">${qty(r.total_added)}</td>
         <td style="text-align:right;font-weight:600;">${money(r.total_value)}</td>
-        <td style="text-align:right">${qty(r.quantity_remaining)}</td>
+        <td style="text-align:right;font-weight:600;">${money(r.value_remaining)}</td>
       `;
       sumTbody.appendChild(tr);
     });
@@ -729,7 +861,7 @@
     const logStart = (iaLogCurrentPage - 1) * IA_PAGE_SIZE;
     const logSlice = logData.slice(logStart, logStart + IA_PAGE_SIZE);
 
-    logTbody.innerHTML = logSlice.length ? '' : '<tr><td colspan="7" class="empty-state" style="text-align:center;">No additions found for this period.</td></tr>';
+    logTbody.innerHTML = logSlice.length ? '' : '<tr><td colspan="8" class="empty-state" style="text-align:center;">No additions found for this period.</td></tr>';
     logSlice.forEach(r => {
       const tr = document.createElement('tr');
       const dt = new Date(r.created_at).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
@@ -746,9 +878,10 @@
         <td><strong>${r.product_name}</strong></td>
         <td>${r.supplier_name || '-'}</td>
         <td>${typeBadge}</td>
+        <td style="text-align:right">${qty(r.quantity_remaining)}</td>
         <td style="text-align:right">${qty(r.quantity_change)}</td>
         <td style="text-align:right">${money(r.value_added)}</td>
-        <td style="text-align:right">${qty(r.quantity_remaining)}</td>
+        <td style="text-align:right;font-weight:600;">${money(r.value_remaining)}</td>
       `;
       logTbody.appendChild(tr);
     });
@@ -1289,4 +1422,65 @@
   // Init profit on load
   loadProfitReport();
 </script>
+
+<!-- Supplier Purchases Modal -->
+<div id="supplierModal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); z-index:9999; align-items:center; justify-content:center; padding: 1rem;">
+  <div style="background:white; padding:1.5rem; border-radius:8px; width:90%; max-width:800px; max-height:90vh; overflow-y:auto; position:relative; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);">
+    <button onclick="document.getElementById('supplierModal').style.display='none'" style="position:absolute; top:1rem; right:1rem; background:none; border:none; font-size:1.5rem; cursor:pointer;">&times;</button>
+    <h2 id="supplierModalTitle" style="margin-top:0;">Purchases from Supplier</h2>
+    <div class="table-wrap" style="margin-top: 1rem;">
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th>Date</th>
+            <th>Ref #</th>
+            <th style="text-align:right">Total Qty</th>
+            <th style="text-align:right">Num Products</th>
+            <th style="text-align:right">Total Value</th>
+            <th style="text-align:right">Balance Remaining</th>
+            <th>Status</th>
+          </tr>
+        </thead>
+        <tbody id="supplierModalBody">
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<script>
+  async function openSupplierModal(supplierId, supplierName) {
+    if (!supplierId) return;
+    document.getElementById('supplierModalTitle').innerText = 'Purchases from ' + supplierName;
+    document.getElementById('supplierModalBody').innerHTML = '<tr><td colspan="7" style="text-align:center;">Loading...</td></tr>';
+    document.getElementById('supplierModal').style.display = 'flex';
+    
+    const params = getFiltersParams('inventory-additions');
+    const res = await fetch(`/reports/supplier-purchases/${supplierId}?${params.toString()}`);
+    const data = await res.json();
+    
+    const tbody = document.getElementById('supplierModalBody');
+    if (data.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;">No purchases found in this period.</td></tr>';
+      return;
+    }
+    
+    tbody.innerHTML = '';
+    data.forEach(p => {
+      const tr = document.createElement('tr');
+      const dt = new Date(p.purchase_date).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric', timeZone: 'UTC' });
+      tr.innerHTML = `
+        <td>${dt}</td>
+        <td>${p.reference_number || '-'}</td>
+        <td style="text-align:right">${qty(p.total_qty)}</td>
+        <td style="text-align:right">${p.num_products}</td>
+        <td style="text-align:right">${money(p.grand_total)}</td>
+        <td style="text-align:right">${money(p.remaining_amount)}</td>
+        <td><span class="stock-pill ${p.status === 'paid' ? 'stock-ok' : (p.status === 'partial' ? 'stock-low' : 'stock-zero')}" style="font-size:0.7rem;">${p.status}</span></td>
+      `;
+      tbody.appendChild(tr);
+    });
+  }
+</script>
+
 {% endblock %}

@@ -1570,6 +1570,7 @@ def products_search():
                     "unit": r["unit"],
                     "stock_quantity": r["stock_quantity"],
                     "is_open": r["is_open"],
+                    "supplier_id": r["supplier_id"],
                 }
             )
         return jsonify(results)
@@ -3295,24 +3296,28 @@ def reports_inventory_additions():
         summary_rows = conn.execute(
             f'''
             SELECT
+                supplier_id,
                 supplier_name,
                 SUM(total_added) as total_added,
                 SUM(total_value) as total_value,
-                SUM(current_stock) as total_remaining
+                SUM(current_stock) as total_remaining,
+                SUM(current_stock * cost_price) as value_remaining
             FROM (
                 SELECT
                     p.id,
+                    s.id AS supplier_id,
                     COALESCE(s.name, 'Untagged') AS supplier_name,
                     COALESCE(SUM(ih.quantity_change), 0) AS total_added,
                     COALESCE(SUM(ih.quantity_change * p.cost_price), 0) AS total_value,
-                    p.stock_quantity AS current_stock
+                    p.stock_quantity AS current_stock,
+                    p.cost_price AS cost_price
                 FROM inventory_history ih
                 JOIN products p ON p.id = ih.product_id
                 LEFT JOIN suppliers s ON s.id = p.supplier_id
                 WHERE {where_sql}
-                GROUP BY p.id, COALESCE(s.name, 'Untagged'), p.stock_quantity
+                GROUP BY p.id, s.id, COALESCE(s.name, 'Untagged'), p.stock_quantity, p.cost_price
             )
-            GROUP BY supplier_name
+            GROUP BY supplier_id, supplier_name
             ORDER BY total_added DESC
             ''',
             params,
@@ -3343,7 +3348,8 @@ def reports_inventory_additions():
                 ih.reference,
                 ih.quantity_change,
                 (ih.quantity_change * p.cost_price) as value_added,
-                p.stock_quantity AS quantity_remaining
+                p.stock_quantity AS quantity_remaining,
+                (p.stock_quantity * p.cost_price) AS value_remaining
             FROM inventory_history ih
             JOIN products p ON p.id = ih.product_id
             LEFT JOIN suppliers s ON s.id = p.supplier_id
@@ -3358,10 +3364,12 @@ def reports_inventory_additions():
     summary_result = []
     for r in summary_rows:
         summary_result.append({
+            "supplier_id": r["supplier_id"],
             "supplier_name": r["supplier_name"],
             "total_added": float(r["total_added"] or 0),
             "total_value": float(r["total_value"] or 0),
-            "quantity_remaining": float(r["total_remaining"] or 0)
+            "quantity_remaining": float(r["total_remaining"] or 0),
+            "value_remaining": float(r["value_remaining"] or 0)
         })
 
     log_result = []
@@ -3374,7 +3382,8 @@ def reports_inventory_additions():
             "reference": r["reference"],
             "quantity_change": float(r["quantity_change"] or 0),
             "value_added": float(r["value_added"] or 0),
-            "quantity_remaining": float(r["quantity_remaining"] or 0)
+            "quantity_remaining": float(r["quantity_remaining"] or 0),
+            "value_remaining": float(r["value_remaining"] or 0)
         })
 
     date_result = []
@@ -3395,6 +3404,61 @@ def _export_csv_bytes(rows, header):
     writer.writerow(header)
     writer.writerows(rows)
     return output.getvalue().encode("utf-8")
+
+
+@app.route("/reports/supplier-purchases/<int:supplier_id>", methods=["GET"])
+@admin_required
+def reports_supplier_purchases(supplier_id):
+    date_from = request.args.get("date_from", "").strip()
+    date_to = request.args.get("date_to", "").strip()
+    
+    conditions = ["p.supplier_id = ?"]
+    params = [supplier_id]
+    
+    if date_from:
+        conditions.append("date(p.purchase_date) >= ?")
+        params.append(date_from)
+    if date_to:
+        conditions.append("date(p.purchase_date) <= ?")
+        params.append(date_to)
+        
+    where_sql = " AND ".join(conditions)
+    
+    conn = get_connection()
+    try:
+        rows = conn.execute(f'''
+            SELECT 
+                p.id,
+                p.purchase_date,
+                p.reference_number,
+                p.grand_total,
+                p.remaining_amount,
+                p.status,
+                COALESCE(SUM(pi.qty), 0) as total_qty,
+                COUNT(DISTINCT pi.product_id) as num_products
+            FROM purchases p
+            LEFT JOIN purchase_items pi ON pi.purchase_id = p.id
+            WHERE {where_sql}
+            GROUP BY p.id
+            ORDER BY p.purchase_date DESC, p.id DESC
+        ''', params).fetchall()
+        
+        result = []
+        for r in rows:
+            result.append({
+                "id": r["id"],
+                "purchase_date": r["purchase_date"],
+                "reference_number": r["reference_number"],
+                "grand_total": r["grand_total"],
+                "remaining_amount": r["remaining_amount"],
+                "status": r["status"],
+                "total_qty": r["total_qty"],
+                "num_products": r["num_products"]
+            })
+            
+        return jsonify(result)
+    finally:
+        conn.close()
 
 
 @app.route("/reports/profit")
