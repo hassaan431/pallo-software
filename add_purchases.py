@@ -55,8 +55,9 @@ def new_purchase():
             remaining_amount = grand_total - amount_paid
             
             status = 'unpaid'
-            if amount_paid >= grand_total:
+            if abs(remaining_amount) < 0.001 or amount_paid >= grand_total:
                 status = 'paid'
+                remaining_amount = 0
             elif amount_paid > 0:
                 status = 'partial'
 
@@ -163,8 +164,9 @@ def add_supplier_payment():
                 new_paid = purchase["amount_paid"] + amount
                 new_remaining = purchase["grand_total"] - new_paid
                 status = 'unpaid'
-                if new_paid >= purchase["grand_total"]:
+                if abs(new_remaining) < 0.001 or new_paid >= purchase["grand_total"]:
                     status = 'paid'
+                    new_remaining = 0
                 elif new_paid > 0:
                     status = 'partial'
                 
