@@ -1533,7 +1533,8 @@ def products_search():
                     cost_price,
                     unit,
                     stock_quantity,
-                    is_open
+                    is_open,
+                    supplier_id
                 FROM products
                 ORDER BY name COLLATE NOCASE
                 LIMIT 20
@@ -1550,7 +1551,8 @@ def products_search():
                     cost_price,
                     unit,
                     stock_quantity,
-                    is_open
+                    is_open,
+                    supplier_id
                 FROM products
                 WHERE name LIKE ? OR brand LIKE ?
                 ORDER BY name COLLATE NOCASE
