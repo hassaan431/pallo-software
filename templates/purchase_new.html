@@ -8,6 +8,18 @@
 
 <div class="panel">
   <div class="panel-body" style="padding: 2rem;">
+    <!-- TomSelect CSS & JS -->
+    <link href="https://cdn.jsdelivr.net/npm/tom-select@2.2.2/dist/css/tom-select.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/tom-select@2.2.2/dist/js/tom-select.complete.min.js"></script>
+    <style>
+      .ts-control { border-radius: 8px; border: 1px solid var(--border-color); padding: 0.5rem 0.75rem; box-shadow: none; font-family: inherit; }
+      .ts-control.focus { border-color: var(--color-primary); box-shadow: 0 0 0 3px rgba(45, 106, 79, 0.1); }
+      .ts-dropdown { border-radius: 8px; border: 1px solid var(--border-color); box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06); font-family: inherit; }
+      .ts-dropdown .active { background-color: #f1f5f9; color: var(--color-text); }
+      .ts-dropdown .option { padding: 0.5rem 0.75rem; }
+      .ts-dropdown .ts-dropdown-content { max-height: 350px; } /* Shows ~10 items */
+    </style>
+
     <form id="purchase-form" onsubmit="submitPurchase(event)">
       
       <!-- Top Meta Info -->
@@ -32,7 +44,7 @@
       </div>
 
       <!-- Items Table -->
-      <div class="table-wrap" style="margin-bottom: 2rem; border-radius: 8px; overflow: hidden; border: 1px solid var(--border-color);">
+      <div class="table-wrap" style="margin-bottom: 2rem; border: 1px solid var(--border-color); border-radius: 8px;">
         <table class="data-table" id="purchase-items-table" style="margin: 0; width: 100%;">
           <thead style="background-color: #f8fafc;">
             <tr>
@@ -131,7 +143,7 @@
 
     tr.innerHTML = `
       <td style="padding: 1rem;">
-        <select class="form-control prod-select" required onchange="handleProductSelect(this)">
+        <select class="form-control prod-select" required>
           ${productOptions}
         </select>
       </td>
@@ -149,6 +161,28 @@
       </td>
     `;
     tbody.appendChild(tr);
+
+    // Initialize TomSelect for the new select
+    const selectEl = tr.querySelector('.prod-select');
+    new TomSelect(selectEl, {
+      create: false,
+      dropdownParent: 'body',
+      sortField: {
+        field: "text",
+        direction: "asc"
+      },
+      onChange: function(value) {
+        // Emulate handleProductSelect
+        if(value) {
+          const option = selectEl.options[selectEl.selectedIndex];
+          const cost = option ? option.getAttribute('data-cost') : null;
+          if (cost) {
+            tr.querySelector('.cost-input').value = parseFloat(cost).toFixed(2);
+          }
+        }
+        calcRow(tr.querySelector('.cost-input'));
+      }
+    });
   }
 
   function handleProductSelect(selectEl) {

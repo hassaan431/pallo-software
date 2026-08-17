@@ -1061,15 +1061,12 @@
       if (v !== '' && v !== '__add_new__' && /^\d+$/.test(v)) opt.remove();
     });
 
-    const addNewOpt = selectEl.querySelector('option[value="__add_new__"]');
-    const refNode = addNewOpt || null;
-
     Object.values(productsById).forEach((p) => {
       if (!p || p.id === null || p.id === undefined) return;
       const opt = document.createElement('option');
       opt.value = String(p.id);
       opt.textContent = p.name || '';
-      selectEl.insertBefore(opt, refNode);
+      selectEl.appendChild(opt);
     });
   }
 

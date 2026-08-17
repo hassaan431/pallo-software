@@ -345,7 +345,7 @@ def inventory():
             query += " AND date(p.created_at) <= ?"
             params.append(date_to)
             
-        query += " ORDER BY p.name COLLATE NOCASE"
+        query += " ORDER BY p.id DESC"
         cur = conn.execute(query, params)
         products = [dict(row) for row in cur.fetchall()]
 
@@ -1148,7 +1148,7 @@ def products_list():
             LEFT JOIN brands b
                 ON LOWER(b.name) = LOWER(p.brand)
             GROUP BY p.id
-            ORDER BY p.name COLLATE NOCASE, p.id ASC
+            ORDER BY p.id DESC
             """
         )
         rows = cur.fetchall()
