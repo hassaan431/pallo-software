@@ -131,7 +131,7 @@
             <th>Area</th>
             <th>City, State</th>
             <th>Phone</th>
-            <th>Email</th>
+            <th>Salesman</th>
             <th style="width: 320px;">Actions</th>
           </tr>
         </thead>
@@ -148,19 +148,19 @@
             <td>{{ c.area or '' }}</td>
             <td>{{ (c.area or '') + ((', ' + c.state) if c.state else '') }}</td>
             <td>{{ c.phone or '' }}</td>
-            <td>{{ c.email or '' }}</td>
-            <td>
+            <td>{{ c.salesman_name or 'Unassigned' }}</td>
+            <td style="display: flex; gap: 0.5rem; flex-wrap: wrap; align-items: center;">
               <button
                 type="button"
                 class="btn btn-edit"
                 data-action="edit-customer"
-                data-customer='{{ {"id": c.id, "name": c.name, "bill_address": c.bill_address or "", "ship_address": c.ship_address or "", "area": c.area or "", "state": c.state or "", "phone": c.phone or "", "email": c.email or ""} | tojson }}'
+                data-customer='{{ {"id": c.id, "name": c.name, "bill_address": c.bill_address or "", "ship_address": c.ship_address or "", "area": c.area or "", "state": c.state or "", "phone": c.phone or "", "email": c.email or "", "salesman_id": c.salesman_id or ""} | tojson }}'
               >
                 Edit
               </button>
 
-              <form method="post" action="{{ url_for('customers_delete', customer_id=c.id) }}" style="display:inline;" onsubmit="return confirm({{ ('Delete ' ~ c.name ~ '? This will not delete their sales history. ') | tojson }});">
-                <button type="submit" class="btn btn-danger" style="margin-left:0.5rem;">Delete</button>
+              <form method="post" action="{{ url_for('customers_delete', customer_id=c.id) }}" style="margin: 0;" onsubmit="return confirm({{ ('Delete ' ~ c.name ~ '? This will not delete their sales history. ') | tojson }});">
+                <button type="submit" class="btn btn-danger">Delete</button>
               </form>
 
               <button
@@ -169,7 +169,6 @@
                 data-action="history-customer"
                 data-customer-id="{{ c.id }}"
                 data-customer-name='{{ c.name | e }}'
-                style="margin-left:0.5rem;"
               >
                 History
               </button>
@@ -233,6 +232,16 @@
           <input class="form-control" type="email" id="addEmail" name="email">
         </div>
 
+        <div class="modal-field">
+          <label for="addSalesman">Salesman</label>
+          <select class="form-control" id="addSalesman" name="salesman_id">
+            <option value="">-- Unassigned --</option>
+            {% for u in users %}
+            <option value="{{ u.id }}">{{ u.username }}</option>
+            {% endfor %}
+          </select>
+        </div>
+
         <div class="inline-flex" style="justify-content: flex-end; gap: 0.65rem; margin-top: 0.25rem;">
           <button type="button" class="btn btn-secondary" data-close-modal="addCustomerModal">Cancel</button>
           <button type="submit" class="btn btn-primary">Save Customer</button>
@@ -292,6 +301,16 @@
         <div class="modal-field">
           <label for="editEmail">Email</label>
           <input class="form-control" type="email" id="editEmail" name="email">
+        </div>
+
+        <div class="modal-field">
+          <label for="editSalesman">Salesman</label>
+          <select class="form-control" id="editSalesman" name="salesman_id">
+            <option value="">-- Unassigned --</option>
+            {% for u in users %}
+            <option value="{{ u.id }}">{{ u.username }}</option>
+            {% endfor %}
+          </select>
         </div>
 
         <div class="inline-flex" style="justify-content: flex-end; gap: 0.65rem; margin-top: 0.25rem;">
@@ -453,6 +472,7 @@ document.addEventListener('DOMContentLoaded', function() {
     const editState = document.getElementById('editState');
     const editPhone = document.getElementById('editPhone');
     const editEmail = document.getElementById('editEmail');
+    const editSalesman = document.getElementById('editSalesman');
 
     if (editCustomerId) editCustomerId.value = customer.id;
     editCustomerForm.action = '/customers/edit/' + customer.id;
@@ -464,6 +484,7 @@ document.addEventListener('DOMContentLoaded', function() {
     if (editState) editState.value = customer.state || '';
     if (editPhone) editPhone.value = customer.phone || '';
     if (editEmail) editEmail.value = customer.email || '';
+    if (editSalesman) editSalesman.value = customer.salesman_id || '';
 
     const billingNorm = normalizeAddress(customer.bill_address);
     const shippingNorm = normalizeAddress(customer.ship_address);

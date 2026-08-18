@@ -60,6 +60,7 @@
 
       <div style="flex:1; min-height:0;">
         <nav class="sidebar-nav" aria-label="Main navigation" style="padding:0 0 1rem 0;">
+          {% if current_user.role == 'admin' %}
           <a href="{{ url_for('dashboard') }}" class="{{ 'is-active' if request.endpoint == 'dashboard' else '' }}">
             <span class="nav-emoji" aria-hidden="true">📊</span>
             <span class="nav-label">Dashboard</span>
@@ -92,6 +93,7 @@
             <span class="nav-emoji" aria-hidden="true">📦</span>
             <span class="nav-label">Purchases (Shipments)</span>
           </a>
+          {% endif %}
           <a href="{{ url_for('pos') }}" target="_blank">
             <span class="nav-emoji" aria-hidden="true">📱</span>
             <span class="nav-label">POS Catalogue</span>

@@ -753,7 +753,7 @@
         const data = await res.json();
         
         if(res.ok && data.ok) {
-          alert(`Order Placed Successfully! Invoice: ${data.invoice_number}`);
+          window.open(`/sales/${data.sale_id}/invoice/pdf`, '_blank');
           cart = {};
           renderCart();
           init(); // Refresh products to update stock

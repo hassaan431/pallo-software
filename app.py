@@ -1255,18 +1255,21 @@ def customers():
         cur = conn.execute(
             """
             SELECT
-                id,
-                name,
-                bill_address,
-                ship_address,
-                area,
-                state,
-                phone,
-                email,
-                terms,
-                created_at
-            FROM customers
-            ORDER BY created_at DESC, id DESC
+                c.id,
+                c.name,
+                c.bill_address,
+                c.ship_address,
+                c.area,
+                c.state,
+                c.phone,
+                c.email,
+                c.terms,
+                c.salesman_id,
+                u.username AS salesman_name,
+                c.created_at
+            FROM customers c
+            LEFT JOIN users u ON c.salesman_id = u.id
+            ORDER BY c.created_at DESC, c.id DESC
             """
         )
         customers_list = [dict(row) for row in cur.fetchall()]
@@ -1281,6 +1284,8 @@ def customers():
             """
         )
         areas_covered = int(cur.fetchone()["c"] or 0)
+        cur = conn.execute("SELECT id, username FROM users WHERE is_active = 1 ORDER BY username")
+        users_list = [dict(row) for row in cur.fetchall()]
     finally:
         conn.close()
 
@@ -1288,6 +1293,7 @@ def customers():
     return render_template(
         "customers.html",
         customers=customers_list,
+        users=users_list,
         total_customers=total_customers,
         areas_covered=areas_covered,
         error=error,
@@ -1320,16 +1326,19 @@ def customers_add():
     terms_raw = (request.form.get("terms") or "").strip()
     terms = terms_raw if terms_raw else None
 
+    salesman_id_raw = (request.form.get("salesman_id") or "").strip()
+    salesman_id = int(salesman_id_raw) if salesman_id_raw else None
+
     conn = get_connection()
     try:
         conn.execute(
             """
             INSERT INTO customers
-                (name, bill_address, ship_address, area, state, phone, email, terms)
+                (name, bill_address, ship_address, area, state, phone, email, terms, salesman_id)
             VALUES
-                (?, ?, ?, ?, ?, ?, ?, ?)
+                (?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
-            (full_name, bill_address or None, ship_address or None, area, state, phone, email, terms),
+            (full_name, bill_address or None, ship_address or None, area, state, phone, email, terms, salesman_id),
         )
         conn.commit()
     finally:
@@ -1364,6 +1373,9 @@ def customers_edit(customer_id: int):
     terms_raw = (request.form.get("terms") or "").strip()
     terms = terms_raw if terms_raw else None
 
+    salesman_id_raw = (request.form.get("salesman_id") or "").strip()
+    salesman_id = int(salesman_id_raw) if salesman_id_raw else None
+
     conn = get_connection()
     try:
         conn.execute(
@@ -1377,10 +1389,11 @@ def customers_edit(customer_id: int):
                 state = ?,
                 phone = ?,
                 email = ?,
-                terms = ?
+                terms = ?,
+                salesman_id = ?
             WHERE id = ?
             """,
-            (full_name, bill_address or None, ship_address or None, area, state, phone, email, terms, customer_id),
+            (full_name, bill_address or None, ship_address or None, area, state, phone, email, terms, salesman_id, customer_id),
         )
         conn.commit()
     finally:
@@ -1408,7 +1421,10 @@ def customers_delete(customer_id: int):
 def customers_list():
     conn = get_connection()
     try:
-        cur = conn.execute("SELECT * FROM customers ORDER BY name")
+        if current_user.role == 'admin':
+            cur = conn.execute("SELECT * FROM customers ORDER BY name")
+        else:
+            cur = conn.execute("SELECT * FROM customers WHERE salesman_id = ? ORDER BY name", (current_user.id,))
         cust_list = [dict(r) for r in cur.fetchall()]
         return jsonify(cust_list)
     finally:
@@ -1450,20 +1466,30 @@ def customers_history(customer_id: int):
 def sales():
     conn = get_connection()
     try:
-        customers = conn.execute(
-            """
-            SELECT id, name, terms
-            FROM customers
-            ORDER BY name COLLATE NOCASE
-            """
-        ).fetchall()
+        if current_user.role == 'admin':
+            customers = conn.execute(
+                """
+                SELECT id, name, terms
+                FROM customers
+                ORDER BY name COLLATE NOCASE
+                """
+            ).fetchall()
+        else:
+            customers = conn.execute(
+                """
+                SELECT id, name, terms
+                FROM customers
+                WHERE salesman_id = ?
+                ORDER BY name COLLATE NOCASE
+                """,
+                (current_user.id,)
+            ).fetchall()
         customers_list = [dict(r) for r in customers]
         
         users_rows = conn.execute("SELECT id, username, role FROM users ORDER BY username").fetchall()
         users_list = [dict(r) for r in users_rows]
 
-        recent_sales_rows = conn.execute(
-            """
+        query = """
             SELECT
                 s.id,
                 s.invoice_number,
@@ -1483,11 +1509,15 @@ def sales():
             LEFT JOIN customers c ON c.id = s.customer_id
             LEFT JOIN sale_items si ON si.sale_id = s.id
             LEFT JOIN users u ON u.id = s.salesman_id
+            { "WHERE s.salesman_id = ?" if current_user.role != 'admin' else "" }
             GROUP BY s.id
             ORDER BY s.invoice_date DESC, s.id DESC
             LIMIT 10
             """
-        ).fetchall()
+        if current_user.role != 'admin':
+            recent_sales_rows = conn.execute(query.replace('{ "WHERE s.salesman_id = ?" if current_user.role != \'admin\' else "" }', 'WHERE s.salesman_id = ?'), (current_user.id,)).fetchall()
+        else:
+            recent_sales_rows = conn.execute(query.replace('{ "WHERE s.salesman_id = ?" if current_user.role != \'admin\' else "" }', '')).fetchall()
         recent_sales = []
         for r in recent_sales_rows:
             d = dict(r)
@@ -1610,19 +1640,23 @@ def sales_data():
         except ValueError:
             pass
             
-    if salesman_name_filter:
-        conditions.append("LOWER(COALESCE(u.username, 'admin')) = ?")
-        params.append(salesman_name_filter.lower())
+    if current_user.role != 'admin':
+        conditions.append("s.salesman_id = ?")
+        params.append(current_user.id)
     else:
-        if salesman_id and salesman_id not in ("all", "0"):
-            try:
-                salesman_id_int = int(salesman_id)
-                conditions.append("s.salesman_id = ?")
-                params.append(salesman_id_int)
-            except ValueError:
-                pass
-        elif salesman_id == "0":
-            conditions.append("s.salesman_id IS NULL")
+        if salesman_name_filter:
+            conditions.append("LOWER(COALESCE(u.username, 'admin')) = ?")
+            params.append(salesman_name_filter.lower())
+        else:
+            if salesman_id and salesman_id not in ("all", "0"):
+                try:
+                    salesman_id_int = int(salesman_id)
+                    conditions.append("s.salesman_id = ?")
+                    params.append(salesman_id_int)
+                except ValueError:
+                    pass
+            elif salesman_id == "0":
+                conditions.append("s.salesman_id IS NULL")
         
     if payment_type and payment_type not in ("all", ""):
         conditions.append("s.payment_type = ?")
@@ -2689,7 +2723,7 @@ def sale_by_invoice(invoice_number: str):
 
 
 @app.route("/sales/<int:id>/invoice/pdf", methods=["GET"])
-@admin_required
+@login_required
 def sales_invoice_pdf(id: int):
     conn = get_connection()
     try:
@@ -2698,7 +2732,8 @@ def sales_invoice_pdf(id: int):
             SELECT
                 s.id,
                 s.invoice_number,
-                s.customer_id
+                s.customer_id,
+                s.salesman_id
             FROM sales s
             WHERE s.id = ?
             """,
@@ -2706,6 +2741,9 @@ def sales_invoice_pdf(id: int):
         ).fetchone()
         if sale is None:
             return Response("Sale not found", status=404)
+        
+        if current_user.role != 'admin' and sale["salesman_id"] != current_user.id:
+            return Response("Unauthorized", status=403)
 
         customer = conn.execute(
             """
@@ -3828,8 +3866,8 @@ def pos_submit_order():
             if not customer_name:
                 raise ValueError("Customer name is required.")
             cur = conn.execute(
-                "INSERT INTO customers (name, bill_address, ship_address, area, state, phone, email, terms) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-                (customer_name, customer_bill, customer_ship, customer_area, customer_state, customer_phone, customer_email, customer_terms)
+                "INSERT INTO customers (name, bill_address, ship_address, area, state, phone, email, terms, salesman_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                (customer_name, customer_bill, customer_ship, customer_area, customer_state, customer_phone, customer_email, customer_terms, current_user.id)
             )
             customer_id = int(cur.lastrowid)
         else:
