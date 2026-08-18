@@ -182,6 +182,12 @@
       <a href="/inventory{% if request.args.get('brand') %}?brand={{ request.args.get('brand')|urlencode }}{% endif %}" class="btn btn-secondary" style="padding: 0.25rem 0.5rem; text-decoration: none;">Clear Dates</a>
       {% endif %}
       <input type="text" id="productSearchInput" class="form-control" placeholder="Search products..." style="width: 200px; padding: 0.25rem 0.5rem; height: auto;" oninput="filterProductsTable()">
+      
+      <div style="display: flex; align-items: center; gap: 0.25rem;">
+        <input type="checkbox" name="open_only" id="filterOpenOnly" value="1" {% if request.args.get('open_only') == '1' %}checked{% endif %} onchange="this.form.submit()" style="width: auto; height: auto; margin: 0;">
+        <label for="filterOpenOnly" style="margin:0; font-size: 0.85rem; font-weight: 600; color: #4b5563; cursor: pointer;">Open Items</label>
+      </div>
+
       <select name="brand" class="form-control" style="width: auto; padding: 0.25rem 0.5rem; height: auto;" onchange="this.form.submit()">
         <option value="">All Brands</option>
         {% set unique_brands = [] %}

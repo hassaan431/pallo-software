@@ -309,6 +309,7 @@ def inventory():
     brand_filter = request.args.get("brand", "").strip()
     date_from = request.args.get("date_from", "").strip()
     date_to = request.args.get("date_to", "").strip()
+    open_only = request.args.get("open_only") == '1'
 
     conn = get_connection()
     try:
@@ -342,8 +343,11 @@ def inventory():
             query += " AND date(p.created_at) >= ?"
             params.append(date_from)
         if date_to:
-            query += " AND date(p.created_at) <= ?"
+            query += " AND DATE(p.created_at) <= ?"
             params.append(date_to)
+            
+        if open_only:
+            query += " AND p.is_open = 1"
             
         query += " ORDER BY p.id DESC"
         cur = conn.execute(query, params)
@@ -1143,7 +1147,8 @@ def products_list():
                 p.cost_price AS cost_price,
                 p.selling_price AS selling_price,
                 p.stock_quantity AS stock_quantity,
-                p.image_url AS image_url
+                p.image_url AS image_url,
+                p.is_open AS is_open
             FROM products p
             LEFT JOIN brands b
                 ON LOWER(b.name) = LOWER(p.brand)
@@ -1165,6 +1170,7 @@ def products_list():
                     "selling_price": float(r["selling_price"] or 0),
                     "stock_quantity": int(r["stock_quantity"] or 0),
                     "image_url": r["image_url"],
+                    "is_open": int(r["is_open"] or 0),
                 }
                 for r in rows
             ]
@@ -3882,22 +3888,43 @@ def pos_submit_order():
             if qty <= 0:
                 continue
             
-            cur = conn.execute("SELECT name, selling_price, cost_price FROM products WHERE id = ?", (product_id,))
-            row = cur.fetchone()
-            if not row:
-                raise ValueError(f"Invalid product ID {product_id}")
-            
-            rate = float(row["selling_price"] or 0)
-            amount = round(qty * rate, 2)
-            subtotal += amount
-            
-            parsed_items.append({
-                "product_id": product_id,
-                "description": row["name"],
-                "qty": qty,
-                "rate": rate,
-                "amount": amount
-            })
+            if product_id == -1:
+                rate = float(it.get("rate", 0))
+                amount = round(qty * rate, 2)
+                subtotal += amount
+                
+                parsed_items.append({
+                    "product_id": -1,
+                    "description": it.get("description", "Open Product"),
+                    "qty": qty,
+                    "rate": rate,
+                    "amount": amount
+                })
+            else:
+                cur = conn.execute("SELECT name, selling_price, cost_price, is_open FROM products WHERE id = ?", (product_id,))
+                row = cur.fetchone()
+                if not row:
+                    raise ValueError(f"Invalid product ID {product_id}")
+                
+                if row["is_open"]:
+                    rate = float(row["selling_price"] or 0)
+                    description = it.get("description", row["name"])
+                    pm = float(it.get("packing_multiplier", 1.0))
+                    qty = qty * pm
+                else:
+                    rate = float(row["selling_price"] or 0)
+                    description = row["name"]
+                
+                amount = round(qty * rate, 2)
+                subtotal += amount
+                
+                parsed_items.append({
+                    "product_id": product_id,
+                    "description": description,
+                    "qty": qty,
+                    "rate": rate,
+                    "amount": amount
+                })
 
         if not parsed_items:
             raise ValueError("Cart has no valid items.")
@@ -3905,7 +3932,8 @@ def pos_submit_order():
         # Validate stock quantity
         qty_total_by_product = defaultdict(float)
         for li in parsed_items:
-            qty_total_by_product[li["product_id"]] += li["qty"]
+            if li["product_id"] != -1:
+                qty_total_by_product[li["product_id"]] += li["qty"]
             
         for product_id, qty_total in qty_total_by_product.items():
             cur = conn.execute("SELECT name, stock_quantity FROM products WHERE id = ?", (product_id,))
@@ -3958,19 +3986,20 @@ def pos_submit_order():
             conn.execute(
                 """
                 INSERT INTO sale_items (sale_id, product_id, description, qty, rate, amount, cost_price)
-                VALUES (?, ?, ?, ?, ?, ?, COALESCE((SELECT cost_price FROM products WHERE id = ?), 0))
+                VALUES (?, ?, ?, ?, ?, ?, ?)
                 """,
-                (sale_id, li["product_id"], li["description"], li["qty"], li["rate"], li["amount"], li["product_id"])
+                (sale_id, None if li["product_id"] == -1 else li["product_id"], li["description"], li["qty"], li["rate"], li["amount"], 0.0 if li["product_id"] == -1 else li["product_id"])
             )
             
-            conn.execute(
-                """
-                UPDATE products
-                SET stock_quantity = COALESCE(stock_quantity, 0) - ?
-                WHERE id = ?
-                """,
-                (li["qty"], li["product_id"])
-            )
+            if li["product_id"] != -1:
+                conn.execute(
+                    """
+                    UPDATE products
+                    SET stock_quantity = COALESCE(stock_quantity, 0) - ?
+                    WHERE id = ?
+                    """,
+                    (li["qty"], li["product_id"])
+                )
 
         conn.commit()
         return jsonify({"ok": True, "sale_id": sale_id, "invoice_number": invoice_number})

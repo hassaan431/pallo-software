@@ -290,7 +290,9 @@
     <div class="cart-area">
       <div class="cart-header">
         <span>Current Order</span>
-        <button class="clear-cart" id="clearCartBtn">Clear</button>
+        <div>
+          <button class="clear-cart" id="clearCartBtn">Clear</button>
+        </div>
       </div>
       <div class="cart-items" id="cartItems">
         <!-- Cart Items -->
@@ -405,10 +407,13 @@
     </div>
   </div>
 
+
+
   <script>
     let products = [];
     let brands = new Set();
     let cart = {}; // product_id -> qty
+    let cartVariants = {}; // product_id -> variant string
     let customers = [];
     let selectedCustomerId = null;
 
@@ -474,7 +479,7 @@
 
     function renderProducts(brandFilter = 'all', searchFilter = '') {
       productGrid.innerHTML = '';
-      let filtered = products;
+      let filtered = products.filter(p => p.stock_quantity > 0);
       if(brandFilter !== 'all') {
         filtered = filtered.filter(p => p.brand_name === brandFilter);
       }
@@ -496,11 +501,13 @@
         
         let stockClass = p.stock_quantity > 0 ? 'stock-ok' : 'stock-out';
         let stockText = p.stock_quantity > 0 ? `${p.stock_quantity} in stock` : 'Out of Stock (Warn)';
+        let openBadge = p.is_open ? `<span style="background:var(--primary); color:white; font-size:0.7rem; padding:2px 6px; border-radius:4px; margin-left:0.5rem;">Open Product</span>` : '';
+        
         card.innerHTML = `
           ${imageHtml}
           <div class="product-info">
             <h3 title="${p.name}">${p.name}</h3>
-            <div class="brand">${p.brand_name || 'Generic'}</div>
+            <div class="brand">${p.brand_name || 'Generic'} ${openBadge}</div>
             <div style="display:flex; justify-content:space-between; align-items:center; margin-top: 0.5rem;">
               <div class="price">${money(p.selling_price)}</div>
               <div class="stock ${stockClass}">${stockText}</div>
@@ -520,6 +527,7 @@
     function addToCart(productId) {
       const p = products.find(x => x.id == productId);
       if(!p) return;
+      
       if(!cart[productId]) cart[productId] = 0;
       
       if(cart[productId] >= p.stock_quantity) {
@@ -531,16 +539,19 @@
       renderCart();
     }
     function updateQty(productId, delta) {
-      if(cart[productId]) {
-        const p = products.find(x => x.id == productId);
-        if(delta > 0 && p && cart[productId] + delta > p.stock_quantity) {
-          alert(`Cannot add more. Only ${p.stock_quantity} available in stock.`);
-          return;
-        }
-        
-        cart[productId] += delta;
-        if(cart[productId] <= 0) delete cart[productId];
+      if(!cart[productId]) return;
+      
+      const p = products.find(x => x.id == productId);
+      if(!p) return;
+      
+      if(delta > 0 && cart[productId] + delta > p.stock_quantity) {
+        alert(`Cannot add more. Only ${p.stock_quantity} available in stock.`);
+        return;
       }
+      
+      cart[productId] += delta;
+      if(cart[productId] <= 0) delete cart[productId];
+      
       renderCart();
     }
     
@@ -559,32 +570,63 @@
       }
       renderCart();
     }
+    
+    function deleteCartItem(productId) {
+      delete cart[productId];
+      renderCart();
+    }
+
+    function setVariant(productId, val) {
+      cartVariants[productId] = val.trim();
+      renderCart();
+    }
 
     document.getElementById('clearCartBtn').onclick = () => {
       cart = {};
+      cartVariants = {};
       renderCart();
     };
+
+
 
     function renderCart() {
       cartItemsDiv.innerHTML = '';
       let total = 0;
       let count = 0;
-      for(const [pid, qty] of Object.entries(cart)) {
+      for (const [pid, qty] of Object.entries(cart)) {
         const p = products.find(x => x.id == pid);
-        if(!p) continue;
-        const lineTotal = p.selling_price * qty;
+        if (!p) continue;
+        const variantStr = cartVariants[pid] || '1';
+        const pmMatch = variantStr.match(/[\d.]+/);
+        const pm = p.is_open ? (pmMatch ? parseFloat(pmMatch[0]) : 1.0) : 1.0;
+        
+        const lineTotal = p.selling_price * qty * pm;
+        
         total += lineTotal;
         count += qty;
+        
+        let variantInput = '';
+        let displayUnit = p.unit && p.unit !== 'Each' ? ` (${p.unit})` : '';
+        if (p.is_open) {
+          variantInput = `
+            <div style="margin-top: 4px; font-size: 0.8rem;">
+              <label>Variant:</label>
+              <input type="text" value="${variantStr}" onchange="setVariant(${pid}, this.value)" style="width: 80px; padding: 2px 4px; border: 1px solid var(--border); border-radius: 4px; font-size: 0.85rem;">
+            </div>
+          `;
+        }
+        
         const item = document.createElement('div');
         item.className = 'cart-item';
         item.innerHTML = `
-          <div class="cart-item-title">${p.name}</div>
+          <div class="cart-item-title">${p.name}${p.is_open ? ' - ' + variantStr + displayUnit : ''} ${variantInput}</div>
           <div class="cart-item-controls">
             <span style="font-weight:600; color:var(--primary);">${money(lineTotal)}</span>
             <div style="display:flex; align-items:center; gap:0.5rem;">
-              <button class="qty-btn" onclick="updateQty(${p.id}, -1)">-</button>
-              <input type="number" value="${qty}" onchange="setQty(${p.id}, this.value)" style="font-weight:bold; width:50px; text-align:center; border:1px solid var(--border); border-radius:4px; padding: 4px; font-size: 1rem;">
-              <button class="qty-btn" onclick="updateQty(${p.id}, 1)">+</button>
+              <button class="qty-btn" onclick="updateQty(${pid}, -1)">-</button>
+              <input type="number" value="${qty}" onchange="setQty(${pid}, this.value)" style="font-weight:bold; width:50px; text-align:center; border:1px solid var(--border); border-radius:4px; padding: 4px; font-size: 1rem;">
+              <button class="qty-btn" onclick="updateQty(${pid}, 1)">+</button>
+              <button class="qty-btn" onclick="deleteCartItem(${pid})" style="background:var(--danger, #ef4444); color:white; border:none; border-radius:4px; width:28px; font-size:14px;" title="Remove Item">&times;</button>
             </div>
           </div>
         `;
@@ -724,7 +766,22 @@
         payment_type: paymentType.value,
         amount_paid: document.getElementById('amountPaid').value || 0,
         due_date: document.getElementById('custDueDate').value,
-        items: Object.entries(cart).map(([id, qty]) => ({ id, qty }))
+        items: Object.entries(cart).map(([id, qty]) => {
+          const p = products.find(x => x.id == id);
+          if (p && p.is_open) {
+            const variantStr = cartVariants[id] || '1';
+            const pmMatch = variantStr.match(/[\d.]+/);
+            const pm = pmMatch ? parseFloat(pmMatch[0]) : 1.0;
+            let displayUnit = p.unit && p.unit !== 'Each' ? ` (${p.unit})` : '';
+            return {
+              id: id,
+              qty: qty,
+              description: p.name + ' - ' + variantStr + displayUnit,
+              packing_multiplier: pm
+            };
+          }
+          return { id, qty };
+        })
       };
       
       if(selectedCustomerContainer.style.display === 'none') {
