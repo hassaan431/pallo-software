@@ -69,6 +69,14 @@
             <span class="nav-emoji" aria-hidden="true">📦</span>
             <span class="nav-label">Products</span>
           </a>
+          <a href="{{ url_for('suppliers_page') }}" class="{{ 'is-active' if request.endpoint == 'suppliers_page' else '' }}">
+            <span class="nav-emoji" aria-hidden="true">🏭</span>
+            <span class="nav-label">Suppliers & Brands</span>
+          </a>
+          <a href="/purchases" class="{{ 'is-active' if request.path.startswith('/purchases') else '' }}">
+            <span class="nav-emoji" aria-hidden="true">📦</span>
+            <span class="nav-label">Purchases (Shipments)</span>
+          </a>
           <a href="{{ url_for('customers') }}" class="{{ 'is-active' if request.endpoint == 'customers' else '' }}">
             <span class="nav-emoji" aria-hidden="true">👥</span>
             <span class="nav-label">Customers</span>
@@ -84,14 +92,6 @@
           <a href="{{ url_for('users_list') }}" class="{{ 'is-active' if request.endpoint == 'users_list' else '' }}">
             <span class="nav-emoji" aria-hidden="true">👤</span>
             <span class="nav-label">Users</span>
-          </a>
-          <a href="{{ url_for('suppliers_page') }}" class="{{ 'is-active' if request.endpoint == 'suppliers_page' else '' }}">
-            <span class="nav-emoji" aria-hidden="true">🏭</span>
-            <span class="nav-label">Suppliers & Brands</span>
-          </a>
-          <a href="/purchases" class="{{ 'is-active' if request.path.startswith('/purchases') else '' }}">
-            <span class="nav-emoji" aria-hidden="true">📦</span>
-            <span class="nav-label">Purchases (Shipments)</span>
           </a>
           {% endif %}
           <a href="{{ url_for('pos') }}" target="_blank">
