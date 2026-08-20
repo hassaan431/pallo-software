@@ -3910,12 +3910,12 @@ def pos_submit_order():
                     rate = float(row["selling_price"] or 0)
                     description = it.get("description", row["name"])
                     pm = float(it.get("packing_multiplier", 1.0))
-                    qty = qty * pm
                 else:
                     rate = float(row["selling_price"] or 0)
                     description = row["name"]
+                    pm = 1.0
                 
-                amount = round(qty * rate, 2)
+                amount = round(qty * rate * pm, 2)
                 subtotal += amount
                 
                 parsed_items.append({
@@ -3923,7 +3923,8 @@ def pos_submit_order():
                     "description": description,
                     "qty": qty,
                     "rate": rate,
-                    "amount": amount
+                    "amount": amount,
+                    "packing_multiplier": pm
                 })
 
         if not parsed_items:
@@ -3933,7 +3934,7 @@ def pos_submit_order():
         qty_total_by_product = defaultdict(float)
         for li in parsed_items:
             if li["product_id"] != -1:
-                qty_total_by_product[li["product_id"]] += li["qty"]
+                qty_total_by_product[li["product_id"]] += li["qty"] * li["packing_multiplier"]
             
         for product_id, qty_total in qty_total_by_product.items():
             cur = conn.execute("SELECT name, stock_quantity FROM products WHERE id = ?", (product_id,))
@@ -3985,10 +3986,10 @@ def pos_submit_order():
         for li in parsed_items:
             conn.execute(
                 """
-                INSERT INTO sale_items (sale_id, product_id, description, qty, rate, amount, cost_price)
-                VALUES (?, ?, ?, ?, ?, ?, ?)
+                INSERT INTO sale_items (sale_id, product_id, description, qty, rate, amount, cost_price, packing_multiplier)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
                 """,
-                (sale_id, None if li["product_id"] == -1 else li["product_id"], li["description"], li["qty"], li["rate"], li["amount"], 0.0 if li["product_id"] == -1 else li["product_id"])
+                (sale_id, None if li["product_id"] == -1 else li["product_id"], li["description"], li["qty"], li["rate"], li["amount"], 0.0 if li["product_id"] == -1 else li["product_id"], li["packing_multiplier"])
             )
             
             if li["product_id"] != -1:
@@ -3998,7 +3999,7 @@ def pos_submit_order():
                     SET stock_quantity = COALESCE(stock_quantity, 0) - ?
                     WHERE id = ?
                     """,
-                    (li["qty"], li["product_id"])
+                    (li["qty"] * li["packing_multiplier"], li["product_id"])
                 )
 
         conn.commit()
