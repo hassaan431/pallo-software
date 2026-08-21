@@ -779,9 +779,14 @@
     : (product ? (product.cost_price || 0) : 0);
   const displayPrintDualUnits = product ? (product.print_dual_units ? 'checked' : '') : '';
   const displayPackingMultiplier = product ? (product.packing_multiplier || 1.0) : 1.0;
+  
+  const isOpen = product && product.is_open;
+  const variantDisplay = isOpen ? 'flex' : 'none';
+  const variantSize = isOpen && displayPackingMultiplier !== 1.0 ? displayPackingMultiplier : '';
+  const variantUnit = product && product.unit ? product.unit : 'g';
 
   return `
-    <tr class="line-item-row" data-row-index="${index}" data-cost-price="${displayCp}" data-packing-multiplier="${displayPackingMultiplier}">
+    <tr class="line-item-row" data-row-index="${index}" data-cost-price="${displayCp}" data-packing-multiplier="${displayPackingMultiplier}" data-product-unit="${variantUnit}">
       <td class="line-no">${index + 1}</td>
       <td>
         <div class="search-wrap" style="position: relative; margin-bottom:0.6rem;">
@@ -794,8 +799,8 @@
               value="${displayName}"
               style="flex: 1;"
               />
-            <div class="custom-variant-container" style="display: none; align-items: center; gap: 4px;">
-              <input type="text" class="form-control custom-size-input" placeholder="Size" style="width: 100px; padding: 4px; font-size: 12px; height: 32px;">
+            <div class="custom-variant-container" style="display: ${variantDisplay}; align-items: center; gap: 4px;">
+              <input type="text" class="form-control custom-size-input" placeholder="Size (e.g., ${variantUnit})" value="${variantSize}" style="width: 100px; padding: 4px; font-size: 12px; height: 32px;">
             </div>
           </div>
           <div class="suggestions product-suggestions" style="display:none;"></div>

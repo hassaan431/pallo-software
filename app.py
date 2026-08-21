@@ -2186,7 +2186,10 @@ def sales_edit(sale_id: int):
                 si.amount,
                 si.print_dual_units,
                 COALESCE(si.packing_multiplier, 1.0) as packing_multiplier,
-                p.stock_quantity
+                p.stock_quantity,
+                p.is_open,
+                p.unit,
+                p.name
             FROM sale_items si
             LEFT JOIN products p ON p.id = si.product_id
             WHERE si.sale_id = ?
@@ -2438,45 +2441,37 @@ def sales_update(sale_id: int):
                 (sale_id,),
             ).fetchall()
 
-            # Restore old stock
+            # Calculate old stock requirements
             old_qty_by_product = defaultdict(float)
             for item in old_items:
                 old_qty_by_product[item["product_id"]] += float(item["qty"]) * float(item["packing_multiplier"])
-
-            for product_id, qty_total in old_qty_by_product.items():
-                cur = conn.execute("SELECT stock_quantity FROM products WHERE id = ?", (product_id,))
-                row = cur.fetchone()
-                old_stock = float(row["stock_quantity"] or 0) if row else 0
-                new_stock = old_stock + qty_total
-                
-                conn.execute(
-                    "UPDATE products SET stock_quantity = ? WHERE id = ?",
-                    (new_stock, product_id),
-                )
-                
-                conn.execute("""
-                    INSERT INTO inventory_history (product_id, transaction_type, quantity_change, previous_stock, new_stock, reference)
-                    VALUES (?, ?, ?, ?, ?, ?)
-                """, (product_id, 'IN', qty_total, old_stock, new_stock, f'Invoice #{invoice_number} Edit Restore'))
 
             # Calculate new stock requirements
             new_qty_by_product = defaultdict(float)
             for li in parsed_items:
                 new_qty_by_product[li["product_id"]] += li["qty"] * li["packing_multiplier"]
 
-            # Check new stock availability
-            for product_id, qty_total in new_qty_by_product.items():
-                cur = conn.execute(
-                    "SELECT stock_quantity, name FROM products WHERE id = ?",
-                    (product_id,),
-                )
-                row = cur.fetchone()
-                if row is None:
-                    raise ValueError("One or more selected products are invalid.")
-                stock_quantity = float(row["stock_quantity"] or 0)
-                product_name = row["name"] or "Unknown Product"
-                if stock_quantity + 1e-9 < qty_total:
-                    raise ValueError(f"Insufficient stock for {product_name} (requested {qty_total}, available {stock_quantity}).")
+            # Compute net changes and check availability
+            # net_deduction = new_qty - old_qty
+            net_deductions = {}
+            all_products = set(old_qty_by_product.keys()) | set(new_qty_by_product.keys())
+            
+            for product_id in all_products:
+                old_qty = old_qty_by_product.get(product_id, 0.0)
+                new_qty = new_qty_by_product.get(product_id, 0.0)
+                net_deduct = new_qty - old_qty
+                
+                if net_deduct != 0:
+                    net_deductions[product_id] = net_deduct
+                    if net_deduct > 0:
+                        cur = conn.execute("SELECT stock_quantity, name FROM products WHERE id = ?", (product_id,))
+                        row = cur.fetchone()
+                        if row is None:
+                            raise ValueError("One or more selected products are invalid.")
+                        stock_quantity = float(row["stock_quantity"] or 0)
+                        if stock_quantity + 1e-9 < net_deduct:
+                            product_name = row["name"] or "Unknown Product"
+                            raise ValueError(f"Insufficient stock for {product_name} (requested additional {net_deduct}, available {stock_quantity}).")
 
             # Update sale record
             try:
@@ -2536,34 +2531,46 @@ def sales_update(sale_id: int):
                     ),
                 )
 
-            # Deduct new stock
-            for product_id, qty_total in new_qty_by_product.items():
+            # Apply net stock changes
+            for product_id, net_deduct in net_deductions.items():
                 cur = conn.execute("SELECT stock_quantity FROM products WHERE id = ?", (product_id,))
                 row = cur.fetchone()
                 old_stock = float(row["stock_quantity"] or 0) if row else 0
 
-                upd = conn.execute(
-                    """
-                    UPDATE products
-                    SET stock_quantity = stock_quantity - ?
-                    WHERE id = ? AND stock_quantity >= ?
-                    """,
-                    (qty_total, product_id, qty_total),
-                )
-                if upd.rowcount == 0:
-                    cur = conn.execute(
-                        "SELECT name FROM products WHERE id = ?",
-                        (product_id,),
+                # Ensure we don't go negative on deduction
+                if net_deduct > 0:
+                    upd = conn.execute(
+                        """
+                        UPDATE products
+                        SET stock_quantity = stock_quantity - ?
+                        WHERE id = ? AND stock_quantity >= ?
+                        """,
+                        (net_deduct, product_id, net_deduct - 1e-9),
                     )
-                    row = cur.fetchone()
-                    product_name = row["name"] if row else "Unknown Product"
-                    raise ValueError(f"Insufficient stock for {product_name}.")
+                    if upd.rowcount == 0:
+                        cur = conn.execute("SELECT name FROM products WHERE id = ?", (product_id,))
+                        row = cur.fetchone()
+                        product_name = row["name"] if row else "Unknown Product"
+                        raise ValueError(f"Insufficient stock for {product_name}.")
                 else:
-                    new_stock = old_stock - qty_total
-                    conn.execute("""
-                        INSERT INTO inventory_history (product_id, transaction_type, quantity_change, previous_stock, new_stock, reference)
-                        VALUES (?, ?, ?, ?, ?, ?)
-                    """, (product_id, 'OUT', -qty_total, old_stock, new_stock, f'Invoice #{invoice_number} Edit'))
+                    # net_deduct < 0, meaning we restore stock (net_deduct is negative, so subtract negative = add)
+                    conn.execute(
+                        """
+                        UPDATE products
+                        SET stock_quantity = stock_quantity - ?
+                        WHERE id = ?
+                        """,
+                        (net_deduct, product_id),
+                    )
+                
+                new_stock = old_stock - net_deduct
+                trans_type = 'OUT' if net_deduct > 0 else 'IN'
+                qty_change = -net_deduct if net_deduct > 0 else abs(net_deduct)
+                
+                conn.execute("""
+                    INSERT INTO inventory_history (product_id, transaction_type, quantity_change, previous_stock, new_stock, reference)
+                    VALUES (?, ?, ?, ?, ?, ?)
+                """, (product_id, trans_type, qty_change, old_stock, new_stock, f'Invoice #{invoice_number} Edit'))
 
             conn.commit()
         except Exception as e:
