@@ -3994,20 +3994,30 @@ def pos_submit_order():
             conn.execute(
                 """
                 INSERT INTO sale_items (sale_id, product_id, description, qty, rate, amount, cost_price, packing_multiplier)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, COALESCE((SELECT cost_price FROM products WHERE id = ?), 0.0), ?)
                 """,
-                (sale_id, None if li["product_id"] == -1 else li["product_id"], li["description"], li["qty"], li["rate"], li["amount"], 0.0 if li["product_id"] == -1 else li["product_id"], li["packing_multiplier"])
+                (sale_id, None if li["product_id"] == -1 else li["product_id"], li["description"], li["qty"], li["rate"], li["amount"], li["product_id"], li["packing_multiplier"])
             )
             
             if li["product_id"] != -1:
+                cur_stock = conn.execute("SELECT stock_quantity FROM products WHERE id = ?", (li["product_id"],)).fetchone()
+                old_stock = float(cur_stock["stock_quantity"] or 0) if cur_stock else 0
+                qty_deduct = li["qty"] * li["packing_multiplier"]
+                new_stock = old_stock - qty_deduct
+                
                 conn.execute(
                     """
                     UPDATE products
                     SET stock_quantity = COALESCE(stock_quantity, 0) - ?
                     WHERE id = ?
                     """,
-                    (li["qty"] * li["packing_multiplier"], li["product_id"])
+                    (qty_deduct, li["product_id"])
                 )
+                
+                conn.execute("""
+                    INSERT INTO inventory_history (product_id, transaction_type, quantity_change, previous_stock, new_stock, reference)
+                    VALUES (?, 'OUT', ?, ?, ?, ?)
+                """, (li["product_id"], -qty_deduct, old_stock, new_stock, f'Invoice #{invoice_number}'))
 
         conn.commit()
         return jsonify({"ok": True, "sale_id": sale_id, "invoice_number": invoice_number})
