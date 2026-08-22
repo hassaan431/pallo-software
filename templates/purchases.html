@@ -76,8 +76,10 @@
                 <span class="badge badge-danger">Unpaid</span>
               {% endif %}
             </td>
-            <td style="text-align: right;">
-              <a href="/purchases/{{ p.id }}" class="btn btn-sm btn-outline">View Details</a>
+            <td style="text-align: right; white-space: nowrap;">
+              <a href="/purchases/{{ p.id }}" class="btn btn-sm btn-outline" title="View Details">View</a>
+              <a href="/purchases/edit/{{ p.id }}" class="btn btn-sm btn-outline" title="Edit Purchase">Edit</a>
+              <button type="button" class="btn btn-sm btn-danger" title="Delete Purchase" onclick="deletePurchase({{ p.id }})">Delete</button>
             </td>
           </tr>
           {% else %}
@@ -92,4 +94,33 @@
     </div>
   </div>
 </section>
+
+<script>
+async function deletePurchase(id, force = false) {
+  if (!force && !confirm("Are you sure you want to delete this purchase?")) return;
+  
+  const payload = force ? { force: true } : {};
+  
+  try {
+    const res = await fetch(`/api/purchases/${id}/delete`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+    const data = await res.json();
+    
+    if (data.ok) {
+      window.location.reload();
+    } else if (data.requires_confirmation) {
+      if (confirm(data.message)) {
+        deletePurchase(id, true);
+      }
+    } else {
+      alert(data.error || "Failed to delete purchase");
+    }
+  } catch (err) {
+    alert("Network error");
+  }
+}
+</script>
 {% endblock %}

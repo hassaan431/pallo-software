@@ -4078,90 +4078,299 @@ def purchases():
         conn.close()
     return render_template("purchases.html", purchases=rows, suppliers=suppliers, filters={'search': search, 'supplier_id': supplier_id, 'start_date': start_date, 'end_date': end_date})
 
-@app.route("/purchases/new", methods=["GET", "POST"])
+@app.route("/purchases/new", methods=["GET"])
 @admin_required
 def new_purchase():
-    if request.method == "GET":
-        conn = get_connection()
-        try:
-            suppliers = [dict(row) for row in conn.execute("SELECT id, name FROM suppliers ORDER BY name COLLATE NOCASE ASC").fetchall()]
-            products = [dict(row) for row in conn.execute("SELECT id, name, cost_price, unit FROM products ORDER BY name COLLATE NOCASE ASC").fetchall()]
-        finally:
-            conn.close()
-        return render_template("purchase_new.html", suppliers=suppliers, products=products)
-    else:
-        # Save purchase logic
-        data = request.json
-        supplier_id = data.get("supplier_id")
-        purchase_date = data.get("purchase_date")
-        reference_number = data.get("reference_number", "")
-        items = data.get("items", [])
-        payment_amount = float(data.get("payment_amount", 0))
-        payment_method = data.get("payment_method", "cash")
-        other_charges = float(data.get("other_charges", 0))
+    conn = get_connection()
+    try:
+        suppliers = [dict(row) for row in conn.execute("SELECT id, name FROM suppliers ORDER BY name COLLATE NOCASE ASC").fetchall()]
+        products = [dict(row) for row in conn.execute("SELECT id, name, cost_price, unit FROM products ORDER BY name COLLATE NOCASE ASC").fetchall()]
+    finally:
+        conn.close()
+    return render_template("purchase_new.html", suppliers=suppliers, products=products, purchase=None)
 
-        if not supplier_id or not items:
-            return jsonify({"ok": False, "error": "Missing supplier or items"}), 400
+@app.route("/purchases/edit/<int:purchase_id>", methods=["GET"])
+@admin_required
+def edit_purchase(purchase_id):
+    conn = get_connection()
+    try:
+        purchase = conn.execute("SELECT * FROM purchases WHERE id = ?", (purchase_id,)).fetchone()
+        if not purchase:
+            return "Purchase not found", 404
+        
+        purchase = dict(purchase)
+        
+        items = conn.execute('''
+            SELECT pi.product_id, pi.qty, pi.cost_price, p.name 
+            FROM purchase_items pi
+            JOIN products p ON p.id = pi.product_id
+            WHERE pi.purchase_id = ?
+        ''', (purchase_id,)).fetchall()
+        purchase['items'] = [dict(i) for i in items]
+        
+        suppliers = [dict(row) for row in conn.execute("SELECT id, name FROM suppliers ORDER BY name COLLATE NOCASE ASC").fetchall()]
+        products = [dict(row) for row in conn.execute("SELECT id, name, cost_price, unit FROM products ORDER BY name COLLATE NOCASE ASC").fetchall()]
+    finally:
+        conn.close()
+    return render_template("purchase_new.html", suppliers=suppliers, products=products, purchase=purchase)
 
-        conn = get_connection()
-        try:
-            conn.execute("BEGIN")
-            
-            subtotal = sum(float(item.get("qty", 0)) * float(item.get("cost_price", 0)) for item in items)
-            grand_total = subtotal + other_charges
-            amount_paid = payment_amount
-            remaining_amount = grand_total - amount_paid
-            
-            status = 'unpaid'
-            if abs(remaining_amount) < 0.001 or amount_paid >= grand_total:
-                status = 'paid'
-                remaining_amount = 0
-            elif amount_paid > 0:
-                status = 'partial'
+@app.route("/purchases/new", methods=["POST"])
+@admin_required
+def create_purchase():
+    # Save purchase logic
+    data = request.json
+    supplier_id = data.get("supplier_id")
+    purchase_date = data.get("purchase_date")
+    reference_number = data.get("reference_number", "")
+    items = data.get("items", [])
+    payment_amount = float(data.get("payment_amount", 0))
+    payment_method = data.get("payment_method", "cash")
+    other_charges = float(data.get("other_charges", 0))
 
-            cur = conn.execute('''
-                INSERT INTO purchases (supplier_id, reference_number, purchase_date, subtotal, other_charges, grand_total, amount_paid, remaining_amount, status)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-            ''', (supplier_id, reference_number, purchase_date, subtotal, other_charges, grand_total, amount_paid, remaining_amount, status))
+    if not supplier_id or not items:
+        return jsonify({"ok": False, "error": "Missing supplier or items"}), 400
+
+    conn = get_connection()
+    try:
+        conn.execute("BEGIN")
+        
+        subtotal = sum(float(item.get("qty", 0)) * float(item.get("cost_price", 0)) for item in items)
+        grand_total = subtotal + other_charges
+        amount_paid = payment_amount
+        remaining_amount = grand_total - amount_paid
+        
+        status = 'unpaid'
+        if abs(remaining_amount) < 0.001 or amount_paid >= grand_total:
+            status = 'paid'
+            remaining_amount = 0
+        elif amount_paid > 0:
+            status = 'partial'
+
+        cur = conn.execute('''
+            INSERT INTO purchases (supplier_id, reference_number, purchase_date, subtotal, other_charges, grand_total, amount_paid, remaining_amount, status)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ''', (supplier_id, reference_number, purchase_date, subtotal, other_charges, grand_total, amount_paid, remaining_amount, status))
+        
+        purchase_id = cur.lastrowid
+        
+        if amount_paid > 0:
+            conn.execute('''
+                INSERT INTO supplier_payments (supplier_id, purchase_id, amount, payment_date, payment_method)
+                VALUES (?, ?, ?, ?, ?)
+            ''', (supplier_id, purchase_id, amount_paid, purchase_date, payment_method))
+
+        for item in items:
+            qty = float(item["qty"])
+            cost = float(item["cost_price"])
+            pid = int(item["product_id"])
+            amount = qty * cost
             
-            purchase_id = cur.lastrowid
+            conn.execute('''
+                INSERT INTO purchase_items (purchase_id, product_id, qty, cost_price, amount)
+                VALUES (?, ?, ?, ?, ?)
+            ''', (purchase_id, pid, qty, cost, amount))
             
-            if amount_paid > 0:
+            # Update inventory
+            cur = conn.execute("SELECT stock_quantity FROM products WHERE id = ?", (pid,))
+            row = cur.fetchone()
+            if row:
+                old_stock = row["stock_quantity"] or 0
+                new_stock = old_stock + qty
+                conn.execute("UPDATE products SET stock_quantity = ? WHERE id = ?", (new_stock, pid))
                 conn.execute('''
-                    INSERT INTO supplier_payments (supplier_id, purchase_id, amount, payment_date, payment_method)
-                    VALUES (?, ?, ?, ?, ?)
-                ''', (supplier_id, purchase_id, amount_paid, purchase_date, payment_method))
+                    INSERT INTO inventory_history (product_id, transaction_type, quantity_change, previous_stock, new_stock, reference, supplier_id)
+                    VALUES (?, 'IN', ?, ?, ?, ?, ?)
+                ''', (pid, qty, old_stock, new_stock, f"Purchase #{purchase_id}", supplier_id))
 
-            for item in items:
-                qty = float(item["qty"])
-                cost = float(item["cost_price"])
-                pid = int(item["product_id"])
-                amount = qty * cost
-                
-                conn.execute('''
-                    INSERT INTO purchase_items (purchase_id, product_id, qty, cost_price, amount)
-                    VALUES (?, ?, ?, ?, ?)
-                ''', (purchase_id, pid, qty, cost, amount))
-                
-                # Update inventory
-                cur = conn.execute("SELECT stock_quantity FROM products WHERE id = ?", (pid,))
-                row = cur.fetchone()
-                if row:
-                    old_stock = row["stock_quantity"] or 0
-                    new_stock = old_stock + qty
+        conn.commit()
+        return jsonify({"ok": True, "purchase_id": purchase_id})
+    except Exception as e:
+        conn.rollback()
+        return jsonify({"ok": False, "error": str(e)}), 500
+    finally:
+        conn.close()
+
+@app.route("/api/purchases/<int:purchase_id>", methods=["POST"])
+@admin_required
+def update_purchase(purchase_id):
+    data = request.json
+    supplier_id = data.get("supplier_id")
+    purchase_date = data.get("purchase_date")
+    reference_number = data.get("reference_number", "")
+    items = data.get("items", [])
+    other_charges = float(data.get("other_charges", 0))
+    force = data.get("force", False)
+
+    if not supplier_id or not items:
+        return jsonify({"ok": False, "error": "Missing supplier or items"}), 400
+
+    conn = get_connection()
+    try:
+        conn.execute("BEGIN")
+        
+        # 1. Fetch old items to calculate net stock changes
+        old_items_db = conn.execute("SELECT product_id, qty FROM purchase_items WHERE purchase_id = ?", (purchase_id,)).fetchall()
+        old_items = {}
+        for row in old_items_db:
+            pid = str(row["product_id"])
+            old_items[pid] = old_items.get(pid, 0) + float(row["qty"] or 0)
+            
+        new_items = {}
+        for item in items:
+            pid = str(item["product_id"])
+            new_items[pid] = new_items.get(pid, 0) + float(item.get("qty", 0))
+            
+        # 2. Check for negative inventory
+        warnings = []
+        for pid in set(old_items.keys()).union(new_items.keys()):
+            old_qty = old_items.get(pid, 0)
+            new_qty = new_items.get(pid, 0)
+            diff = new_qty - old_qty
+            
+            if diff < 0:
+                cur_stock = conn.execute("SELECT name, stock_quantity FROM products WHERE id = ?", (pid,)).fetchone()
+                if cur_stock:
+                    projected_stock = float(cur_stock["stock_quantity"] or 0) + diff
+                    if projected_stock < 0:
+                        warnings.append(f"{cur_stock['name']} will drop to {projected_stock} stock.")
+                        
+        if warnings and not force:
+            conn.rollback()
+            return jsonify({
+                "ok": False, 
+                "requires_confirmation": True, 
+                "message": "Updating this purchase will cause negative inventory:\n" + "\n".join(warnings) + "\n\nAre you sure you want to proceed?"
+            })
+            
+        # 3. Apply net changes to products
+        for pid in set(old_items.keys()).union(new_items.keys()):
+            old_qty = old_items.get(pid, 0)
+            new_qty = new_items.get(pid, 0)
+            diff = new_qty - old_qty
+            
+            if diff != 0:
+                cur_stock = conn.execute("SELECT stock_quantity FROM products WHERE id = ?", (pid,)).fetchone()
+                if cur_stock:
+                    current_stock = float(cur_stock["stock_quantity"] or 0)
+                    new_stock = current_stock + diff
                     conn.execute("UPDATE products SET stock_quantity = ? WHERE id = ?", (new_stock, pid))
+                    
+                    # Log to history
+                    trans_type = 'IN' if diff > 0 else 'OUT'
                     conn.execute('''
                         INSERT INTO inventory_history (product_id, transaction_type, quantity_change, previous_stock, new_stock, reference, supplier_id)
-                        VALUES (?, 'IN', ?, ?, ?, ?, ?)
-                    ''', (pid, qty, old_stock, new_stock, f"Purchase #{purchase_id}", supplier_id))
+                        VALUES (?, ?, ?, ?, ?, ?, ?)
+                    ''', (pid, trans_type, abs(diff), current_stock, new_stock, f"Edit Purchase #{purchase_id}", supplier_id))
+                    
+        # 4. Delete old items and insert new
+        conn.execute("DELETE FROM purchase_items WHERE purchase_id = ?", (purchase_id,))
+        
+        subtotal = 0
+        for item in items:
+            qty = float(item["qty"])
+            cost = float(item["cost_price"])
+            pid = int(item["product_id"])
+            amount = qty * cost
+            subtotal += amount
+            
+            conn.execute('''
+                INSERT INTO purchase_items (purchase_id, product_id, qty, cost_price, amount)
+                VALUES (?, ?, ?, ?, ?)
+            ''', (purchase_id, pid, qty, cost, amount))
+            
+        # 5. Update purchase master record
+        grand_total = subtotal + other_charges
+        purchase_record = conn.execute("SELECT amount_paid FROM purchases WHERE id = ?", (purchase_id,)).fetchone()
+        amount_paid = float(purchase_record["amount_paid"] or 0) if purchase_record else 0
+        remaining_amount = grand_total - amount_paid
+        
+        status = 'unpaid'
+        if abs(remaining_amount) < 0.001 or amount_paid >= grand_total:
+            status = 'paid'
+            remaining_amount = 0
+        elif amount_paid > 0:
+            status = 'partial'
+            
+        conn.execute('''
+            UPDATE purchases
+            SET supplier_id = ?, purchase_date = ?, reference_number = ?, subtotal = ?, other_charges = ?, grand_total = ?, remaining_amount = ?, status = ?
+            WHERE id = ?
+        ''', (supplier_id, purchase_date, reference_number, subtotal, other_charges, grand_total, remaining_amount, status, purchase_id))
+        
+        conn.commit()
+        return jsonify({"ok": True, "purchase_id": purchase_id})
+    except Exception as e:
+        conn.rollback()
+        return jsonify({"ok": False, "error": str(e)}), 500
+    finally:
+        conn.close()
 
-            conn.commit()
-            return jsonify({"ok": True, "purchase_id": purchase_id})
-        except Exception as e:
+@app.route("/api/purchases/<int:purchase_id>/delete", methods=["POST"])
+@admin_required
+def delete_purchase(purchase_id):
+    data = request.json or {}
+    force = data.get("force", False)
+    
+    conn = get_connection()
+    try:
+        conn.execute("BEGIN")
+        
+        purchase = conn.execute("SELECT supplier_id FROM purchases WHERE id = ?", (purchase_id,)).fetchone()
+        if not purchase:
+            return jsonify({"ok": False, "error": "Purchase not found"}), 404
+        supplier_id = purchase["supplier_id"]
+            
+        items = conn.execute("SELECT product_id, qty FROM purchase_items WHERE purchase_id = ?", (purchase_id,)).fetchall()
+        
+        # 1. Check for negative inventory
+        warnings = []
+        for item in items:
+            pid = item["product_id"]
+            qty = float(item["qty"])
+            
+            cur_stock = conn.execute("SELECT name, stock_quantity FROM products WHERE id = ?", (pid,)).fetchone()
+            if cur_stock:
+                projected_stock = float(cur_stock["stock_quantity"] or 0) - qty
+                if projected_stock < 0:
+                    warnings.append(f"{cur_stock['name']} will drop to {projected_stock} stock.")
+                    
+        if warnings and not force:
             conn.rollback()
-            return jsonify({"ok": False, "error": str(e)}), 500
-        finally:
-            conn.close()
+            return jsonify({
+                "ok": False, 
+                "requires_confirmation": True, 
+                "message": "Deleting this purchase will cause negative inventory:\n" + "\n".join(warnings) + "\n\nAre you sure you want to proceed?"
+            })
+            
+        # 2. Revert inventory
+        for item in items:
+            pid = item["product_id"]
+            qty = float(item["qty"])
+            
+            cur_stock = conn.execute("SELECT stock_quantity FROM products WHERE id = ?", (pid,)).fetchone()
+            if cur_stock:
+                current_stock = float(cur_stock["stock_quantity"] or 0)
+                new_stock = current_stock - qty
+                conn.execute("UPDATE products SET stock_quantity = ? WHERE id = ?", (new_stock, pid))
+                
+                conn.execute('''
+                    INSERT INTO inventory_history (product_id, transaction_type, quantity_change, previous_stock, new_stock, reference, supplier_id)
+                    VALUES (?, 'OUT', ?, ?, ?, ?, ?)
+                ''', (pid, qty, current_stock, new_stock, f"Delete Purchase #{purchase_id}", supplier_id))
+                
+        # 3. Delete records
+        conn.execute("DELETE FROM supplier_payments WHERE purchase_id = ?", (purchase_id,))
+        conn.execute("DELETE FROM purchase_items WHERE purchase_id = ?", (purchase_id,))
+        conn.execute("DELETE FROM purchases WHERE id = ?", (purchase_id,))
+        
+        conn.commit()
+        return jsonify({"ok": True})
+    except Exception as e:
+        conn.rollback()
+        return jsonify({"ok": False, "error": str(e)}), 500
+    finally:
+        conn.close()
+
 
 @app.route("/purchases/<int:purchase_id>")
 @login_required

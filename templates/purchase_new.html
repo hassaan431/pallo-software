@@ -1,9 +1,9 @@
 {% extends "base.html" %}
-{% block page_heading %}Receive Shipment / Add Inventory{% endblock %}
+{% block page_heading %}{% if purchase %}Edit Shipment{% else %}Receive Shipment / Add Inventory{% endif %}{% endblock %}
 {% block content %}
 <div class="page-header" style="margin-bottom: 1.5rem;">
-  <h2 style="margin:0; font-size:1.25rem; font-weight:700;">Receive Shipment</h2>
-  <p style="color: var(--text-muted); margin-top: 0.25rem;">Log incoming inventory from suppliers and record payment details.</p>
+  <h2 style="margin:0; font-size:1.25rem; font-weight:700;">{% if purchase %}Edit Shipment{% else %}Receive Shipment{% endif %}</h2>
+  <p style="color: var(--text-muted); margin-top: 0.25rem;">{% if purchase %}Edit details of an existing shipment.{% else %}Log incoming inventory from suppliers and record payment details.{% endif %}</p>
 </div>
 
 <div class="panel">
@@ -25,22 +25,22 @@
       <!-- Top Meta Info -->
       <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem; margin-bottom: 2rem;">
         <div>
-          <label class="form-label" for="supplier_id">Supplier *</label>
-          <select id="supplier_id" class="form-control" required>
-            <option value="">-- Select Supplier --</option>
-            {% for s in suppliers %}
-            <option value="{{ s.id }}">{{ s.name }}</option>
-            {% endfor %}
-          </select>
+            <label class="form-label" for="supplier_id">Supplier <span style="color:var(--danger-text)">*</span></label>
+            <select id="supplier_id" class="form-control" required>
+              <option value="" disabled {% if not purchase %}selected{% endif %}>Select Supplier</option>
+              {% for s in suppliers %}
+              <option value="{{ s.id }}" {% if purchase and purchase.supplier_id == s.id %}selected{% endif %}>{{ s.name }}</option>
+              {% endfor %}
+            </select>
         </div>
         <div>
-          <label class="form-label" for="purchase_date">Purchase Date *</label>
-          <input type="date" id="purchase_date" class="form-control" required>
-        </div>
+            <label class="form-label" for="purchase_date">Date Received <span style="color:var(--danger-text)">*</span></label>
+            <input type="date" id="purchase_date" class="form-control" value="{{ purchase.purchase_date if purchase else '' }}" required>
+          </div>
         <div>
-          <label class="form-label" for="reference_number">Reference / Bill #</label>
-          <input type="text" id="reference_number" class="form-control" placeholder="e.g. INV-9923">
-        </div>
+            <label class="form-label" for="reference_number">Reference / Invoice #</label>
+            <input type="text" id="reference_number" class="form-control" value="{{ purchase.reference_number if purchase else '' }}" placeholder="e.g. INV-2023-001">
+          </div>
       </div>
 
       <!-- Items Table -->
@@ -74,7 +74,7 @@
             <label class="form-label">Payment Amount</label>
             <div style="position: relative; display: flex; align-items: center;">
               <span style="position: absolute; left: 12px; color: var(--text-muted); font-weight: 500;">$</span>
-              <input type="number" id="payment_amount" class="form-control" style="padding-left: 28px;" step="0.01" min="0" placeholder="0.00">
+              <input type="number" id="payment_amount" class="form-control" style="padding-left: 28px;" step="0.01" min="0" placeholder="0.00" value="{% if purchase %}{{ purchase.amount_paid }}{% else %}0{% endif %}" {% if purchase %}readonly title="Cannot edit initial payment here"{% endif %}>
             </div>
             <small style="color: var(--text-muted); display: block; margin-top: 0.25rem;">Leave as 0 if adding to unpaid balance.</small>
           </div>
@@ -97,7 +97,7 @@
             <label for="other_charges" style="color: var(--text-muted); margin: 0; font-weight: normal; cursor: pointer;">Other Charges:</label>
             <div style="position: relative; display: flex; align-items: center; justify-self: end; width: 100px;">
               <span style="position: absolute; left: 8px; color: var(--text-muted); font-weight: 500;">$</span>
-              <input type="number" id="other_charges" class="form-control" style="padding-left: 20px; padding-right: 0.5rem; text-align: right; height: 32px;" step="0.01" min="0" value="0.00">
+              <input type="number" id="other_charges" class="form-control" style="padding-left: 20px; padding-right: 0.5rem; text-align: right; height: 32px;" step="0.01" min="0" value="{% if purchase %}{{ purchase.other_charges }}{% else %}0.00{% endif %}">
             </div>
 
             <span style="color: var(--text-muted);">Amount Paid:</span>
@@ -124,22 +124,29 @@
 <!-- Product Data JSON -->
 <script>
   const products = {{ products|tojson }};
+  const existingPurchase = {{ purchase|tojson if purchase else 'null' }};
 </script>
 
 <script>
   // Setup date
-  document.getElementById('purchase_date').valueAsDate = new Date();
+  if (!existingPurchase) {
+    document.getElementById('purchase_date').valueAsDate = new Date();
+  }
 
   const tbody = document.getElementById('items-tbody');
 
-  function addPurchaseRow() {
+  function addPurchaseRow(initialData = null) {
     const tr = document.createElement('tr');
     
     // Product select options
     let productOptions = '<option value="">-- Select Product --</option>';
     products.forEach(p => {
-      productOptions += `<option value="${p.id}" data-cost="${p.cost_price || 0}">${p.name}</option>`;
+      const isSelected = initialData && initialData.product_id == p.id ? 'selected' : '';
+      productOptions += `<option value="${p.id}" data-cost="${p.cost_price || 0}" ${isSelected}>${p.name}</option>`;
     });
+
+    const initQty = initialData ? initialData.qty : 1;
+    const initCost = initialData ? parseFloat(initialData.cost_price).toFixed(2) : '0.00';
 
     tr.innerHTML = `
       <td style="padding: 1rem;">
@@ -148,10 +155,10 @@
         </select>
       </td>
       <td style="padding: 1rem;">
-        <input type="number" class="form-control qty-input" min="0.01" step="0.01" value="1" required oninput="calcRow(this)">
+        <input type="number" class="form-control qty-input" min="0.01" step="0.01" value="${initQty}" required oninput="calcRow(this)">
       </td>
       <td style="padding: 1rem;">
-        <input type="number" class="form-control cost-input" min="0" step="0.01" value="0" required oninput="calcRow(this)">
+        <input type="number" class="form-control cost-input" min="0" step="0.01" value="${initCost}" required oninput="calcRow(this)">
       </td>
       <td style="padding: 1rem; text-align: right; vertical-align: middle; font-weight: 500;">
         $<span class="row-amount">0.00</span>
@@ -183,6 +190,10 @@
         calcRow(tr.querySelector('.cost-input'));
       }
     });
+
+    if (initialData) {
+      calcRow(tr.querySelector('.cost-input'));
+    }
   }
 
   function handleProductSelect(selectEl) {
@@ -229,8 +240,14 @@
   document.getElementById('payment_amount').addEventListener('input', calcTotals);
   document.getElementById('other_charges').addEventListener('input', calcTotals);
 
-  // Initialize with one row
-  addPurchaseRow();
+  // Initialize rows
+  if (existingPurchase && existingPurchase.items && existingPurchase.items.length > 0) {
+    existingPurchase.items.forEach(item => {
+      addPurchaseRow(item);
+    });
+  } else {
+    addPurchaseRow();
+  }
 
   async function submitPurchase(e) {
     e.preventDefault();
@@ -267,29 +284,48 @@
       items: items
     };
 
-    const btn = document.getElementById('save-purchase-btn');
-    btn.disabled = true;
-    btn.textContent = 'Saving...';
+    const submitUrl = existingPurchase ? `/api/purchases/${existingPurchase.id}` : '/purchases/new';
+    
+    // Helper function to send the request
+    const sendRequest = async (force = false) => {
+      if (force) {
+        payload.force = true;
+      }
+      
+      const btn = document.getElementById('save-purchase-btn');
+      btn.disabled = true;
+      btn.textContent = 'Saving...';
 
-    try {
-      const res = await fetch('/purchases/new', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
-      });
-      const data = await res.json();
-      if (data.ok) {
-        window.location.href = `/purchases/${data.purchase_id}`;
-      } else {
-        alert(data.error || "Failed to save purchase");
+      try {
+        const res = await fetch(submitUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+        const data = await res.json();
+        
+        if (data.ok) {
+          window.location.href = `/purchases/${data.purchase_id}`;
+        } else if (data.requires_confirmation) {
+          if (confirm(data.message)) {
+            sendRequest(true);
+          } else {
+            btn.disabled = false;
+            btn.textContent = 'Save Shipment';
+          }
+        } else {
+          alert(data.error || "Failed to save purchase");
+          btn.disabled = false;
+          btn.textContent = 'Save Shipment';
+        }
+      } catch (err) {
+        alert("Network error");
         btn.disabled = false;
         btn.textContent = 'Save Shipment';
       }
-    } catch (err) {
-      alert("Network error");
-      btn.disabled = false;
-      btn.textContent = 'Save Shipment';
-    }
+    };
+    
+    sendRequest(false);
   }
 </script>
 {% endblock %}
