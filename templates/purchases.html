@@ -1,6 +1,30 @@
 {% extends "base.html" %}
 {% block page_heading %}Shipments & Purchases{% endblock %}
 {% block content %}
+<link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
+<style>
+  .select2-container .select2-selection--single {
+    height: 38px;
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+    background-color: var(--input-bg);
+  }
+  .select2-container--default .select2-selection--single .select2-selection__rendered {
+    line-height: 36px;
+    color: var(--text-color);
+  }
+  .select2-container--default .select2-selection--single .select2-selection__arrow {
+    height: 36px;
+  }
+  .select2-dropdown {
+    background-color: var(--input-bg);
+    border: 1px solid var(--border-color);
+  }
+  .select2-container--default .select2-results__option--selected {
+    background-color: var(--primary-color);
+    color: white;
+  }
+</style>
 <div class="page-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem;">
   <h2 style="margin:0; font-size:1.25rem; font-weight:700;">Purchase History</h2>
   <div>
@@ -26,7 +50,7 @@
       </div>
       <div style="flex: 1; min-width: 200px;">
         <label class="form-label">Product</label>
-        <select name="product_id" class="form-control">
+        <select name="product_id" class="form-control select2-searchable">
           <option value="">All Products</option>
           {% for p in products %}
           <option value="{{ p.id }}" {% if filters.product_id == p.id|string %}selected{% endif %}>{{ p.name }}</option>
@@ -165,5 +189,16 @@ async function deletePurchase(id, force = false) {
     alert("Network error");
   }
 }
+</script>
+<script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
+<script>
+  $(document).ready(function() {
+    $('.select2-searchable').select2({
+      width: '100%',
+      placeholder: "Search for a product...",
+      allowClear: true
+    });
+  });
 </script>
 {% endblock %}
