@@ -4071,7 +4071,26 @@ def purchases():
         query += ' ORDER BY p.purchase_date DESC, p.id DESC'
         
         cur = conn.execute(query, params)
-        rows = cur.fetchall()
+        rows = [dict(r) for r in cur.fetchall()]
+        
+        if rows:
+            purchase_ids = [str(r["id"]) for r in rows]
+            items = conn.execute(f'''
+                SELECT pi.purchase_id, pr.name as product_name, pi.qty 
+                FROM purchase_items pi
+                JOIN products pr ON pi.product_id = pr.id
+                WHERE pi.purchase_id IN ({','.join(purchase_ids)})
+            ''').fetchall()
+            
+            items_by_purchase = {}
+            for item in items:
+                pid = item["purchase_id"]
+                if pid not in items_by_purchase:
+                    items_by_purchase[pid] = []
+                items_by_purchase[pid].append(dict(item))
+                
+            for r in rows:
+                r["purchase_items"] = items_by_purchase.get(r["id"], [])
         
         suppliers = conn.execute('SELECT id, name FROM suppliers ORDER BY name COLLATE NOCASE ASC').fetchall()
     finally:
