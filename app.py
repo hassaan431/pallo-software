@@ -4039,6 +4039,7 @@ def pos_submit_order():
 def purchases():
     search = request.args.get('search', '').strip()
     supplier_id = request.args.get('supplier_id', '')
+    product_id = request.args.get('product_id', '')
     start_date = request.args.get('start_date', '')
     end_date = request.args.get('end_date', '')
     
@@ -4059,6 +4060,10 @@ def purchases():
         if supplier_id:
             query += ' AND p.supplier_id = ?'
             params.append(supplier_id)
+            
+        if product_id:
+            query += ' AND EXISTS (SELECT 1 FROM purchase_items pi WHERE pi.purchase_id = p.id AND pi.product_id = ?)'
+            params.append(product_id)
             
         if start_date:
             query += ' AND p.purchase_date >= ?'
@@ -4093,9 +4098,10 @@ def purchases():
                 r["purchase_items"] = items_by_purchase.get(r["id"], [])
         
         suppliers = conn.execute('SELECT id, name FROM suppliers ORDER BY name COLLATE NOCASE ASC').fetchall()
+        products = conn.execute('SELECT id, name FROM products ORDER BY name COLLATE NOCASE ASC').fetchall()
     finally:
         conn.close()
-    return render_template("purchases.html", purchases=rows, suppliers=suppliers, filters={'search': search, 'supplier_id': supplier_id, 'start_date': start_date, 'end_date': end_date})
+    return render_template("purchases.html", purchases=rows, suppliers=suppliers, products=products, filters={'search': search, 'supplier_id': supplier_id, 'product_id': product_id, 'start_date': start_date, 'end_date': end_date})
 
 @app.route("/purchases/new", methods=["GET"])
 @admin_required
