@@ -12,9 +12,19 @@
     <p class="stat-note">Sales amount for today</p>
   </article>
   <article class="stat-card">
-    <h3>Daily Profit Amount</h3>
+    <h3>Daily Gross Profit</h3>
     <p class="stat-value sensitive-data" style="color: {% if daily_profit < 0 %}var(--color-danger){% else %}var(--color-success){% endif %};">${{ "%.0f"|format(daily_profit) }}</p>
-    <p class="stat-note">Profit amount for today</p>
+    <p class="stat-note">Revenue minus cost of goods</p>
+  </article>
+  <article class="stat-card">
+    <h3>Daily Expenses</h3>
+    <p class="stat-value sensitive-data" style="color: {% if daily_expenses > 0 %}var(--color-danger){% else %}var(--color-text-muted){% endif %};">${{ "%.0f"|format(daily_expenses) }}</p>
+    <p class="stat-note">Operational costs today &nbsp;<a href="/expenses" style="font-size:0.8rem;">View →</a></p>
+  </article>
+  <article class="stat-card">
+    <h3>Daily Net Profit</h3>
+    <p class="stat-value sensitive-data" style="color: {% if daily_net_profit < 0 %}var(--color-danger){% else %}var(--color-success){% endif %};">${{ "%.0f"|format(daily_net_profit) }}</p>
+    <p class="stat-note">Gross profit minus expenses</p>
   </article>
   <article class="stat-card">
     <h3>Monthly Sales</h3>
@@ -22,9 +32,19 @@
     <p class="stat-note">Current month to date</p>
   </article>
   <article class="stat-card">
-    <h3>Monthly Profit Amount</h3>
+    <h3>Monthly Gross Profit</h3>
     <p class="stat-value sensitive-data" style="color: {% if monthly_profit < 0 %}var(--color-danger){% else %}var(--color-success){% endif %};">${{ "%.0f"|format(monthly_profit) }}</p>
     <p class="stat-note">Current month to date</p>
+  </article>
+  <article class="stat-card">
+    <h3>Monthly Expenses</h3>
+    <p class="stat-value sensitive-data" style="color: {% if monthly_expenses > 0 %}var(--color-danger){% else %}var(--color-text-muted){% endif %};">${{ "%.0f"|format(monthly_expenses) }}</p>
+    <p class="stat-note">Operational costs this month</p>
+  </article>
+  <article class="stat-card" style="border: 2px solid {% if monthly_net_profit >= 0 %}var(--color-accent){% else %}var(--color-danger){% endif %};">
+    <h3>Monthly Net Profit</h3>
+    <p class="stat-value sensitive-data" style="color: {% if monthly_net_profit < 0 %}var(--color-danger){% else %}var(--color-success){% endif %};">${{ "%.0f"|format(monthly_net_profit) }}</p>
+    <p class="stat-note">After all expenses &nbsp;<strong>{{ monthly_net_margin }}%</strong> margin</p>
   </article>
 </div>
 

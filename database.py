@@ -266,9 +266,26 @@ def init_db():
         
         conn.commit()
         _migrate_database(conn)
+        _migrate_expenses(conn)
         _seed_default_data(conn)
     finally:
         conn.close()
+
+
+def _migrate_expenses(conn):
+    """Add expenses table if it doesn't exist (safe to run on existing DBs)."""
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS expenses (
+            id          INTEGER PRIMARY KEY AUTOINCREMENT,
+            date        TEXT NOT NULL,
+            category    TEXT NOT NULL,
+            description TEXT,
+            amount      REAL NOT NULL,
+            added_by    INTEGER REFERENCES users(id),
+            created_at  TEXT DEFAULT (datetime('now'))
+        )
+    """)
+    conn.commit()
 
 
 def _migrate_database(conn):

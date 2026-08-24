@@ -77,6 +77,10 @@
             <span class="nav-emoji" aria-hidden="true">📦</span>
             <span class="nav-label">Purchases (Shipments)</span>
           </a>
+          <a href="/expenses" class="{{ 'is-active' if request.path.startswith('/expenses') else '' }}">
+            <span class="nav-emoji" aria-hidden="true">💸</span>
+            <span class="nav-label">Expenses</span>
+          </a>
           <a href="{{ url_for('customers') }}" class="{{ 'is-active' if request.endpoint == 'customers' else '' }}">
             <span class="nav-emoji" aria-hidden="true">👥</span>
             <span class="nav-label">Customers</span>

@@ -221,6 +221,24 @@ def dashboard():
         monthly_profit = monthly_revenue - monthly_cost
         monthly_margin = round((monthly_profit / monthly_revenue * 100), 2) if monthly_revenue > 0 else 0
         
+        # Get daily expenses
+        daily_expenses_row = conn.execute(
+            "SELECT COALESCE(SUM(amount), 0) as total FROM expenses WHERE date = ?",
+            (today,)
+        ).fetchone()
+        daily_expenses = float(daily_expenses_row["total"] or 0)
+        daily_net_profit = daily_profit - daily_expenses
+
+        # Get monthly expenses
+        monthly_expenses_row = conn.execute(
+            "SELECT COALESCE(SUM(amount), 0) as total FROM expenses WHERE strftime('%m', date) = ? AND strftime('%Y', date) = ?",
+            (f"{current_month:02d}", str(current_year))
+        ).fetchone()
+        monthly_expenses = float(monthly_expenses_row["total"] or 0)
+        monthly_net_profit = monthly_profit - monthly_expenses
+        monthly_net_margin = round((monthly_net_profit / monthly_revenue * 100), 2) if monthly_revenue > 0 else 0
+
+        
         # Get recent sales (last 5)
         recent_sales_rows = conn.execute(
             """
@@ -296,6 +314,11 @@ def dashboard():
         daily_revenue=daily_revenue,
         daily_profit=daily_profit,
         monthly_revenue=monthly_revenue,
+        daily_expenses=daily_expenses,
+        daily_net_profit=daily_net_profit,
+        monthly_expenses=monthly_expenses,
+        monthly_net_profit=monthly_net_profit,
+        monthly_net_margin=monthly_net_margin,
         recent_sales=recent_sales,
         upcoming_payments=upcoming_payments,
         daily_sales_labels=daily_sales_labels,
@@ -4034,9 +4057,138 @@ def pos_submit_order():
 
 
 
+# ── EXPENSES ────────────────────────────────────────────────────────────────
+
+@app.route("/expenses")
+@admin_required
+def expenses():
+    search      = request.args.get("search", "").strip()
+    category    = request.args.get("category", "").strip()
+    start_date  = request.args.get("start_date", "").strip()
+    end_date    = request.args.get("end_date", "").strip()
+
+    conn = get_connection()
+    try:
+        query  = """
+            SELECT e.id, e.date, e.category, e.description, e.amount, e.created_at,
+                   u.username as added_by_name
+            FROM expenses e
+            LEFT JOIN users u ON e.added_by = u.id
+            WHERE 1=1
+        """
+        params = []
+        if search:
+            query += " AND (e.description LIKE ? OR e.category LIKE ?)"
+            params.extend([f"%{search}%", f"%{search}%"])
+        if category:
+            query += " AND e.category = ?"
+            params.append(category)
+        if start_date:
+            query += " AND e.date >= ?"
+            params.append(start_date)
+        if end_date:
+            query += " AND e.date <= ?"
+            params.append(end_date)
+        query += " ORDER BY e.date DESC, e.id DESC"
+
+        rows = [dict(r) for r in conn.execute(query, params).fetchall()]
+        total = sum(r["amount"] for r in rows)
+
+        # All distinct categories for the filter dropdown + autocomplete
+        categories = [r[0] for r in conn.execute(
+            "SELECT DISTINCT category FROM expenses ORDER BY category COLLATE NOCASE"
+        ).fetchall()]
+
+    finally:
+        conn.close()
+
+    return render_template(
+        "expenses.html",
+        expenses=rows,
+        total=total,
+        categories=categories,
+        filters={"search": search, "category": category,
+                 "start_date": start_date, "end_date": end_date},
+    )
+
+
+@app.route("/expenses/add", methods=["POST"])
+@admin_required
+def expenses_add():
+    date_val    = request.form.get("date", "").strip()
+    category    = request.form.get("category", "").strip()
+    description = request.form.get("description", "").strip()
+    amount_str  = request.form.get("amount", "0").strip()
+    try:
+        amount = float(amount_str)
+    except ValueError:
+        flash("Invalid amount.", "danger")
+        return redirect(url_for("expenses"))
+
+    if not date_val or not category or amount <= 0:
+        flash("Date, category and a positive amount are required.", "danger")
+        return redirect(url_for("expenses"))
+
+    conn = get_connection()
+    try:
+        conn.execute(
+            "INSERT INTO expenses (date, category, description, amount, added_by) VALUES (?, ?, ?, ?, ?)",
+            (date_val, category, description, amount, current_user.id),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+    flash("Expense added successfully.", "success")
+    return redirect(url_for("expenses"))
+
+
+@app.route("/expenses/edit/<int:expense_id>", methods=["POST"])
+@admin_required
+def expenses_edit(expense_id):
+    date_val    = request.form.get("date", "").strip()
+    category    = request.form.get("category", "").strip()
+    description = request.form.get("description", "").strip()
+    amount_str  = request.form.get("amount", "0").strip()
+    try:
+        amount = float(amount_str)
+    except ValueError:
+        flash("Invalid amount.", "danger")
+        return redirect(url_for("expenses"))
+
+    if not date_val or not category or amount <= 0:
+        flash("Date, category and a positive amount are required.", "danger")
+        return redirect(url_for("expenses"))
+
+    conn = get_connection()
+    try:
+        conn.execute(
+            "UPDATE expenses SET date=?, category=?, description=?, amount=? WHERE id=?",
+            (date_val, category, description, amount, expense_id),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+    flash("Expense updated.", "success")
+    return redirect(url_for("expenses"))
+
+
+@app.route("/expenses/delete/<int:expense_id>", methods=["POST"])
+@admin_required
+def expenses_delete(expense_id):
+    conn = get_connection()
+    try:
+        conn.execute("DELETE FROM expenses WHERE id=?", (expense_id,))
+        conn.commit()
+    finally:
+        conn.close()
+    flash("Expense deleted.", "success")
+    return redirect(url_for("expenses"))
+
+
 @app.route("/purchases")
 @login_required
 def purchases():
+
     search = request.args.get('search', '').strip()
     supplier_id = request.args.get('supplier_id', '')
     product_id = request.args.get('product_id', '')
