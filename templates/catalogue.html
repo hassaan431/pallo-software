@@ -291,7 +291,7 @@
       <div class="cart-header">
         <span>Current Order</span>
         <div>
-          <button class="clear-cart" id="clearCartBtn">Clear</button>
+          <button class="btn btn-sm btn-danger" id="clearCartBtn" style="padding: 0.25rem 0.5rem; font-size: 0.85rem; margin-top: -4px;">Clear Cart</button>
         </div>
       </div>
       <div class="cart-items" id="cartItems">
@@ -414,6 +414,17 @@
     let brands = new Set();
     let cart = {}; // product_id -> qty
     let cartVariants = {}; // product_id -> variant string
+    
+    // Load saved cart from localStorage if available
+    try {
+      const savedCart = localStorage.getItem('pos_cart');
+      const savedVariants = localStorage.getItem('pos_cartVariants');
+      if (savedCart) cart = JSON.parse(savedCart);
+      if (savedVariants) cartVariants = JSON.parse(savedVariants);
+    } catch (e) {
+      console.error("Failed to load cart from localStorage", e);
+    }
+
     let customers = [];
     let selectedCustomerId = null;
 
@@ -582,6 +593,7 @@
     }
 
     document.getElementById('clearCartBtn').onclick = () => {
+      if (!confirm("Are you sure you want to clear the entire cart?")) return;
       cart = {};
       cartVariants = {};
       renderCart();
@@ -633,13 +645,24 @@
         cartItemsDiv.appendChild(item);
       }
       cartTotalSpan.textContent = money(total);
+      
       if(count > 0) {
         checkoutBtn.disabled = false;
         checkoutBtn.textContent = `Checkout (${count} items)`;
+        document.getElementById('clearCartBtn').style.display = 'block';
       } else {
         checkoutBtn.disabled = true;
         checkoutBtn.textContent = 'Checkout';
         cartItemsDiv.innerHTML = '<div style="color:var(--text-muted); text-align:center; padding-top:2rem;">Cart is empty</div>';
+        document.getElementById('clearCartBtn').style.display = 'none';
+      }
+      
+      // Save state to local storage
+      try {
+        localStorage.setItem('pos_cart', JSON.stringify(cart));
+        localStorage.setItem('pos_cartVariants', JSON.stringify(cartVariants));
+      } catch (e) {
+        console.error("Failed to save cart to localStorage", e);
       }
     }
 
@@ -812,6 +835,7 @@
         if(res.ok && data.ok) {
           window.open(`/sales/${data.sale_id}/invoice/pdf`, '_blank');
           cart = {};
+          cartVariants = {};
           renderCart();
           init(); // Refresh products to update stock
           checkoutModal.style.display = 'none';
