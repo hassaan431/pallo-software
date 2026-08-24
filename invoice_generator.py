@@ -526,10 +526,11 @@ def generate_pdf_from_data(sale: dict, customer: dict, sale_items: list, is_quot
     table_bottom_floor_regular = margin + 40
     table_bottom_floor_last = margin + totals_block_height + footer_height + 26
 
-    while idx < sale_rows_total:
+    totals_drawn = False
+    while idx < sale_rows_total or not totals_drawn:
         # Determine if this page is last by checking remaining height vs available height
         remaining = sale_rows_total - idx
-        remaining_height = sum(row_models[j]["row_height"] for j in range(idx, sale_rows_total))
+        remaining_height = sum(row_models[j]["row_height"] for j in range(idx, sale_rows_total)) if idx < sale_rows_total else 0
 
         # Draw header and get y cursor for table header bottom
         y_top = page_height - margin
@@ -538,8 +539,12 @@ def generate_pdf_from_data(sale: dict, customer: dict, sale_items: list, is_quot
         # y_cursor is table header bottom; rows go downward, so starting row bottom is below header
         y_cursor -= 2  # small spacing
 
-        table_bottom_floor = table_bottom_floor_last if remaining_height <= (y_cursor - table_bottom_floor_last) else table_bottom_floor_regular
-        page_is_last = table_bottom_floor == table_bottom_floor_last
+        if idx >= sale_rows_total:
+            table_bottom_floor = table_bottom_floor_last
+            page_is_last = True
+        else:
+            table_bottom_floor = table_bottom_floor_last if remaining_height <= (y_cursor - table_bottom_floor_last) else table_bottom_floor_regular
+            page_is_last = table_bottom_floor == table_bottom_floor_last
 
         # Draw item rows until floor reached
         while idx < sale_rows_total:
@@ -629,6 +634,7 @@ def generate_pdf_from_data(sale: dict, customer: dict, sale_items: list, is_quot
 
         # Totals + footer on last page only
         if page_is_last:
+            totals_drawn = True
             # Draw totals near bottom-right
             totals_right_x = x0 + usable_width
             totals_x = totals_right_x - 260
