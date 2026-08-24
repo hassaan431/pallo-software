@@ -4094,11 +4094,10 @@ def expenses():
         rows = [dict(r) for r in conn.execute(query, params).fetchall()]
         total = sum(r["amount"] for r in rows)
 
-        # All distinct categories for the filter dropdown + autocomplete
+        # All distinct categories entered already in the DB
         categories = [r[0] for r in conn.execute(
-            "SELECT DISTINCT category FROM expenses ORDER BY category COLLATE NOCASE"
+            "SELECT DISTINCT category FROM expenses WHERE category IS NOT NULL AND category != '' ORDER BY category COLLATE NOCASE"
         ).fetchall()]
-
     finally:
         conn.close()
 

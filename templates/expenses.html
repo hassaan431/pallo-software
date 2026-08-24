@@ -2,49 +2,56 @@
 {% block title %}Expenses — AK Distributors{% endblock %}
 {% block page_heading %}Expenses{% endblock %}
 {% block content %}
+<style>
+  .section-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    margin-bottom: 1.5rem;
+  }
+  .modal-field {
+    margin-bottom: 16px;
+  }
+  .modal-field label {
+    font-weight: bold;
+    font-size: 13px;
+    color: #374151;
+    display: block;
+    margin-bottom: 4px;
+  }
+  .modal-field .form-control {
+    width: 100%;
+    padding: 10px 12px;
+    border-radius: 6px;
+    border: 1px solid #d1d5db;
+    font-size: 14px;
+  }
+  .modal-field .form-control:focus {
+    outline: none;
+    border-color: #3b82f6;
+    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+  }
+  .required {
+    color: #dc2626;
+  }
+</style>
 
-<div class="panel" style="margin-bottom:1.5rem;">
-  <div class="panel-header" style="display:flex; justify-content:space-between; align-items:center;">
-    <h2 style="margin:0; font-size:1.1rem;">Expense Ledger</h2>
-    <button class="btn btn-primary" onclick="document.getElementById('addExpensePanel').style.display = document.getElementById('addExpensePanel').style.display === 'none' ? 'block' : 'none'">
-      + Add Expense
-    </button>
+<div class="section-header">
+  <h2 style="margin:0; font-size:1.25rem; font-weight:700;">Expense Ledger</h2>
+  <div>
+    <button type="button" class="btn btn-primary" id="openAddExpenseModal">+ Add Expense</button>
   </div>
+</div>
 
-  <div id="addExpensePanel" style="display:none; padding:1.25rem; border-top:1px solid var(--color-border); background:var(--color-bg-muted);">
-    <form method="POST" action="/expenses/add" style="display:flex; flex-wrap:wrap; gap:1rem; align-items:flex-end;">
-      <div style="flex:1; min-width:140px;">
-        <label class="form-label">Date *</label>
-        <input type="date" name="date" id="addDate" class="form-control" required>
-      </div>
-      <div style="flex:1.5; min-width:160px;">
-        <label class="form-label">Category *</label>
-        <input type="text" name="category" class="form-control" placeholder="e.g. Fuel, Salary, Rent..." required list="categoryList">
-        <datalist id="categoryList">
-          {% for c in categories %}<option value="{{ c }}">{% endfor %}
-        </datalist>
-      </div>
-      <div style="flex:2; min-width:200px;">
-        <label class="form-label">Description</label>
-        <input type="text" name="description" class="form-control" placeholder="Optional note">
-      </div>
-      <div style="flex:1; min-width:130px;">
-        <label class="form-label">Amount (PKR) *</label>
-        <input type="number" name="amount" class="form-control" step="0.01" min="0.01" required placeholder="0.00">
-      </div>
-      <div>
-        <button type="submit" class="btn btn-primary">Save</button>
-      </div>
-    </form>
-  </div>
-
-  <div class="panel-body" style="border-top:1px solid var(--color-border);">
-    <form method="GET" action="/expenses" style="display:flex; flex-wrap:wrap; gap:1rem; align-items:flex-end;">
-      <div style="flex:1.5; min-width:180px;">
+<section class="panel" style="margin-bottom: 1.5rem;">
+  <div class="panel-body" style="padding: 1rem 1.5rem;">
+    <form method="GET" action="/expenses" style="display: flex; gap: 1rem; flex-wrap: wrap; align-items: flex-end;">
+      <div style="flex: 1; min-width: 200px;">
         <label class="form-label">Search</label>
-        <input type="text" name="search" class="form-control" placeholder="Keyword..." value="{{ filters.search }}">
+        <input type="text" name="search" class="form-control" placeholder="Keyword in description or category..." value="{{ filters.search }}">
       </div>
-      <div style="flex:1; min-width:160px;">
+      <div style="flex: 1; min-width: 200px;">
         <label class="form-label">Category</label>
         <select name="category" class="form-control">
           <option value="">All Categories</option>
@@ -53,21 +60,21 @@
           {% endfor %}
         </select>
       </div>
-      <div style="flex:1; min-width:140px;">
+      <div style="flex: 1; min-width: 150px;">
         <label class="form-label">From Date</label>
         <input type="date" name="start_date" class="form-control" value="{{ filters.start_date }}">
       </div>
-      <div style="flex:1; min-width:140px;">
+      <div style="flex: 1; min-width: 150px;">
         <label class="form-label">To Date</label>
         <input type="date" name="end_date" class="form-control" value="{{ filters.end_date }}">
       </div>
-      <div style="display:flex; gap:0.5rem;">
+      <div>
         <button type="submit" class="btn btn-primary">Filter</button>
-        <a href="/expenses" class="btn btn-secondary">Clear</a>
+        <a href="/expenses" class="btn btn-outline" style="margin-left: 0.5rem;">Clear</a>
       </div>
     </form>
   </div>
-</div>
+</section>
 
 {% with messages = get_flashed_messages(with_categories=true) %}
   {% if messages %}
@@ -77,7 +84,7 @@
   {% endif %}
 {% endwith %}
 
-<div class="panel">
+<section class="panel">
   <div class="panel-body">
     <div class="table-wrap">
       <table class="data-table">
@@ -86,9 +93,8 @@
             <th>Date</th>
             <th>Category</th>
             <th>Description</th>
-            <th style="text-align:right;">Amount (PKR)</th>
-            <th>Added By</th>
-            <th style="text-align:center;">Actions</th>
+            <th style="text-align:right;">Amount ($)</th>
+            <th style="text-align:right;">Actions</th>
           </tr>
         </thead>
         <tbody>
@@ -101,85 +107,176 @@
                   {{ e.category }}
                 </span>
               </td>
-              <td style="color:var(--color-text-muted);">{{ e.description or '—' }}</td>
+              <td style="color:var(--text-muted);">{{ e.description or '—' }}</td>
               <td style="text-align:right; font-weight:600;">{{ "{:,.0f}".format(e.amount) }}</td>
-              <td style="color:var(--color-text-muted); font-size:0.9rem;">{{ e.added_by_name or '—' }}</td>
-              <td style="text-align:center;">
-                <button class="btn btn-secondary btn-sm"
-                        onclick="openEdit({{ e.id }}, '{{ e.date }}', '{{ e.category|e }}', '{{ (e.description or '')|e }}', {{ e.amount }})"
-                        style="font-size:0.8rem; padding:3px 10px;">Edit</button>
+              <td style="text-align:right; white-space:nowrap;">
+                <button type="button" class="btn btn-sm btn-outline" data-action="edit-expense" 
+                        data-expense='{{ {"id": e.id, "date": e.date, "category": e.category, "description": (e.description or ""), "amount": e.amount} | tojson | forceescape }}'>Edit</button>
                 <form method="POST" action="/expenses/delete/{{ e.id }}" style="display:inline;"
                       onsubmit="return confirm('Delete this expense?')">
-                  <button type="submit" class="btn btn-danger btn-sm" style="font-size:0.8rem; padding:3px 10px;">Delete</button>
+                  <button type="submit" class="btn btn-sm btn-danger">Delete</button>
                 </form>
               </td>
             </tr>
             {% endfor %}
           {% else %}
-            <tr><td colspan="6" style="text-align:center; color:var(--color-text-muted); padding:2rem;">No expenses found.</td></tr>
+            <tr><td colspan="5" style="text-align:center; color:var(--text-muted); padding:2rem;">No expenses found.</td></tr>
           {% endif %}
         </tbody>
         <tfoot>
-          <tr style="font-weight:700; border-top:2px solid var(--color-border);">
-            <td colspan="3" style="text-align:right; padding-right:1rem;">Total:</td>
-            <td style="text-align:right; color:var(--color-danger);">{{ "{:,.0f}".format(total) }}</td>
-            <td colspan="2"></td>
+          <tr style="font-weight:700; font-size:1.15rem; border-top:3px solid var(--color-border);">
+            <td colspan="3" style="text-align:right; padding:1.25rem 1rem 1.25rem 0;">Total:</td>
+            <td style="text-align:right; color:var(--color-danger); padding:1.25rem 1rem 1.25rem 0;">{{ "{:,.0f}".format(total) }}</td>
+            <td></td>
           </tr>
         </tfoot>
       </table>
     </div>
   </div>
+</section>
+
+<div id="addExpenseModal" class="modal-backdrop" aria-hidden="true">
+  <div class="modal" role="dialog" aria-modal="true" aria-label="Add Expense">
+    <div class="modal-header">
+      <h3>Add Expense</h3>
+      <button type="button" class="modal-close" data-close-modal="addExpenseModal" aria-label="Close">&times;</button>
+    </div>
+    <div class="modal-body">
+      <form id="addExpenseForm" method="POST" action="/expenses/add">
+        <div class="modal-field">
+          <label for="addDate">Date <span class="required">*</span></label>
+          <input type="date" name="date" id="addDate" class="form-control" required>
+        </div>
+        <div class="modal-field">
+          <label for="addCategory">Category <span class="required">*</span></label>
+          <input type="text" name="category" id="addCategory" class="form-control" placeholder="e.g. Fuel, Salary, Rent..." required list="categoryList">
+          <datalist id="categoryList">
+            {% for c in categories %}<option value="{{ c }}">{% endfor %}
+          </datalist>
+        </div>
+        <div class="modal-field">
+          <label for="addDescription">Description</label>
+          <input type="text" name="description" id="addDescription" class="form-control" placeholder="Optional note">
+        </div>
+        <div class="modal-field">
+          <label for="addAmount">Amount ($) <span class="required">*</span></label>
+          <input type="number" name="amount" id="addAmount" class="form-control" step="0.01" min="0.01" required placeholder="0.00">
+        </div>
+        <div class="inline-flex" style="justify-content: flex-end; gap: 0.65rem; margin-top: 0.25rem;">
+          <button type="button" class="btn btn-secondary" data-close-modal="addExpenseModal">Cancel</button>
+          <button type="submit" class="btn btn-primary">Save Expense</button>
+        </div>
+      </form>
+    </div>
+  </div>
 </div>
 
-<div id="editModal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.5); z-index:1000; align-items:center; justify-content:center;">
-  <div style="background:var(--color-bg-main); border-radius:12px; padding:2rem; width:90%; max-width:520px; box-shadow:var(--shadow-modal);">
-    <h3 style="margin-top:0;">Edit Expense</h3>
-    <form id="editForm" method="POST">
-      <div style="display:grid; gap:1rem;">
-        <div>
-          <label class="form-label">Date *</label>
+<div id="editExpenseModal" class="modal-backdrop" aria-hidden="true">
+  <div class="modal" role="dialog" aria-modal="true" aria-label="Edit Expense">
+    <div class="modal-header">
+      <h3>Edit Expense</h3>
+      <button type="button" class="modal-close" data-close-modal="editExpenseModal" aria-label="Close">&times;</button>
+    </div>
+    <div class="modal-body">
+      <form id="editExpenseForm" method="POST">
+        <div class="modal-field">
+          <label for="editDate">Date <span class="required">*</span></label>
           <input type="date" name="date" id="editDate" class="form-control" required>
         </div>
-        <div>
-          <label class="form-label">Category *</label>
+        <div class="modal-field">
+          <label for="editCategory">Category <span class="required">*</span></label>
           <input type="text" name="category" id="editCategory" class="form-control" required list="categoryList2">
           <datalist id="categoryList2">
             {% for c in categories %}<option value="{{ c }}">{% endfor %}
           </datalist>
         </div>
-        <div>
-          <label class="form-label">Description</label>
+        <div class="modal-field">
+          <label for="editDescription">Description</label>
           <input type="text" name="description" id="editDescription" class="form-control">
         </div>
-        <div>
-          <label class="form-label">Amount (PKR) *</label>
+        <div class="modal-field">
+          <label for="editAmount">Amount ($) <span class="required">*</span></label>
           <input type="number" name="amount" id="editAmount" class="form-control" step="0.01" min="0.01" required>
         </div>
-      </div>
-      <div style="display:flex; gap:1rem; margin-top:1.5rem; justify-content:flex-end;">
-        <button type="button" class="btn btn-secondary" onclick="closeEdit()">Cancel</button>
-        <button type="submit" class="btn btn-primary">Save Changes</button>
-      </div>
-    </form>
+        <div class="inline-flex" style="justify-content: flex-end; gap: 0.65rem; margin-top: 0.25rem;">
+          <button type="button" class="btn btn-secondary" data-close-modal="editExpenseModal">Cancel</button>
+          <button type="submit" class="btn btn-primary">Save Changes</button>
+        </div>
+      </form>
+    </div>
   </div>
 </div>
 
 <script>
+document.addEventListener('DOMContentLoaded', function() {
   document.getElementById('addDate').value = new Date().toISOString().split('T')[0];
 
-  function openEdit(id, date, category, description, amount) {
-    document.getElementById('editForm').action = '/expenses/edit/' + id;
-    document.getElementById('editDate').value = date;
-    document.getElementById('editCategory').value = category;
-    document.getElementById('editDescription').value = description;
-    document.getElementById('editAmount').value = amount;
-    document.getElementById('editModal').style.display = 'flex';
+  const addExpenseModal = document.getElementById('addExpenseModal');
+  const editExpenseModal = document.getElementById('editExpenseModal');
+  const openAddExpenseModalBtn = document.getElementById('openAddExpenseModal');
+  const closeModalButtons = document.querySelectorAll('[data-close-modal]');
+
+  function openModal(modalEl) {
+    if (!modalEl) return;
+    modalEl.classList.add('is-open');
+    modalEl.setAttribute('aria-hidden', 'false');
   }
-  function closeEdit() {
-    document.getElementById('editModal').style.display = 'none';
+
+  function closeModal(modalEl) {
+    if (!modalEl) return;
+    modalEl.classList.remove('is-open');
+    modalEl.setAttribute('aria-hidden', 'true');
   }
-  document.getElementById('editModal').addEventListener('click', function(e) {
-    if (e.target === this) closeEdit();
+
+  closeModalButtons.forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const targetId = btn.getAttribute('data-close-modal');
+      const modalEl = document.getElementById(targetId);
+      if (modalEl) closeModal(modalEl);
+    });
   });
+
+  [addExpenseModal, editExpenseModal].forEach((modalEl) => {
+    if (!modalEl) return;
+    modalEl.addEventListener('click', (e) => {
+      if (e.target === modalEl) closeModal(modalEl);
+    });
+  });
+
+  if (openAddExpenseModalBtn) {
+    openAddExpenseModalBtn.addEventListener('click', () => {
+      const form = document.getElementById('addExpenseForm');
+      if (form) {
+        const d = document.getElementById('addDate').value;
+        form.reset();
+        document.getElementById('addDate').value = d; // keep today's date
+      }
+      openModal(addExpenseModal);
+    });
+  }
+
+  document.body.addEventListener('click', (e) => {
+    const btn = e.target.closest('[data-action]');
+    if (!btn) return;
+
+    if (btn.getAttribute('data-action') === 'edit-expense') {
+      let expense = null;
+      try {
+        expense = JSON.parse(btn.getAttribute('data-expense'));
+      } catch (err) {
+        console.error('Failed to parse expense data:', err);
+        return;
+      }
+      
+      document.getElementById('editExpenseForm').action = '/expenses/edit/' + expense.id;
+      document.getElementById('editDate').value = expense.date || '';
+      document.getElementById('editCategory').value = expense.category || '';
+      document.getElementById('editDescription').value = expense.description || '';
+      document.getElementById('editAmount').value = expense.amount || '';
+      
+      openModal(editExpenseModal);
+    }
+  });
+});
 </script>
 {% endblock %}
