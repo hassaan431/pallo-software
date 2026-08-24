@@ -279,10 +279,8 @@ def dashboard():
                 s.remaining_amount
             FROM sales s
             LEFT JOIN customers c ON c.id = s.customer_id
-            WHERE s.remaining_amount > 0
-              AND s.due_date IS NOT NULL
-              AND s.due_date != ''
-            ORDER BY s.due_date ASC
+            WHERE s.remaining_amount > 0 OR s.status = 'unpaid'
+            ORDER BY COALESCE(NULLIF(s.due_date, ''), s.invoice_date) ASC
             LIMIT 10
             """
         ).fetchall()
