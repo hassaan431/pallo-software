@@ -297,9 +297,9 @@ def generate_pdf_from_data(sale: dict, customer: dict, sale_items: list, is_quot
     # We'll place table header at y_header_bottom and then set content_start_y = y_header_bottom - 0.
     # For simplicity, compute y positions dynamically per page during drawing.
 
-    def draw_header_and_table_header(cnv, inv_data, cust_data, y_top, is_first_page=True):
+    def draw_header_and_table_header(cnv, inv_data, cust_data, y_top, is_first_page=True, draw_table_header=True):
         """
-        Draws header, meta box, bill/ship box, and the table column header.
+        Draws header, meta box, bill/ship box, and optionally the table column header.
         Returns y_cursor at the top of the first items row (y value to start drawing next).
         """
         invoice_x_right = x0 + usable_width
@@ -457,6 +457,10 @@ def generate_pdf_from_data(sale: dict, customer: dict, sale_items: list, is_quot
             y_header_bottom = bill_box_bottom - table_header_height - 18
         else:
             y_header_bottom = y_top - table_header_height - 18
+
+        if not draw_table_header:
+            return y_header_bottom + table_header_height
+
         cnv.setFillColor(_VERY_LIGHT_GREY)
         cnv.setStrokeColor(colors.black)
         cnv.rect(x0, y_header_bottom, usable_width, table_header_height, stroke=0, fill=1)
@@ -535,7 +539,8 @@ def generate_pdf_from_data(sale: dict, customer: dict, sale_items: list, is_quot
         # Draw header and get y cursor for table header bottom
         y_top = page_height - margin
         is_first = (page_num == 1)
-        y_cursor = draw_header_and_table_header(cnv, inv_data, cust_data, y_top=y_top, is_first_page=is_first)
+        needs_table_header = (idx < sale_rows_total)
+        y_cursor = draw_header_and_table_header(cnv, inv_data, cust_data, y_top=y_top, is_first_page=is_first, draw_table_header=needs_table_header)
         # y_cursor is table header bottom; rows go downward, so starting row bottom is below header
         y_cursor -= 2  # small spacing
 
