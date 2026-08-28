@@ -100,17 +100,17 @@
         <tbody>
           {% if expenses %}
             {% for e in expenses %}
-            <tr>
+            <tr style="cursor: pointer;" onclick="if(!event.target.closest('form') && !event.target.closest('button')){ document.getElementById('edit-btn-{{ e.id }}').click(); }">
               <td>{{ e.date }}</td>
               <td>
                 <span style="background:var(--color-bg-muted); padding:2px 8px; border-radius:99px; font-size:0.85rem; border:1px solid var(--color-border);">
                   {{ e.category }}
                 </span>
               </td>
-              <td style="color:var(--text-muted);">{{ e.description or '—' }}</td>
+              <td style="color:var(--text-muted); max-width: 250px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="{{ e.description }}">{{ e.description or '—' }}</td>
               <td style="text-align:right; font-weight:600;">{{ "{:,.0f}".format(e.amount) }}</td>
               <td style="text-align:right; white-space:nowrap;">
-                <button type="button" class="btn btn-sm btn-outline" data-action="edit-expense" 
+                <button type="button" id="edit-btn-{{ e.id }}" class="btn btn-sm btn-outline" data-action="edit-expense" 
                         data-expense='{{ {"id": e.id, "date": e.date, "category": e.category, "description": (e.description or ""), "amount": e.amount} | tojson | forceescape }}'>Edit</button>
                 <form method="POST" action="/expenses/delete/{{ e.id }}" style="display:inline;"
                       onsubmit="return confirm('Delete this expense?')">
@@ -156,7 +156,7 @@
         </div>
         <div class="modal-field">
           <label for="addDescription">Description</label>
-          <input type="text" name="description" id="addDescription" class="form-control" placeholder="Optional note">
+          <textarea name="description" id="addDescription" class="form-control" placeholder="Optional note" rows="3" style="resize: vertical;"></textarea>
         </div>
         <div class="modal-field">
           <label for="addAmount">Amount ($) <span class="required">*</span></label>
@@ -192,7 +192,7 @@
         </div>
         <div class="modal-field">
           <label for="editDescription">Description</label>
-          <input type="text" name="description" id="editDescription" class="form-control">
+          <textarea name="description" id="editDescription" class="form-control" rows="3" style="resize: vertical;"></textarea>
         </div>
         <div class="modal-field">
           <label for="editAmount">Amount ($) <span class="required">*</span></label>
