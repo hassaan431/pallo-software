@@ -102,6 +102,10 @@
             <span class="nav-emoji" aria-hidden="true">📱</span>
             <span class="nav-label">POS Catalogue</span>
           </a>
+          <a href="{{ url_for('public_bp.home') }}" target="_blank">
+            <span class="nav-emoji" aria-hidden="true">🌐</span>
+            <span class="nav-label">Public Website</span>
+          </a>
         </nav>
       </div>
 
@@ -119,7 +123,11 @@
     <div class="main-wrap">
       <header class="topbar">
         <h1 class="topbar-title">{% block page_heading %}Dashboard{% endblock %}</h1>
-        <div style="display: flex; align-items: center; gap: 1.5rem;">
+        <div style="display: flex; align-items: center; gap: 1rem;">
+          <a href="{{ url_for('public_bp.home') }}" target="_blank" style="display: inline-flex; align-items: center; gap: 0.4rem; padding: 0.35rem 0.75rem; border: 1px solid var(--color-border); border-radius: 6px; background: #ffffff; color: var(--color-text-muted); text-decoration: none; font-size: 0.85rem; font-weight: 600; transition: all 0.15s ease;" title="View Public Website">
+            <span>🌐</span>
+            <span>View Website</span>
+          </a>
           <button id="privacyModeToggle" style="background: none; border: none; font-size: 1.5rem; cursor: pointer; padding: 0.25rem;" title="Toggle Privacy Mode">
             👁️
           </button>
