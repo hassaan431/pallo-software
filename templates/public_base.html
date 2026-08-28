@@ -8,22 +8,22 @@
     <!-- Google Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Outfit:wght@500;700;800&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Playfair+Display:wght@500;700;800&display=swap" rel="stylesheet">
     <link rel="icon" type="image/x-icon" href="{{ url_for('static', filename='favicon.ico') }}">
     <link rel="shortcut icon" type="image/x-icon" href="{{ url_for('static', filename='favicon.ico') }}">
     <style>
         :root {
-            --bg-main: #ffffff;
-            --bg-alt: #f8f9fb;
-            --bg-dark: #0f172a;
+            --bg-main: #faf9f6;
+            --bg-alt: #f3f1eb;
+            --bg-dark: #2d4a22;
             --bg-card: #ffffff;
-            --text-main: #0f172a;
-            --text-muted: #64748b;
+            --text-main: #1c1917;
+            --text-muted: #57534e;
             --text-light: #ffffff;
-            --accent: #10b981;
-            --accent-hover: #059669;
-            --border: #e2e8f0;
-            --border-heavy: #cbd5e1;
+            --accent: #4d7c38;
+            --accent-hover: #3a5e2a;
+            --border: #e7e5df;
+            --border-heavy: #d6d3c9;
         }
         body {
             margin: 0;
@@ -35,7 +35,7 @@
             min-height: 100vh;
         }
         h1, h2, h3, h4, h5, h6, .brand-font {
-            font-family: 'Outfit', sans-serif;
+            font-family: 'Playfair Display', serif;
         }
         .site-header {
             display: flex;
@@ -102,7 +102,7 @@
         }
         footer {
             padding: 4rem 5%;
-            background: linear-gradient(135deg, rgba(15, 23, 42, 0.9) 0%, rgba(16, 185, 129, 0.5) 100%), url("{{ url_for('static', filename='images/hero_bg.png') }}") center/cover no-repeat;
+            background: linear-gradient(135deg, rgba(45, 74, 34, 0.95) 0%, rgba(77, 124, 56, 0.8) 100%), url("{{ url_for('static', filename='images/hero_bg.png') }}") center/cover no-repeat;
             border-top: none;
             color: var(--text-light);
             font-size: 0.875rem;

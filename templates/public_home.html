@@ -33,7 +33,7 @@
         letter-spacing: -0.02em;
     }
     .hero h1 span {
-        color: #34d399; /* Lighter emerald for contrast */
+        color: #34d399;
     }
     .hero p {
         font-size: 1.25rem;
@@ -115,15 +115,15 @@
         content: '';
         position: absolute;
         inset: 0;
-        background: radial-gradient(circle at center, rgba(16, 185, 129, 0.1) 0%, transparent 70%);
+        background: radial-gradient(circle at center, rgba(77, 124, 56, 0.05) 0%, transparent 70%);
         opacity: 0;
         transition: opacity 0.3s;
     }
     .brand-card:hover {
-        transform: translateY(-4px);
-        background: var(--card-bg);
-        border-color: var(--border-heavy);
-        box-shadow: 0 12px 24px -4px rgba(15, 23, 42, 0.08);
+        transform: scale(1.02);
+        background: var(--bg-card);
+        border-color: var(--accent);
+        box-shadow: 0 10px 30px -10px rgba(28, 25, 23, 0.05);
     }
     .brand-card:hover::after {
         opacity: 1;
@@ -143,7 +143,7 @@
     .brand-name {
         position: relative;
         z-index: 2;
-        font-family: 'Outfit', sans-serif;
+        font-family: 'Playfair Display', serif;
     }
     
     @media (max-width: 768px) {
