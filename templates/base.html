@@ -34,7 +34,8 @@
   </style>
 </head>
 <body>
-  <div class="app-shell">
+  <div id="mobileOverlay" class="mobile-overlay"></div>
+  <div class="app-layout">
     <aside class="sidebar" style="display:flex; flex-direction:column; height:100vh;">
       <div
         class="sidebar-brand"
@@ -122,7 +123,12 @@
     </aside>
     <div class="main-wrap">
       <header class="topbar">
-        <h1 class="topbar-title">{% block page_heading %}Dashboard{% endblock %}</h1>
+        <div style="display: flex; align-items: center; gap: 0.5rem;">
+          <button id="mobileMenuBtn" class="mobile-menu-btn" title="Menu">
+            ☰
+          </button>
+          <h1 class="topbar-title">{% block page_heading %}Dashboard{% endblock %}</h1>
+        </div>
         <div style="display: flex; align-items: center; gap: 1rem;">
           <a href="{{ url_for('public_bp.home') }}" target="_blank" style="display: inline-flex; align-items: center; gap: 0.4rem; padding: 0.35rem 0.75rem; border: 1px solid var(--color-border); border-radius: 6px; background: #ffffff; color: var(--color-text-muted); text-decoration: none; font-size: 0.85rem; font-weight: 600; transition: all 0.15s ease;" title="View Public Website">
             <span>🌐</span>
@@ -145,6 +151,19 @@
   
   <script>
     document.addEventListener('DOMContentLoaded', () => {
+      const mobileBtn = document.getElementById('mobileMenuBtn');
+      const sidebar = document.querySelector('.sidebar');
+      const overlay = document.getElementById('mobileOverlay');
+
+      if (mobileBtn && sidebar && overlay) {
+        function toggleMenu() {
+          sidebar.classList.toggle('is-open');
+          overlay.classList.toggle('is-active');
+        }
+        mobileBtn.addEventListener('click', toggleMenu);
+        overlay.addEventListener('click', toggleMenu);
+      }
+
       const toggleBtn = document.getElementById('privacyModeToggle');
       if (toggleBtn) {
         // Load preference
