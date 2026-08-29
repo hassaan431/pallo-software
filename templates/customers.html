@@ -118,8 +118,9 @@
 </div>
 
 <section class="panel">
-  <div class="panel-header">
+  <div class="panel-header" style="display: flex; justify-content: space-between; align-items: center; gap: 1rem; flex-wrap: wrap;">
     <h2>Customer List</h2>
+    <input type="text" id="customerSearch" class="form-control" placeholder="Search customers..." style="max-width: 300px;">
   </div>
   <div class="panel-body">
     <div class="table-wrap">
@@ -365,6 +366,18 @@
 
 <script>
 document.addEventListener('DOMContentLoaded', function() {
+  const searchInput = document.getElementById('customerSearch');
+  if (searchInput) {
+    searchInput.addEventListener('input', function() {
+      const term = this.value.toLowerCase();
+      const rows = document.querySelectorAll('.data-table tbody tr');
+      rows.forEach(row => {
+        if (row.querySelector('.empty-state')) return;
+        const text = row.textContent.toLowerCase();
+        row.style.display = text.includes(term) ? '' : 'none';
+      });
+    });
+  }
   const addCustomerModal = document.getElementById('addCustomerModal');
   const editCustomerModal = document.getElementById('editCustomerModal');
   const historyCustomerModal = document.getElementById('historyCustomerModal');
