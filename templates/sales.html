@@ -252,6 +252,17 @@
             <input class="form-control" type="date" id="invoiceDate" name="invoice_date" value="{% if edit_mode %}{{ edit_sale.invoice_date }}{% else %}{{ today }}{% endif %}" required>
           </div>
 
+          {% if current_user.role == 'admin' %}
+          <div class="form-group">
+            <label class="field-label" for="warehouseId">Warehouse</label>
+            <select class="form-control" id="warehouseId" name="warehouse_id">
+              {% for w in warehouses %}
+                <option value="{{ w.id }}" {% if edit_mode and edit_sale.warehouse_id == w.id %}selected{% endif %}>{{ w.name }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          {% endif %}
+
           <div class="form-group">
             <label class="field-label" for="dueDate">Due Date</label>
             <input class="form-control" type="date" id="dueDate" name="due_date" value="{% if edit_mode %}{{ edit_sale.due_date or '' }}{% endif %}">
@@ -756,7 +767,11 @@
   }
 
   function fetchProductResults(q) {
-    const url = '/products/search?q=' + encodeURIComponent(q);
+    let url = '/products/search?q=' + encodeURIComponent(q);
+    const warehouseSelect = document.getElementById('warehouseId');
+    if (warehouseSelect) {
+      url += '&warehouse_id=' + warehouseSelect.value;
+    }
     return fetch(url, { credentials: 'same-origin', cache: 'no-store' })
       .then((res) => res.json());
   }

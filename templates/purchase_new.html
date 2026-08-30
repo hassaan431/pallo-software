@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% block title %}{% if purchase %}Edit Shipment{% else %}Receive Shipment{% endif %} - AK Distributors{% endblock %}
 {% block page_heading %}{% if purchase %}Edit Shipment{% else %}Receive Shipment / Add Inventory{% endif %}{% endblock %}
 {% block content %}
 <div class="page-header" style="margin-bottom: 1.5rem;">
@@ -34,9 +35,20 @@
             </select>
         </div>
         <div>
-            <label class="form-label" for="purchase_date">Date Received <span style="color:var(--danger-text)">*</span></label>
-            <input type="date" id="purchase_date" class="form-control" value="{{ purchase.purchase_date if purchase else '' }}" required>
+            <div class="form-group">
+            <label for="purchase_date" class="form-label">Date Received <span style="color:var(--danger-text)">*</span></label>
+            <input type="date" class="form-control" id="purchase_date" value="{{ purchase.purchase_date if purchase else '' }}" required>
           </div>
+          
+          <div class="form-group" style="margin-top: 1rem;">
+            <label for="warehouse_id" class="form-label">Warehouse <span style="color:var(--danger-text)">*</span></label>
+            <select class="form-control" id="warehouse_id" required>
+              {% for w in warehouses %}
+                <option value="{{ w.id }}" {% if purchase and purchase.warehouse_id == w.id %}selected{% endif %}>{{ w.name }}</option>
+              {% endfor %}
+            </select>
+          </div>
+        </div>
         <div>
             <label class="form-label" for="reference_number">Reference / Invoice #</label>
             <input type="text" id="reference_number" class="form-control" value="{{ purchase.reference_number if purchase else '' }}" placeholder="e.g. INV-2023-001">
@@ -276,6 +288,7 @@
 
     const payload = {
       supplier_id: document.getElementById('supplier_id').value,
+      warehouse_id: document.getElementById('warehouse_id').value,
       purchase_date: document.getElementById('purchase_date').value,
       reference_number: document.getElementById('reference_number').value,
       payment_amount: document.getElementById('payment_amount').value,

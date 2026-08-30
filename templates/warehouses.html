@@ -1,0 +1,145 @@
+{% extends "base.html" %}
+
+{% block title %}Manage Warehouses | AK Distributors{% endblock %}
+{% block page_heading %}Manage Warehouses{% endblock %}
+
+{% block content %}
+<section class="panel">
+  <div class="panel-header">
+    <h2>Warehouses</h2>
+    <div style="display: flex; gap: 0.5rem; align-items: center;">
+      <button class="btn btn-primary" data-open-modal="addWarehouseModal">+ Add Warehouse</button>
+    </div>
+  </div>
+  <div class="panel-body">
+    <div class="table-wrap">
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th>ID</th>
+            <th>Name</th>
+            <th>Location</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for w in warehouses %}
+          <tr>
+            <td>{{ w.id }}</td>
+            <td style="font-weight: 500;">{{ w.name }}</td>
+            <td>{{ w.location or 'N/A' }}</td>
+            <td>
+              <button class="btn btn-secondary btn-sm" onclick="openEditWarehouse({{ w.id }}, '{{ w.name|e }}', '{{ w.location|e }}')">Edit</button>
+            </td>
+          </tr>
+          {% else %}
+          <tr>
+            <td colspan="4" class="text-center">No warehouses found.</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</section>
+
+<!-- Add Warehouse Modal -->
+<div id="addWarehouseModal" class="modal-backdrop" aria-hidden="true">
+  <div class="modal" role="dialog" aria-modal="true" aria-label="Add Warehouse">
+    <div class="modal-header">
+      <h3>Add New Warehouse</h3>
+      <button type="button" class="modal-close" data-close-modal="addWarehouseModal" aria-label="Close">&times;</button>
+    </div>
+    <div class="modal-body">
+      <form action="{{ url_for('warehouses_add') }}" method="POST">
+        <div class="modal-field">
+          <label for="newName">Name</label>
+          <input type="text" class="form-control" id="newName" name="name" required>
+        </div>
+        <div class="modal-field">
+          <label for="newLocation">Location</label>
+          <input type="text" class="form-control" id="newLocation" name="location">
+        </div>
+        
+        <div class="modal-actions" style="margin-top: 1.5rem; display: flex; justify-content: flex-end; gap: 0.75rem;">
+          <button type="button" class="btn btn-secondary" data-close-modal="addWarehouseModal">Cancel</button>
+          <button type="submit" class="btn btn-primary">Create Warehouse</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<!-- Edit Warehouse Modal -->
+<div id="editWarehouseModal" class="modal-backdrop" aria-hidden="true">
+  <div class="modal" role="dialog" aria-modal="true" aria-label="Edit Warehouse">
+    <div class="modal-header">
+      <h3>Edit Warehouse</h3>
+      <button type="button" class="modal-close" data-close-modal="editWarehouseModal" aria-label="Close">&times;</button>
+    </div>
+    <div class="modal-body">
+      <form id="editWarehouseForm" method="POST">
+        <div class="modal-field">
+          <label for="editName">Name</label>
+          <input type="text" class="form-control" id="editName" name="name" required>
+        </div>
+        <div class="modal-field">
+          <label for="editLocation">Location</label>
+          <input type="text" class="form-control" id="editLocation" name="location">
+        </div>
+        
+        <div class="modal-actions" style="margin-top: 1.5rem; display: flex; justify-content: flex-end; gap: 0.75rem;">
+          <button type="button" class="btn btn-secondary" data-close-modal="editWarehouseModal">Cancel</button>
+          <button type="submit" class="btn btn-primary">Save Changes</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<script>
+  // Modal Handling
+  const modals = document.querySelectorAll('.modal-backdrop');
+  const openButtons = document.querySelectorAll('[data-open-modal]');
+  const closeButtons = document.querySelectorAll('[data-close-modal]');
+
+  function openModal(id) {
+    const modal = document.getElementById(id);
+    if (modal) {
+      modal.classList.add('is-open');
+      modal.setAttribute('aria-hidden', 'false');
+    }
+  }
+
+  function closeModal(id) {
+    const modal = document.getElementById(id);
+    if (modal) {
+      modal.classList.remove('is-open');
+      modal.setAttribute('aria-hidden', 'true');
+    }
+  }
+
+  openButtons.forEach(btn => {
+    btn.addEventListener('click', () => openModal(btn.dataset.openModal));
+  });
+
+  closeButtons.forEach(btn => {
+    btn.addEventListener('click', () => closeModal(btn.dataset.closeModal));
+  });
+
+  modals.forEach(modal => {
+    modal.addEventListener('click', (e) => {
+      if (e.target === modal) {
+        closeModal(modal.id);
+      }
+    });
+  });
+
+  function openEditWarehouse(id, name, location) {
+    document.getElementById('editWarehouseForm').action = `/warehouses/edit/${id}`;
+    document.getElementById('editName').value = name;
+    document.getElementById('editLocation').value = location;
+    openModal('editWarehouseModal');
+  }
+</script>
+{% endblock %}

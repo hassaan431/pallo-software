@@ -176,6 +176,14 @@
   <div class="panel-header" style="display: flex; justify-content: space-between; align-items: center;">
     <h2 style="margin: 0;">Products</h2>
     <form action="/inventory" method="GET" style="display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap;">
+      {% if current_user.role == "admin" %}
+      <select name="warehouse_id" class="form-control" style="width: auto; padding: 0.25rem 0.5rem; height: auto;" onchange="this.form.submit()">
+        <option value="">All Warehouses</option>
+        {% for w in warehouses %}
+          <option value="{{ w.id }}" {% if current_warehouse_id == w.id %}selected{% endif %}>{{ w.name }}</option>
+        {% endfor %}
+      </select>
+      {% endif %}
       <input type="date" name="date_from" class="form-control" value="{{ request.args.get('date_from', '') }}" title="Date From" style="width: auto; padding: 0.25rem 0.5rem; height: auto;" onchange="this.form.submit()">
       <input type="date" name="date_to" class="form-control" value="{{ request.args.get('date_to', '') }}" title="Date To" style="width: auto; padding: 0.25rem 0.5rem; height: auto;" onchange="this.form.submit()">
       {% if request.args.get('date_from') or request.args.get('date_to') %}
@@ -282,7 +290,7 @@
                 <span style="color: #6b7280;">-</span>
               {% endif %}
             </td>
-            <td>{{ qty_int }}</td>
+            <td>{{ qty_int }} <button class="btn btn-sm btn-outline-primary" style="padding: 2px 5px; font-size: 10px; margin-left: 5px;" onclick="openAdjustStockModal({{ p.id }}, '{{ p.name|e|replace("'", "\\'") }}', {{ qty_int }})" title="Adjust Stock"><i class="fas fa-edit"></i></button></td>
             <td class="sensitive-data" style="font-weight: 600; color: #1e293b;">${{ '%.2f' % ((p.stock_quantity|default(0)|float) * (p.cost_price|default(0)|float)) }}</td>
             <td>
 
@@ -453,9 +461,9 @@
           </div>
         </div>
 
-        <div class="modal-field" style="display: none;">
-          <label for="addStockQuantity">Stock Quantity</label>
-          <input class="form-control" type="hidden" step="any" min="0" id="addStockQuantity" name="stock_quantity" value="0">
+        <div class="modal-field">
+          <label for="addStockQuantity">Initial Stock Quantity</label>
+          <input class="form-control" type="number" step="any" min="0" id="addStockQuantity" name="stock_quantity" value="0">
         </div>
 
         <div class="modal-field" style="display: flex; align-items: center; gap: 0.5rem; margin-top: 1rem;">
@@ -477,7 +485,38 @@
   </div>
 </div>
 
-<!-- Edit Product Modal -->
+
+  <!-- Adjust Stock Modal -->
+  <div id="adjustStockModal" class="modal-backdrop" aria-hidden="true">
+    <div class="modal" role="dialog" aria-modal="true" aria-label="Adjust Stock">
+      <div class="modal-header">
+        <h3>Adjust Stock: <span id="adjustStockProductName"></span></h3>
+        <button class="modal-close" onclick="closeModal(document.getElementById('adjustStockModal'))">&times;</button>
+      </div>
+      <div class="modal-body">
+        <form id="adjustStockForm" method="post" action="/inventory/adjust_stock">
+          <input type="hidden" id="adjustStockProductId" name="product_id">
+          <div class="modal-field">
+            <label>Current Stock</label>
+            <input type="number" class="form-control" id="adjustStockCurrent" readonly style="background: #f3f4f6;">
+          </div>
+          <div class="modal-field">
+            <label for="adjustStockNew">New Stock Quantity</label>
+            <input type="number" step="any" class="form-control" id="adjustStockNew" name="new_stock" required>
+          </div>
+          <div class="modal-field" style="display:none;">
+            <input type="hidden" name="warehouse_id" value="{{ current_warehouse_id }}">
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="btn" onclick="closeModal(document.getElementById('adjustStockModal'))">Cancel</button>
+            <button type="submit" class="btn btn-primary">Save Adjustment</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- Edit Product Modal -->
 <div id="editProductModal" class="modal-backdrop" aria-hidden="true">
   <div class="modal" role="dialog" aria-modal="true" aria-label="Edit Product">
     <div class="modal-header">
@@ -579,12 +618,16 @@
           </div>
         </div>
 
-        <div class="modal-field">
-          <label for="editStockQuantity">Stock Quantity</label>
-          <input class="form-control" type="number" step="any" min="0" id="editStockQuantity" name="stock_quantity" required>
-          <small style="color: var(--text-muted);">To add new stock from a supplier, use the <a href="/purchases/new">Receive Shipment</a> feature.</small>
-        </div>
 
+
+
+        <div class="modal-field" style="display: flex; justify-content: space-between; align-items: center; background: #f8fafc; padding: 10px; border-radius: 6px; border: 1px solid #e2e8f0; margin-top: 10px; margin-bottom: 10px;">
+          <div>
+            <span style="font-weight: 600; color: #475569;">Current Inventory:</span>
+            <span id="editModalCurrentStockDisplay" style="font-size: 1.1rem; font-weight: 700; color: #0f172a; margin-left: 10px;">0</span>
+          </div>
+          <button type="button" id="btnAdjustInventoryInEdit" class="btn btn-outline-primary" style="padding: 6px 12px; font-size: 13px;" onclick="openAdjustStockFromEdit(this)">Adjust Inventory</button>
+        </div>
         <div class="modal-field" style="display: flex; align-items: center; gap: 0.5rem; margin-top: 1rem;">
           <input type="checkbox" id="editIsPublic" name="is_public" value="1" style="width: auto; height: auto;">
           <label for="editIsPublic" style="margin: 0; cursor: pointer;">Show on Public Website</label>
@@ -623,6 +666,7 @@
               <th>New</th>
               <th>Ref</th>
               <th>Supplier</th>
+              <th>Warehouse</th>
             </tr>
           </thead>
           <tbody id="historyTbody"></tbody>
@@ -681,6 +725,30 @@
   function openImagePreview(url) {
     document.getElementById('imagePreviewImg').src = url;
     document.getElementById('imagePreviewModal').style.display = 'flex';
+  }
+
+  
+  
+  function openAdjustStockFromEdit(btn) {
+    try {
+      const id = btn.getAttribute('data-id');
+      const name = btn.getAttribute('data-name');
+      const stock = btn.getAttribute('data-stock');
+      closeModal(document.getElementById('editProductModal'));
+      setTimeout(() => {
+        openAdjustStockModal(id, name, stock);
+      }, 100);
+    } catch(err) {
+      alert("Error opening modal: " + err.message);
+    }
+  }
+
+  function openAdjustStockModal(id, name, currentStock) {
+    document.getElementById('adjustStockProductId').value = id;
+    document.getElementById('adjustStockProductName').textContent = name;
+    document.getElementById('adjustStockCurrent').value = currentStock;
+    document.getElementById('adjustStockNew').value = currentStock;
+    openModal(document.getElementById('adjustStockModal'));
   }
 
   function filterProductsTable() {
@@ -1129,7 +1197,7 @@
       document.getElementById('editUnitSelect').value = unitVal;
       document.getElementById('editCostPrice').value = costVal;
       document.getElementById('editSellingPrice').value = sellingVal;
-      document.getElementById('editStockQuantity').value = stockVal;
+// document.getElementById('editStockQuantity').value = stockVal;
       
       calcProfitMargin(document.getElementById('editCostPrice'), document.getElementById('editSellingPrice'), document.getElementById('editProfitMarginDisplay'), document.getElementById('editProfitAmountDisplay'));
 
@@ -1168,10 +1236,10 @@
       if (unitEl) unitEl.value = 'Each';
       const costEl = document.getElementById('editCostPrice');
       const sellEl = document.getElementById('editSellingPrice');
-      const stockEl = document.getElementById('editStockQuantity');
-      if (costEl) costEl.value = '';
-      if (sellEl) sellEl.value = '';
-      if (stockEl) stockEl.value = '';
+      // const stockEl = document.getElementById('editStockQuantity');
+      // if (stockEl) {
+      //   stockEl.value = (stockEl.value || 0).toString();
+      // }if (sellEl) sellEl.value = '';
       document.getElementById('editProfitMarginDisplay').value = '';
       document.getElementById('editProfitAmountDisplay').value = '';
 
@@ -1345,7 +1413,14 @@
         document.getElementById('editUnitQuantity').value = editBtn.getAttribute('data-unit-quantity') || 0;
         document.getElementById('editCostPrice').value = editBtn.getAttribute('data-cost-price') || 0;
         document.getElementById('editSellingPrice').value = editBtn.getAttribute('data-selling-price') || 0;
-        document.getElementById('editStockQuantity').value = editBtn.getAttribute('data-stock-quantity') || 0;
+        
+        const stockQty = editBtn.getAttribute('data-stock-quantity') || 0;
+        document.getElementById('editModalCurrentStockDisplay').textContent = stockQty;
+        const adjustBtn = document.getElementById('btnAdjustInventoryInEdit');
+        adjustBtn.setAttribute('data-id', productId);
+        adjustBtn.setAttribute('data-name', editBtn.getAttribute('data-name'));
+        adjustBtn.setAttribute('data-stock', stockQty);
+
         
         // Update unit quantity display
         updateUnitQuantityDisplay('editUnitSelect', 'editUnitQuantity', 'editUnitDisplay');
@@ -1377,7 +1452,7 @@
         document.getElementById('historyProductName').textContent = `History: ${productName}`;
         
         const historyTbody = document.getElementById('historyTbody');
-        historyTbody.innerHTML = '<tr><th colspan="7" class="empty-state">Loading...</th></tr>';
+        historyTbody.innerHTML = '<tr><th colspan="8" class="empty-state">Loading...</th></tr>';
         openModal(document.getElementById('historyProductModal'));
         
         try {
@@ -1385,7 +1460,7 @@
           const data = await res.json();
           if (data.ok) {
             if (data.history.length === 0) {
-              historyTbody.innerHTML = '<tr><th colspan="7" class="empty-state">No history available for this product.</th></tr>';
+              historyTbody.innerHTML = '<tr><th colspan="8" class="empty-state">No history available for this product.</th></tr>';
             } else {
               historyTbody.innerHTML = data.history.map(h => {
                 let badge = '';
@@ -1403,14 +1478,15 @@
                   <td>${h.new_stock}</td>
                   <td>${h.reference || '-'}</td>
                   <td>${h.supplier_name || '-'}</td>
+                  <td>${h.warehouse_name || '-'}</td>
                 </tr>`;
               }).join('');
             }
           } else {
-            historyTbody.innerHTML = `<tr><th colspan="7" class="empty-state">Error: ${data.error}</th></tr>`;
+            historyTbody.innerHTML = `<tr><th colspan="8" class="empty-state">Error: ${data.error}</th></tr>`;
           }
         } catch (err) {
-            historyTbody.innerHTML = `<tr><th colspan="7" class="empty-state">Failed to load history.</th></tr>`;
+            historyTbody.innerHTML = `<tr><th colspan="8" class="empty-state">Failed to load history.</th></tr>`;
         }
         return;
       }

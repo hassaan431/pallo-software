@@ -1,5 +1,6 @@
 {% extends "base.html" %}
-{% block page_heading %}Shipments & Purchases{% endblock %}
+{% block title %}Purchases (Shipments) - AK Distributors{% endblock %}
+{% block page_heading %}Purchases (Shipments){% endblock %}
 {% block content %}
 <link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
 <style>
@@ -97,6 +98,7 @@
             <th>Date</th>
             <th>Supplier</th>
             <th>Reference #</th>
+            <th>Warehouse</th>
             <th style="text-align: right;">Total</th>
             <th style="text-align: right;">Paid</th>
             <th style="text-align: right;">Balance</th>
@@ -114,6 +116,7 @@
             <td>{{ p.purchase_date }}</td>
             <td style="font-weight: 500;">{{ p.supplier_name or 'Unknown' }}</td>
             <td>{{ p.reference_number }}</td>
+            <td style="color: #6b7280; font-size: 0.9em;">{{ p.warehouse_name or "Main Warehouse" }}</td>
             <td style="text-align: right;">${{ "%.2f"|format(p.grand_total) }}</td>
             <td style="text-align: right; color: var(--success-text);">${{ "%.2f"|format(p.amount_paid) }}</td>
             <td style="text-align: right; color: var(--danger-text); font-weight: 500;">${{ "%.2f"|format(p.remaining_amount) }}</td>

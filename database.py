@@ -346,7 +346,7 @@ def get_user_by_id(user_id: int):
     conn = get_connection()
     try:
         cur = conn.execute(
-            "SELECT id, username, role, is_active FROM users WHERE id = ?", (user_id,)
+            "SELECT id, username, role, is_active, warehouse_id FROM users WHERE id = ?", (user_id,)
         )
         return cur.fetchone()
     finally:
@@ -357,7 +357,7 @@ def get_user_by_username(username: str):
     conn = get_connection()
     try:
         cur = conn.execute(
-            "SELECT id, username, password_hash, role, is_active FROM users WHERE username = ?",
+            "SELECT id, username, password_hash, role, is_active, warehouse_id FROM users WHERE username = ?",
             (username,),
         )
         return cur.fetchone()

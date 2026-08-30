@@ -2,7 +2,18 @@
 {% block title %}Dashboard — AK Distributors{% endblock %}
 {% block page_heading %}Dashboard{% endblock %}
 {% block content %}
-<div style="display: flex; justify-content: flex-end; margin-bottom: 20px;">
+<div style="display: flex; justify-content: {% if current_user.role == 'admin' %}space-between{% else %}flex-end{% endif %}; margin-bottom: 20px;">
+  {% if current_user.role == 'admin' %}
+  <form method="get" action="{{ url_for('dashboard') }}" style="display: flex; gap: 10px; align-items: center;">
+    <label for="warehouse_id" style="font-weight: 600; font-size: 14px; margin-bottom: 0;">Warehouse:</label>
+    <select name="warehouse_id" id="warehouse_id" class="form-control" style="width: auto; padding: 4px 10px;" onchange="this.form.submit()">
+      <option value="">All Warehouses</option>
+      {% for w in warehouses %}
+        <option value="{{ w.id }}" {% if current_warehouse_id == w.id %}selected{% endif %}>{{ w.name }}</option>
+      {% endfor %}
+    </select>
+  </form>
+  {% endif %}
   <a href="{{ url_for('sales') }}" class="btn btn-primary" style="font-size: 14px; padding: 8px 20px; font-weight: 600;">Record Sale</a>
 </div>
 <div class="card-grid">

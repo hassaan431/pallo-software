@@ -90,11 +90,19 @@
             <span class="nav-emoji" aria-hidden="true">🧾</span>
             <span class="nav-label">Sales</span>
           </a>
+          <a href="{{ url_for('suppliers_page') }}" class="{% if request.endpoint == 'suppliers_page' %}is-active{% endif %}" title="Suppliers">
+            <span class="nav-emoji" aria-hidden="true">🏢</span>
+            <span class="nav-label">Suppliers</span>
+          </a>
+          <a href="{{ url_for('warehouses_list') }}" class="{% if request.endpoint == 'warehouses_list' %}is-active{% endif %}" title="Warehouses">
+            <span class="nav-emoji" aria-hidden="true">🏭</span>
+            <span class="nav-label">Warehouses</span>
+          </a>
           <a href="{{ url_for('reports') }}" class="{{ 'is-active' if request.endpoint == 'reports' else '' }}">
             <span class="nav-emoji" aria-hidden="true">📈</span>
             <span class="nav-label">Reports</span>
           </a>
-          <a href="{{ url_for('users_list') }}" class="{{ 'is-active' if request.endpoint == 'users_list' else '' }}">
+          <a href="{{ url_for('users_list') }}" class="{% if request.endpoint == 'users_list' %}is-active{% endif %}" title="Users">
             <span class="nav-emoji" aria-hidden="true">👤</span>
             <span class="nav-label">Users</span>
           </a>

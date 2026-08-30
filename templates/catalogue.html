@@ -58,6 +58,15 @@
       outline: none;
       font-size: 1rem;
     }
+    .warehouse-select {
+      padding: 0.6rem 1rem;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      outline: none;
+      font-size: 1rem;
+      background-color: white;
+      cursor: pointer;
+    }
     
     .categories {
       display: flex;
@@ -270,11 +279,19 @@
     <div class="catalogue-area">
       <div class="header">
         <h1>
-          <img src="/static/logos/AK_Distributors_Logo.png" style="height:40px; border-radius:50%;">
-          AK Distributors POS
+          <img src="/static/logos/AK_Distributors_Logo.png" alt="AK Logo" style="height: 30px;">
+          POS
         </h1>
         <div class="header-actions">
-          <input type="text" id="searchInput" class="search-bar" placeholder="Search products...">
+          {% if current_user.role == 'admin' %}
+          <select id="warehouseSelect" class="warehouse-select" onchange="loadProducts()">
+            {% for w in warehouses %}
+              <option value="{{ w.id }}">{{ w.name }}</option>
+            {% endfor %}
+          </select>
+          {% endif %}
+          <input type="text" class="search-bar" id="productSearch" placeholder="Search by name or code..." autocomplete="off">
+          <a href="{{ url_for('dashboard') }}" class="btn">Back to Dashboard</a>
           <a href="/logout" style="color:var(--text-muted); text-decoration:none; font-weight:600;">[Logout]</a>
         </div>
       </div>
@@ -445,10 +462,18 @@
     };
 
     // Initialize
+    async function loadProducts() {
+      try {
+        const prodRes = await fetch(`/products/list?warehouse_id=${document.getElementById("warehouseSelect") ? document.getElementById("warehouseSelect").value : ""}`).then(r => r.json());
+        products = prodRes;
+        renderProducts(products);
+      } catch (e) { console.error(e); }
+    }
+
     async function init() {
       try {
         const [prodRes, custRes] = await Promise.all([
-          fetch('/products/list').then(r => r.json()),
+          fetch(`/products/list?warehouse_id=${document.getElementById("warehouseSelect") ? document.getElementById("warehouseSelect").value : ""}`).then(r => r.json()),
           fetch('/customers/list').then(r => r.json())
         ]);
         products = prodRes;
@@ -790,6 +815,7 @@
         payment_type: paymentType.value,
         amount_paid: document.getElementById('amountPaid').value || 0,
         due_date: document.getElementById('custDueDate').value,
+        warehouse_id: document.getElementById('warehouseSelect') ? document.getElementById('warehouseSelect').value : null,
         items: Object.entries(cart).map(([id, qty]) => {
           const p = products.find(x => x.id == id);
           if (p && p.is_open) {

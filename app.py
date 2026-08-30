@@ -75,10 +75,11 @@ login_manager.login_message = None
 
 
 class User(UserMixin):
-    def __init__(self, db_id: int, username: str, role: str = 'admin'):
+    def __init__(self, db_id: int, username: str, role: str = 'admin', warehouse_id: int = None):
         self.id = db_id
         self.username = username
         self.role = role
+        self.warehouse_id = warehouse_id
 
 
 @login_manager.user_loader
@@ -96,7 +97,8 @@ def load_user(user_id):
     if is_active == 0:
         return None
     role = row["role"] if "role" in row.keys() else "admin"
-    return User(row["id"], row["username"], role)
+    warehouse_id = row["warehouse_id"] if "warehouse_id" in row.keys() else None
+    return User(row["id"], row["username"], role, warehouse_id)
 
 def admin_required(f):
     @wraps(f)
@@ -180,20 +182,55 @@ def handle_exception(e):
 @app.route("/dashboard")
 @admin_required
 def dashboard():
+    warehouse_id = request.args.get("warehouse_id")
+    if current_user.role != 'admin':
+        warehouse_id = current_user.warehouse_id
+        
     conn = get_connection()
     try:
-        # Get today's sales
+        warehouses = conn.execute("SELECT id, name FROM warehouses ORDER BY name").fetchall()
+        
+        # Build conditions
         today = date.today().isoformat()
+        now = date.today()
+        current_month = f"{now.month:02d}"
+        current_year = str(now.year)
+        
+        daily_cond = "invoice_date = ?"
+        daily_params = [today]
+        month_cond = "strftime('%m', invoice_date) = ? AND strftime('%Y', invoice_date) = ?"
+        month_params = [current_month, current_year]
+        
+        if warehouse_id:
+            daily_cond += " AND warehouse_id = ?"
+            daily_params.append(warehouse_id)
+            month_cond += " AND warehouse_id = ?"
+            month_params.append(warehouse_id)
+            
+        # Get today's sales
         daily_revenue_row = conn.execute(
-            'SELECT COALESCE(SUM(grand_total), 0) as total_revenue FROM sales WHERE invoice_date = ?', 
-            (today,)
+            f'SELECT COALESCE(SUM(grand_total), 0) as total_revenue FROM sales WHERE {daily_cond}', 
+            tuple(daily_params)
         ).fetchone()
+        
+        # For joins involving sales:
+        daily_cost_cond = "s.invoice_date = ?"
+        daily_cost_params = [today]
+        month_cost_cond = "strftime('%m', s.invoice_date) = ? AND strftime('%Y', s.invoice_date) = ?"
+        month_cost_params = [current_month, current_year]
+        
+        if warehouse_id:
+            daily_cost_cond += " AND s.warehouse_id = ?"
+            daily_cost_params.append(warehouse_id)
+            month_cost_cond += " AND s.warehouse_id = ?"
+            month_cost_params.append(warehouse_id)
+            
         daily_cost_row = conn.execute(
-            '''SELECT COALESCE(SUM(si.qty * COALESCE(si.packing_multiplier, 1.0) * si.cost_price), 0) as total_cost 
+            f'''SELECT COALESCE(SUM(si.qty * COALESCE(si.packing_multiplier, 1.0) * si.cost_price), 0) as total_cost 
                FROM sale_items si 
                JOIN sales s ON si.sale_id = s.id 
-               WHERE s.invoice_date = ?''', 
-            (today,)
+               WHERE {daily_cost_cond}''', 
+            tuple(daily_cost_params)
         ).fetchone()
         
         daily_revenue = float(daily_revenue_row["total_revenue"] or 0)
@@ -201,19 +238,16 @@ def dashboard():
         daily_profit = daily_revenue - daily_cost
         
         # Get monthly revenue and cost
-        now = date.today()
-        current_month = now.month
-        current_year = now.year
         monthly_revenue_row = conn.execute(
-            "SELECT COALESCE(SUM(grand_total), 0) as total_revenue FROM sales WHERE strftime('%m', invoice_date) = ? AND strftime('%Y', invoice_date) = ?",
-            (f"{current_month:02d}", str(current_year))
+            f"SELECT COALESCE(SUM(grand_total), 0) as total_revenue FROM sales WHERE {month_cond}",
+            tuple(month_params)
         ).fetchone()
         monthly_cost_row = conn.execute(
-            '''SELECT COALESCE(SUM(si.qty * COALESCE(si.packing_multiplier, 1.0) * si.cost_price), 0) as total_cost 
+            f'''SELECT COALESCE(SUM(si.qty * COALESCE(si.packing_multiplier, 1.0) * si.cost_price), 0) as total_cost 
                FROM sale_items si 
                JOIN sales s ON si.sale_id = s.id 
-               WHERE strftime('%m', s.invoice_date) = ? AND strftime('%Y', s.invoice_date) = ?''',
-            (f"{current_month:02d}", str(current_year))
+               WHERE {month_cost_cond}''',
+            tuple(month_cost_params)
         ).fetchone()
         
         monthly_revenue = float(monthly_revenue_row["total_revenue"] or 0)
@@ -232,16 +266,21 @@ def dashboard():
         # Get monthly expenses
         monthly_expenses_row = conn.execute(
             "SELECT COALESCE(SUM(amount), 0) as total FROM expenses WHERE strftime('%m', date) = ? AND strftime('%Y', date) = ?",
-            (f"{current_month:02d}", str(current_year))
+            (current_month, str(current_year))
         ).fetchone()
         monthly_expenses = float(monthly_expenses_row["total"] or 0)
         monthly_net_profit = monthly_profit - monthly_expenses
         monthly_net_margin = round((monthly_net_profit / monthly_revenue * 100), 2) if monthly_revenue > 0 else 0
 
         
-        # Get recent sales (last 5)
+        recent_sales_cond = ""
+        recent_sales_params = []
+        if warehouse_id:
+            recent_sales_cond = "WHERE s.warehouse_id = ?"
+            recent_sales_params.append(warehouse_id)
+            
         recent_sales_rows = conn.execute(
-            """
+            f'''
             SELECT
                 s.id,
                 s.invoice_number,
@@ -253,9 +292,10 @@ def dashboard():
                 (SELECT COALESCE(SUM(si.qty * COALESCE(si.packing_multiplier, 1.0) * si.cost_price), 0) FROM sale_items si WHERE si.sale_id = s.id) as total_cost
             FROM sales s
             LEFT JOIN customers c ON c.id = s.customer_id
+            {recent_sales_cond}
             ORDER BY s.id DESC
             LIMIT 5
-            """
+            ''', tuple(recent_sales_params)
         ).fetchall()
         recent_sales = []
         for r in recent_sales_rows:
@@ -331,10 +371,19 @@ def inventory():
     date_from = request.args.get("date_from", "").strip()
     date_to = request.args.get("date_to", "").strip()
     open_only = request.args.get("open_only") == '1'
+    warehouse_id = request.args.get("warehouse_id")
+    if current_user.role != 'admin' and current_user.warehouse_id:
+        warehouse_id = current_user.warehouse_id
 
     conn = get_connection()
     try:
-        query = """
+        warehouses = conn.execute("SELECT id, name FROM warehouses ORDER BY name").fetchall()
+        
+        stock_select = "COALESCE((SELECT SUM(stock_quantity) FROM warehouse_inventory WHERE product_id = p.id), 0)"
+        if warehouse_id:
+            stock_select = f"COALESCE((SELECT stock_quantity FROM warehouse_inventory WHERE product_id = p.id AND warehouse_id = ?), 0)"
+            
+        query = f"""
             SELECT
                 p.id,
                 p.name,
@@ -342,7 +391,7 @@ def inventory():
                 p.unit,
                 p.cost_price,
                 p.selling_price,
-                p.stock_quantity,
+                {stock_select} AS stock_quantity,
                 p.image_url,
                 p.is_public,
                 p.category_id,
@@ -352,11 +401,12 @@ def inventory():
                 c.name AS category_name
             FROM products p
             LEFT JOIN categories c ON p.category_id = c.id
-
             WHERE 1=1
         """
         params = []
-        
+        if warehouse_id:
+            params.append(warehouse_id)
+            
         if brand_filter:
             query += " AND p.brand = ?"
             params.append(brand_filter)
@@ -377,21 +427,20 @@ def inventory():
         cur = conn.execute("SELECT COUNT(*) AS total_products FROM products")
         total_products = int(cur.fetchone()["total_products"] or 0)
 
-        cur = conn.execute(
-            """
-            SELECT COALESCE(SUM(COALESCE(cost_price, 0) * COALESCE(stock_quantity, 0)), 0) AS total_stock_value
-            FROM products
-            """
-        )
+        stock_val_query = "SELECT COALESCE(SUM(COALESCE(p.cost_price, 0) * COALESCE(wi.stock_quantity, 0)), 0) AS total_stock_value FROM warehouse_inventory wi JOIN products p ON wi.product_id = p.id"
+        stock_val_params = []
+        if warehouse_id:
+            stock_val_query += " WHERE wi.warehouse_id = ?"
+            stock_val_params.append(warehouse_id)
+        cur = conn.execute(stock_val_query, tuple(stock_val_params))
         total_stock_value = float(cur.fetchone()["total_stock_value"] or 0)
 
-        cur = conn.execute(
-            """
-            SELECT
-                COALESCE(SUM(CASE WHEN COALESCE(stock_quantity, 0) < 5 THEN 1 ELSE 0 END), 0) AS low_stock_count
-            FROM products
-            """
-        )
+        low_stock_query = "SELECT COALESCE(SUM(CASE WHEN COALESCE(wi.stock_quantity, 0) < 5 THEN 1 ELSE 0 END), 0) AS low_stock_count FROM warehouse_inventory wi"
+        low_stock_params = []
+        if warehouse_id:
+            low_stock_query += " WHERE wi.warehouse_id = ?"
+            low_stock_params.append(warehouse_id)
+        cur = conn.execute(low_stock_query, tuple(low_stock_params))
         low_stock_count = int(cur.fetchone()["low_stock_count"] or 0)
 
         cur = conn.execute("SELECT id, name FROM categories ORDER BY name COLLATE NOCASE")
@@ -402,6 +451,11 @@ def inventory():
     finally:
         conn.close()
 
+    try:
+        current_warehouse_id = int(warehouse_id) if warehouse_id else None
+    except ValueError:
+        current_warehouse_id = None
+
     return render_template(
         "inventory.html",
         products=products,
@@ -410,6 +464,8 @@ def inventory():
         total_products=total_products,
         total_stock_value=total_stock_value,
         low_stock_count=low_stock_count,
+        warehouses=warehouses,
+        current_warehouse_id=current_warehouse_id
     )
 
 
@@ -576,19 +632,20 @@ def inventory_add():
                 supplier_id = conn.execute("SELECT last_insert_rowid()").fetchone()[0]
         
         # Check if product already exists
+        wid = current_user.warehouse_id or 1
         cur = conn.execute("SELECT id, stock_quantity FROM products WHERE LOWER(name) = LOWER(?)", (product_name,))
         existing = cur.fetchone()
         
         if existing:
             product_id = existing["id"]
-            old_stock = float(existing["stock_quantity"] or 0)
-            new_stock = float(stock_quantity)
+            old_stock_row = conn.execute("SELECT stock_quantity FROM warehouse_inventory WHERE product_id = ? AND warehouse_id = ?", (product_id, wid)).fetchone()
+            old_stock = float(old_stock_row["stock_quantity"] if old_stock_row else 0)
             
             update_query = """
                 UPDATE products
-                SET category_id = ?, brand = ?, unit = ?, cost_price = ?, selling_price = ?, stock_quantity = ?, supplier_id = ?, is_open = ?
+                SET category_id = ?, brand = ?, unit = ?, cost_price = ?, selling_price = ?, supplier_id = ?, is_open = ?
             """
-            params = [category_id, brand or None, unit, cost_price, selling_price, new_stock, supplier_id, is_open]
+            params = [category_id, brand or None, unit, cost_price, selling_price, supplier_id, is_open]
             
             if created_at:
                 update_query += ", created_at = ?"
@@ -602,43 +659,128 @@ def inventory_add():
             
             conn.execute(update_query, params)
             
-            if new_stock != old_stock:
-                diff = new_stock - old_stock
-                t_type = 'IN' if diff > 0 else 'ADJUSTMENT'
+            new_stock = old_stock + stock_quantity
+            if stock_quantity > 0:
+                conn.execute("INSERT INTO warehouse_inventory (product_id, warehouse_id, stock_quantity) VALUES (?, ?, ?) ON CONFLICT(warehouse_id, product_id) DO UPDATE SET stock_quantity = ?", (product_id, wid, new_stock, new_stock))
                 conn.execute("""
-                    INSERT INTO inventory_history (product_id, transaction_type, quantity_change, previous_stock, new_stock, reference, supplier_id)
+                    INSERT INTO inventory_history (product_id, transaction_type, quantity_change, previous_stock, new_stock, reference, warehouse_id)
                     VALUES (?, ?, ?, ?, ?, ?, ?)
-                """, (product_id, t_type, diff, old_stock, new_stock, 'Manual Edit (Add Product)', supplier_id))
+                """, (product_id, 'IN', stock_quantity, old_stock, new_stock, 'Manual Addition', wid))
         else:
-            if created_at:
-                cur = conn.execute(
-                    """
-                    INSERT INTO products
-                        (name, category_id, brand, unit, cost_price, selling_price, stock_quantity, image_url, created_at, is_public, supplier_id, is_open)
-                    VALUES
-                        (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                    """,
-                    (product_name, category_id, brand or None, unit, cost_price, selling_price, stock_quantity, image_url, created_at, is_public, supplier_id, is_open),
-                )
-            else:
-                cur = conn.execute(
-                    """
-                    INSERT INTO products
-                        (name, category_id, brand, unit, cost_price, selling_price, stock_quantity, image_url, is_public, supplier_id, is_open)
-                    VALUES
-                        (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                    """,
-                    (product_name, category_id, brand or None, unit, cost_price, selling_price, stock_quantity, image_url, is_public, supplier_id, is_open),
-                )
-            product_id = int(cur.lastrowid)
+            fields = ["name", "category_id", "brand", "unit", "cost_price", "selling_price", "is_public", "supplier_id", "is_open"]
+            vals = ["?", "?", "?", "?", "?", "?", "?", "?", "?"]
+            params_insert = [product_name, category_id, brand or None, unit, cost_price, selling_price, is_public, supplier_id, is_open]
             
-            if stock_quantity != 0:
+            if created_at:
+                fields.append("created_at")
+                vals.append("?")
+                params_insert.append(created_at)
+            
+            if image_url:
+                fields.append("image_url")
+                vals.append("?")
+                params_insert.append(image_url)
+                
+            conn.execute(f"INSERT INTO products ({', '.join(fields)}) VALUES ({', '.join(vals)})", params_insert)
+            product_id = conn.execute("SELECT last_insert_rowid()").fetchone()[0]
+            
+            if stock_quantity > 0:
+                conn.execute("INSERT INTO warehouse_inventory (product_id, warehouse_id, stock_quantity) VALUES (?, ?, ?)", (product_id, wid, stock_quantity))
                 conn.execute("""
-                    INSERT INTO inventory_history (product_id, transaction_type, quantity_change, previous_stock, new_stock, reference, supplier_id)
+                    INSERT INTO inventory_history (product_id, transaction_type, quantity_change, previous_stock, new_stock, reference, warehouse_id)
                     VALUES (?, ?, ?, ?, ?, ?, ?)
-                """, (product_id, 'IN', stock_quantity, 0, stock_quantity, 'Initial Stock', supplier_id))
+                """, (product_id, 'IN', stock_quantity, 0, stock_quantity, 'Initial Stock', wid))
 
         # Keep brands table in sync for the Brand dropdown.
+        if brand:
+            conn.execute("INSERT OR IGNORE INTO brands (name) VALUES (?)", (brand,))
+
+        conn.commit()
+    finally:
+        conn.close()
+
+    return redirect(url_for("inventory"))
+
+    if not product_name or not category_id:
+        return redirect(url_for("inventory"))
+
+    import os
+    from werkzeug.utils import secure_filename
+    image_file = request.files.get("product_image")
+    image_url = None
+    if image_file and image_file.filename:
+        filename = secure_filename(image_file.filename)
+        base, _ = os.path.splitext(filename)
+        filename = f"{base}.webp"
+        
+        upload_folder = os.path.join(app.root_path, "static", "uploads", "products")
+        os.makedirs(upload_folder, exist_ok=True)
+        filepath = os.path.join(upload_folder, filename)
+        
+        try:
+            from PIL import Image
+            img = Image.open(image_file)
+            if img.mode != 'RGB':
+                img = img.convert('RGB')
+            img.thumbnail((800, 800))
+            img.save(filepath, format="WEBP", optimize=True, quality=70)
+        except Exception:
+            # Fallback if Pillow fails
+            image_file.seek(0)
+            image_file.save(filepath)
+            
+        image_url = f"/static/uploads/products/{filename}"
+
+    conn = get_connection()
+    try:
+        conn.execute("BEGIN")
+        
+        # Determine supplier
+        if supplier_id:
+            try:
+                supplier_id = int(supplier_id)
+            except ValueError:
+                supplier_id = None
+        
+        if not supplier_id and brand:
+            cur_sup = conn.execute("SELECT id FROM suppliers WHERE name = ?", (brand,))
+            sup_row = cur_sup.fetchone()
+            if sup_row:
+                supplier_id = sup_row["id"]
+            else:
+                conn.execute("INSERT INTO suppliers (name) VALUES (?)", (brand,))
+                supplier_id = conn.execute("SELECT last_insert_rowid()").fetchone()[0]
+        
+        # Check if product already exists
+        wid = current_user.warehouse_id or 1
+        cur = conn.execute("SELECT id, stock_quantity FROM products WHERE LOWER(name) = LOWER(?)", (product_name,))
+        existing = cur.fetchone()
+        
+        if existing:
+            product_id = existing["id"]
+            old_stock_row = conn.execute("SELECT stock_quantity FROM warehouse_inventory WHERE product_id = ? AND warehouse_id = ?", (product_id, wid)).fetchone()
+            old_stock = float(old_stock_row["stock_quantity"] if old_stock_row else 0)
+            new_stock = float(stock_quantity)
+            
+            update_query = """
+                UPDATE products
+                SET category_id = ?, brand = ?, unit = ?, cost_price = ?, selling_price = ?, supplier_id = ?, is_open = ?
+            """
+            params = [category_id, brand or None, unit, cost_price, selling_price, supplier_id, is_open]
+            
+            if created_at:
+                update_query += ", created_at = ?"
+                params.append(created_at)
+                
+            if image_url:
+                update_query += ", image_url = ?"
+                params.append(image_url)
+            update_query += " WHERE id = ?"
+            params.append(product_id)
+            
+            conn.execute(update_query, params)
+            
+            # Keep brands table in sync for the Brand dropdown.
         if brand:
             conn.execute("INSERT OR IGNORE INTO brands (name) VALUES (?)", (brand,))
 
@@ -667,7 +809,7 @@ def inventory_edit(product_id: int):
         category_id = int(category_id_raw)
         cost_price = float(request.form.get("cost_price") or 0)
         selling_price = float(request.form.get("selling_price") or 0)
-        stock_quantity = float(request.form.get("stock_quantity") or 0)
+        
     except ValueError:
         return redirect(url_for("inventory"))
 
@@ -724,17 +866,15 @@ def inventory_edit(product_id: int):
                 supplier_id = conn.execute("SELECT last_insert_rowid()").fetchone()[0]
         
         cur = conn.execute("SELECT stock_quantity FROM products WHERE id = ?", (product_id,))
-        old_stock_row = cur.fetchone()
-        old_stock = float(old_stock_row["stock_quantity"] or 0) if old_stock_row else 0
-        new_stock = float(stock_quantity)
+        
         
         # If user uploaded a new image, use it. Else if they clicked remove, set it to NULL.
         # Otherwise, keep existing image_url.
         update_query = """
             UPDATE products
-            SET name = ?, brand = ?, category_id = ?, unit = ?, cost_price = ?, selling_price = ?, stock_quantity = ?, is_public = ?, supplier_id = ?, is_open = ?
+            SET name = ?, brand = ?, category_id = ?, unit = ?, cost_price = ?, selling_price = ?, is_public = ?, supplier_id = ?, is_open = ?
         """
-        params = [product_name, brand, category_id, unit, cost_price, selling_price, stock_quantity, is_public, supplier_id, is_open]
+        params = [product_name, brand, category_id, unit, cost_price, selling_price, is_public, supplier_id, is_open]
         
         if created_at:
             update_query += ", created_at = ?"
@@ -751,20 +891,56 @@ def inventory_edit(product_id: int):
         
         conn.execute(update_query, params)
         
-        if new_stock != old_stock:
-            diff = new_stock - old_stock
-            t_type = 'IN' if diff > 0 else 'ADJUSTMENT'
-            conn.execute("""
-                INSERT INTO inventory_history (product_id, transaction_type, quantity_change, previous_stock, new_stock, reference, supplier_id)
-                VALUES (?, ?, ?, ?, ?, ?, ?)
-            """, (product_id, t_type, diff, old_stock, new_stock, 'Manual Edit (Edit Product)', supplier_id))
-
-
         # Keep brands table in sync for the Brand dropdown.
         if brand:
             conn.execute("INSERT OR IGNORE INTO brands (name) VALUES (?)", (brand,))
 
         conn.commit()
+    finally:
+        conn.close()
+
+    return redirect(url_for("inventory"))
+
+
+
+@app.route("/inventory/adjust_stock", methods=["POST"])
+@admin_required
+def inventory_adjust_stock():
+    product_id = int(request.form.get("product_id", 0))
+    raw_wid = request.form.get("warehouse_id", "").strip()
+    warehouse_id = int(raw_wid) if raw_wid else 1
+    new_stock = request.form.get("new_stock", "").strip()
+
+    if not product_id or warehouse_id <= 0 or not new_stock:
+        flash("Invalid request for stock adjustment.", "error")
+        return redirect(url_for("inventory"))
+
+    try:
+        new_stock = float(new_stock)
+    except ValueError:
+        flash("Invalid stock quantity.", "error")
+        return redirect(url_for("inventory"))
+
+    conn = get_connection()
+    try:
+        old_stock_row = conn.execute("SELECT stock_quantity FROM warehouse_inventory WHERE product_id = ? AND warehouse_id = ?", (product_id, warehouse_id)).fetchone()
+        old_stock = old_stock_row["stock_quantity"] if old_stock_row else 0.0
+
+        if old_stock != new_stock:
+            conn.execute("INSERT INTO warehouse_inventory (product_id, warehouse_id, stock_quantity) VALUES (?, ?, ?) ON CONFLICT(warehouse_id, product_id) DO UPDATE SET stock_quantity = ?", (product_id, warehouse_id, new_stock, new_stock))
+            
+            adjustment = new_stock - old_stock
+            conn.execute(
+                "INSERT INTO inventory_history (product_id, transaction_type, quantity_change, previous_stock, new_stock, reference, warehouse_id) VALUES (?, ?, ?, ?, ?, ?, ?)",
+                (product_id, "Manual Adjustment", adjustment, old_stock, new_stock, None, warehouse_id)
+            )
+            conn.commit()
+            flash("Stock adjusted successfully.", "success")
+        else:
+            flash("No changes made to stock.", "info")
+    except Exception as e:
+        print(f"Error adjusting stock: {e}")
+        flash("Failed to adjust stock.", "error")
     finally:
         conn.close()
 
@@ -782,7 +958,9 @@ def inventory_delete(product_id: int):
     try:
         # Remove references to avoid FOREIGN KEY constraint error
         conn.execute("UPDATE sale_items SET product_id = NULL WHERE product_id = ?", (product_id,))
+        conn.execute("UPDATE purchase_items SET product_id = NULL WHERE product_id = ?", (product_id,))
         conn.execute("DELETE FROM inventory_history WHERE product_id = ?", (product_id,))
+        conn.execute("DELETE FROM warehouse_inventory WHERE product_id = ?", (product_id,))
         
         cur = conn.execute("DELETE FROM products WHERE id = ?", (product_id,))
         conn.commit()
@@ -817,9 +995,11 @@ def api_inventory_history(product_id):
                 h.new_stock, 
                 h.reference, 
                 h.created_at,
-                s.name as supplier_name
+                s.name as supplier_name,
+                w.name as warehouse_name
             FROM inventory_history h
             LEFT JOIN suppliers s ON h.supplier_id = s.id
+            LEFT JOIN warehouses w ON h.warehouse_id = w.id
             WHERE h.product_id = ?
             ORDER BY h.created_at DESC
             """,
@@ -1154,6 +1334,8 @@ def brands_delete(brand_id):
 @app.route("/products/list", methods=["GET"])
 @login_required
 def products_list():
+    warehouse_id = request.args.get("warehouse_id")
+    wid = int(warehouse_id) if warehouse_id else (current_user.warehouse_id or 1)
     conn = get_connection()
     try:
         cur = conn.execute(
@@ -1167,7 +1349,7 @@ def products_list():
                 p.unit AS unit,
                 p.cost_price AS cost_price,
                 p.selling_price AS selling_price,
-                p.stock_quantity AS stock_quantity,
+                COALESCE((SELECT stock_quantity FROM warehouse_inventory WHERE product_id = p.id AND warehouse_id = ?), 0) AS stock_quantity,
                 p.image_url AS image_url,
                 p.is_open AS is_open
             FROM products p
@@ -1354,6 +1536,7 @@ def customers_add():
     terms = terms_raw if terms_raw else None
 
     salesman_id_raw = (request.form.get("salesman_id") or "").strip()
+    warehouse_id_raw = (request.form.get("warehouse_id") or "").strip()
     salesman_id = int(salesman_id_raw) if salesman_id_raw else None
 
     conn = get_connection()
@@ -1401,6 +1584,7 @@ def customers_edit(customer_id: int):
     terms = terms_raw if terms_raw else None
 
     salesman_id_raw = (request.form.get("salesman_id") or "").strip()
+    warehouse_id_raw = (request.form.get("warehouse_id") or "").strip()
     salesman_id = int(salesman_id_raw) if salesman_id_raw else None
 
     conn = get_connection()
@@ -1553,6 +1737,8 @@ def sales():
             d["profit_margin"] = round(((rev - cost) / rev * 100), 2) if rev > 0 else 0
             d["profit_amount"] = round(rev - cost, 2)
             recent_sales.append(d)
+        warehouses_rows = conn.execute("SELECT id, name FROM warehouses ORDER BY name").fetchall()
+        warehouses_list = [dict(r) for r in warehouses_rows]
     finally:
         conn.close()
 
@@ -1563,9 +1749,8 @@ def sales():
         next_invoice_number=get_next_invoice_number(),
         today=date.today().isoformat(),
         all_users=users_list,
+        warehouses=warehouses_list
     )
-
-
 @app.route("/sales/next-invoice", methods=["GET"])
 @login_required
 def sales_next_invoice():
@@ -1577,11 +1762,18 @@ def sales_next_invoice():
 def products_search():
     q = (request.args.get("q") or "").strip()
     like = f"%{q}%"
+    warehouse_id = request.args.get("warehouse_id")
+    if current_user.role != 'admin' and current_user.warehouse_id:
+        warehouse_id = current_user.warehouse_id
+    wid = int(warehouse_id) if warehouse_id else (current_user.warehouse_id or 1)
+        
+    stock_query = "COALESCE((SELECT stock_quantity FROM warehouse_inventory WHERE product_id = products.id AND warehouse_id = ?), 0)"
+    
     conn = get_connection()
     try:
         if not q:
             cur = conn.execute(
-                """
+                f"""
                 SELECT
                     id,
                     name,
@@ -1589,17 +1781,17 @@ def products_search():
                     selling_price,
                     cost_price,
                     unit,
-                    stock_quantity,
+                    {stock_query} AS stock_quantity,
                     is_open,
                     supplier_id
                 FROM products
                 ORDER BY name COLLATE NOCASE
                 LIMIT 20
-                """
+                """, (wid,)
             )
         else:
             cur = conn.execute(
-                """
+                f"""
                 SELECT
                     id,
                     name,
@@ -1607,15 +1799,14 @@ def products_search():
                     selling_price,
                     cost_price,
                     unit,
-                    stock_quantity,
+                    {stock_query} AS stock_quantity,
                     is_open,
                     supplier_id
                 FROM products
                 WHERE name LIKE ? OR brand LIKE ?
                 ORDER BY name COLLATE NOCASE
                 LIMIT 15
-                """,
-                (like, like),
+                """, (warehouse_id, like, like) if warehouse_id else (like, like),
             )
         results = []
         for r in cur.fetchall():
@@ -1865,6 +2056,7 @@ def sales_new():
     amount_paid = float(request.form.get('amount_paid', 0) or 0)
     remaining_amount = float(request.form.get('remaining_amount', 0) or 0)
     salesman_id_raw = (request.form.get("salesman_id") or "").strip()
+    warehouse_id_raw = (request.form.get("warehouse_id") or "").strip()
     discount_amount_raw = (request.form.get("discount_amount") or "").strip()
     items_json = request.form.get("items_json") or "[]"
     generate_invoice = "generate_invoice" in request.form
@@ -2023,10 +2215,8 @@ def sales_new():
             # Ensure stock is sufficient (aggregate per product for repeated items)
             if not is_quote:
                 for product_id, qty_total in qty_total_by_product.items():
-                    cur = conn.execute(
-                        "SELECT stock_quantity, name FROM products WHERE id = ?",
-                        (product_id,),
-                    )
+                    wid = int(warehouse_id_raw) if warehouse_id_raw else (current_user.warehouse_id or 1)
+                    cur = conn.execute("SELECT p.name, COALESCE((SELECT stock_quantity FROM warehouse_inventory WHERE product_id = p.id AND warehouse_id = ?), 0) as stock_quantity FROM products p WHERE p.id = ?", (wid, product_id,))
                     row = cur.fetchone()
                     if row is None:
                         raise ValueError("One or more selected products are invalid.")
@@ -2044,9 +2234,9 @@ def sales_new():
                 """
                 INSERT INTO sales
                     (invoice_number, customer_id, invoice_date, due_date, terms, payment_type,
-                     discount_amount, subtotal, grand_total, notes, status, amount_paid, remaining_amount, salesman_id)
+                     discount_amount, subtotal, grand_total, notes, status, amount_paid, remaining_amount, salesman_id, warehouse_id)
                 VALUES
-                    (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     invoice_number,
@@ -2063,6 +2253,7 @@ def sales_new():
                     amount_paid,
                     remaining_amount,
                     salesman_id,
+                    int(warehouse_id_raw) if warehouse_id_raw else (current_user.warehouse_id or 1),
                 ),
             )
             sale_id = int(cur.lastrowid)
@@ -2091,17 +2282,14 @@ def sales_new():
             # Deduct stock atomically (per product total)
             if not is_quote:
                 for product_id, qty_total in qty_total_by_product.items():
-                    cur = conn.execute("SELECT stock_quantity FROM products WHERE id = ?", (product_id,))
-                    row = cur.fetchone()
-                    old_stock = float(row["stock_quantity"] or 0) if row else 0
-
+                    wid = int(warehouse_id_raw) if warehouse_id_raw else (current_user.warehouse_id or 1)
                     upd = conn.execute(
                         """
-                        UPDATE products
+                        UPDATE warehouse_inventory
                         SET stock_quantity = stock_quantity - ?
-                        WHERE id = ? AND stock_quantity >= ?
+                        WHERE product_id = ? AND warehouse_id = ? AND stock_quantity >= ?
                         """,
-                        (qty_total, product_id, qty_total),
+                        (qty_total, product_id, wid, qty_total),
                     )
                     if upd.rowcount == 0:
                         cur = conn.execute(
@@ -2290,6 +2478,7 @@ def sales_update(sale_id: int):
     amount_paid = float(request.form.get("amount_paid") or 0)
     remaining_amount = 0
     salesman_id_raw = (request.form.get("salesman_id") or "").strip()
+    warehouse_id_raw = (request.form.get("warehouse_id") or "").strip()
 
     error = None
 
@@ -3796,8 +3985,9 @@ def reports_export(type: str):
 def users_list():
     conn = get_connection()
     try:
-        users = conn.execute("SELECT id, username, role, is_active FROM users").fetchall()
-        return render_template("users.html", users=[dict(u) for u in users])
+        users = conn.execute("SELECT u.id, u.username, u.role, u.is_active, u.warehouse_id, w.name as warehouse_name FROM users u LEFT JOIN warehouses w ON u.warehouse_id = w.id").fetchall()
+        warehouses = conn.execute("SELECT id, name FROM warehouses ORDER BY name").fetchall()
+        return render_template("users.html", users=[dict(u) for u in users], warehouses=[dict(w) for w in warehouses])
     finally:
         conn.close()
 
@@ -3810,11 +4000,15 @@ def users_add():
     if not username or not password:
         return jsonify({"ok": False, "error": "Username and password are required."}), 400
     
+    warehouse_id = request.form.get("warehouse_id")
+    if not warehouse_id:
+        warehouse_id = None
+        
     conn = get_connection()
     try:
         conn.execute(
-            "INSERT INTO users (username, password_hash, role) VALUES (?, ?, ?)",
-            (username, generate_password_hash(password, method="pbkdf2:sha256"), role)
+            "INSERT INTO users (username, password_hash, role, warehouse_id) VALUES (?, ?, ?, ?)",
+            (username, generate_password_hash(password, method="pbkdf2:sha256"), role, warehouse_id)
         )
         conn.commit()
         return jsonify({"ok": True})
@@ -3836,6 +4030,71 @@ def users_toggle_active(user_id):
     finally:
         conn.close()
     return redirect(url_for("users_list"))
+
+@app.route("/users/edit/<int:user_id>", methods=["POST"])
+@admin_required
+def users_edit(user_id):
+    warehouse_id = request.form.get("warehouse_id")
+    if not warehouse_id:
+        warehouse_id = None
+    role = (request.form.get("role") or "salesman").strip()
+    
+    conn = get_connection()
+    try:
+        conn.execute("UPDATE users SET role = ?, warehouse_id = ? WHERE id = ?", (role, warehouse_id, user_id))
+        conn.commit()
+        return redirect(url_for("users_list"))
+    finally:
+        conn.close()
+
+# ---------------------------------------------------------
+# WAREHOUSES
+# ---------------------------------------------------------
+@app.route("/warehouses")
+@admin_required
+def warehouses_list():
+    conn = get_connection()
+    try:
+        warehouses = conn.execute("SELECT * FROM warehouses ORDER BY name").fetchall()
+        return render_template("warehouses.html", warehouses=[dict(w) for w in warehouses])
+    finally:
+        conn.close()
+
+@app.route("/warehouses/add", methods=["POST"])
+@admin_required
+def warehouses_add():
+    name = (request.form.get("name") or "").strip()
+    location = (request.form.get("location") or "").strip()
+    if not name:
+        return redirect(url_for("warehouses_list"))
+        
+    conn = get_connection()
+    try:
+        conn.execute("INSERT INTO warehouses (name, location) VALUES (?, ?)", (name, location))
+        conn.commit()
+    except sqlite3.IntegrityError:
+        pass
+    finally:
+        conn.close()
+    return redirect(url_for("warehouses_list"))
+
+@app.route("/warehouses/edit/<int:warehouse_id>", methods=["POST"])
+@admin_required
+def warehouses_edit(warehouse_id):
+    name = (request.form.get("name") or "").strip()
+    location = (request.form.get("location") or "").strip()
+    if not name:
+        return redirect(url_for("warehouses_list"))
+        
+    conn = get_connection()
+    try:
+        conn.execute("UPDATE warehouses SET name = ?, location = ? WHERE id = ?", (name, location, warehouse_id))
+        conn.commit()
+    except sqlite3.IntegrityError:
+        pass
+    finally:
+        conn.close()
+    return redirect(url_for("warehouses_list"))
 
 @app.route("/users/reset_password", methods=["POST"])
 @admin_required
@@ -3861,8 +4120,12 @@ def users_reset_password():
 @app.route("/pos")
 @login_required
 def pos():
-    # Only salesmen or admin can access
-    return render_template("catalogue.html")
+    conn = get_connection()
+    try:
+        warehouses = conn.execute("SELECT id, name FROM warehouses ORDER BY name").fetchall()
+        return render_template("catalogue.html", warehouses=[dict(w) for w in warehouses])
+    finally:
+        conn.close()
 
 @app.route("/pos/submit_order", methods=["POST"])
 @login_required
@@ -3890,6 +4153,8 @@ def pos_submit_order():
 
     invoice_date = date.today().isoformat()
     invoice_number = get_next_invoice_number()
+    warehouse_id_raw = data.get("warehouse_id")
+    wid = int(warehouse_id_raw) if warehouse_id_raw else (current_user.warehouse_id or 1)
     
     conn = get_connection()
     try:
@@ -3965,7 +4230,7 @@ def pos_submit_order():
                 qty_total_by_product[li["product_id"]] += li["qty"] * li["packing_multiplier"]
             
         for product_id, qty_total in qty_total_by_product.items():
-            cur = conn.execute("SELECT name, stock_quantity FROM products WHERE id = ?", (product_id,))
+            cur = conn.execute("SELECT p.name, COALESCE((SELECT stock_quantity FROM warehouse_inventory WHERE product_id = p.id AND warehouse_id = ?), 0) as stock_quantity FROM products p WHERE p.id = ?", (wid, product_id,))
             row = cur.fetchone()
             if not row:
                 raise ValueError("One or more selected products are invalid.")
@@ -3999,13 +4264,13 @@ def pos_submit_order():
             """
             INSERT INTO sales
                 (invoice_number, customer_id, invoice_date, due_date, terms, payment_type,
-                 subtotal, grand_total, status, amount_paid, remaining_amount, salesman_id)
+                 subtotal, grand_total, status, amount_paid, remaining_amount, salesman_id, warehouse_id)
             VALUES
-                (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 invoice_number, customer_id, invoice_date, data.get("due_date"), data.get("customer_terms"), payment_type,
-                subtotal, grand_total, status, amount_paid, remaining_amount, current_user.id
+                subtotal, grand_total, status, amount_paid, remaining_amount, current_user.id, wid
             )
         )
         sale_id = int(cur.lastrowid)
@@ -4021,24 +4286,24 @@ def pos_submit_order():
             )
             
             if li["product_id"] != -1:
-                cur_stock = conn.execute("SELECT stock_quantity FROM products WHERE id = ?", (li["product_id"],)).fetchone()
+                cur_stock = conn.execute("SELECT stock_quantity FROM warehouse_inventory WHERE product_id = ? AND warehouse_id = ?", (li["product_id"], wid)).fetchone()
                 old_stock = float(cur_stock["stock_quantity"] or 0) if cur_stock else 0
                 qty_deduct = li["qty"] * li["packing_multiplier"]
                 new_stock = old_stock - qty_deduct
                 
                 conn.execute(
                     """
-                    UPDATE products
+                    UPDATE warehouse_inventory
                     SET stock_quantity = COALESCE(stock_quantity, 0) - ?
-                    WHERE id = ?
+                    WHERE product_id = ? AND warehouse_id = ?
                     """,
-                    (qty_deduct, li["product_id"])
+                    (qty_deduct, li["product_id"], wid)
                 )
                 
                 conn.execute("""
-                    INSERT INTO inventory_history (product_id, transaction_type, quantity_change, previous_stock, new_stock, reference)
-                    VALUES (?, 'OUT', ?, ?, ?, ?)
-                """, (li["product_id"], -qty_deduct, old_stock, new_stock, f'Invoice #{invoice_number}'))
+                    INSERT INTO inventory_history (product_id, transaction_type, quantity_change, previous_stock, new_stock, reference, warehouse_id)
+                    VALUES (?, 'OUT', ?, ?, ?, ?, ?)
+                """, (li["product_id"], -qty_deduct, old_stock, new_stock, f'Invoice #{invoice_number}', wid))
 
         conn.commit()
         return jsonify({"ok": True, "sale_id": sale_id, "invoice_number": invoice_number})
@@ -4195,9 +4460,10 @@ def purchases():
     conn = get_connection()
     try:
         query = '''
-            SELECT p.id, p.reference_number, p.purchase_date, p.grand_total, p.amount_paid, p.remaining_amount, p.status, s.name as supplier_name
+            SELECT p.id, p.reference_number, p.purchase_date, p.grand_total, p.amount_paid, p.remaining_amount, p.status, s.name as supplier_name, w.name as warehouse_name
             FROM purchases p
             LEFT JOIN suppliers s ON p.supplier_id = s.id
+            LEFT JOIN warehouses w ON p.warehouse_id = w.id
             WHERE 1=1
         '''
         params = []
@@ -4259,9 +4525,11 @@ def new_purchase():
     try:
         suppliers = [dict(row) for row in conn.execute("SELECT id, name FROM suppliers ORDER BY name COLLATE NOCASE ASC").fetchall()]
         products = [dict(row) for row in conn.execute("SELECT id, name, cost_price, unit FROM products ORDER BY name COLLATE NOCASE ASC").fetchall()]
+        warehouses = [dict(row) for row in conn.execute("SELECT id, name FROM warehouses ORDER BY name").fetchall()]
+        warehouses = [dict(row) for row in conn.execute("SELECT id, name FROM warehouses ORDER BY name").fetchall()]
     finally:
         conn.close()
-    return render_template("purchase_new.html", suppliers=suppliers, products=products, purchase=None)
+    return render_template("purchase_new.html", suppliers=suppliers, products=products, warehouses=warehouses, purchase=None)
 
 @app.route("/purchases/edit/<int:purchase_id>", methods=["GET"])
 @admin_required
@@ -4284,9 +4552,10 @@ def edit_purchase(purchase_id):
         
         suppliers = [dict(row) for row in conn.execute("SELECT id, name FROM suppliers ORDER BY name COLLATE NOCASE ASC").fetchall()]
         products = [dict(row) for row in conn.execute("SELECT id, name, cost_price, unit FROM products ORDER BY name COLLATE NOCASE ASC").fetchall()]
+        warehouses = [dict(row) for row in conn.execute("SELECT id, name FROM warehouses ORDER BY name").fetchall()]
     finally:
         conn.close()
-    return render_template("purchase_new.html", suppliers=suppliers, products=products, purchase=purchase)
+    return render_template("purchase_new.html", suppliers=suppliers, products=products, purchase=purchase, warehouses=warehouses)
 
 @app.route("/purchases/new", methods=["POST"])
 @admin_required
@@ -4300,6 +4569,8 @@ def create_purchase():
     payment_amount = float(data.get("payment_amount", 0))
     payment_method = data.get("payment_method", "cash")
     other_charges = float(data.get("other_charges", 0))
+    wid_raw = data.get("warehouse_id")
+    wid = int(wid_raw) if wid_raw else (current_user.warehouse_id or 1)
 
     if not supplier_id or not items:
         return jsonify({"ok": False, "error": "Missing supplier or items"}), 400
@@ -4321,9 +4592,9 @@ def create_purchase():
             status = 'partial'
 
         cur = conn.execute('''
-            INSERT INTO purchases (supplier_id, reference_number, purchase_date, subtotal, other_charges, grand_total, amount_paid, remaining_amount, status)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-        ''', (supplier_id, reference_number, purchase_date, subtotal, other_charges, grand_total, amount_paid, remaining_amount, status))
+            INSERT INTO purchases (supplier_id, reference_number, purchase_date, subtotal, other_charges, grand_total, amount_paid, remaining_amount, status, warehouse_id)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ''', (supplier_id, reference_number, purchase_date, subtotal, other_charges, grand_total, amount_paid, remaining_amount, status, wid))
         
         purchase_id = cur.lastrowid
         
@@ -4345,16 +4616,21 @@ def create_purchase():
             ''', (purchase_id, pid, qty, cost, amount))
             
             # Update inventory
-            cur = conn.execute("SELECT stock_quantity FROM products WHERE id = ?", (pid,))
+            cur = conn.execute("SELECT stock_quantity FROM warehouse_inventory WHERE product_id = ? AND warehouse_id = ?", (pid, wid))
             row = cur.fetchone()
-            if row:
-                old_stock = row["stock_quantity"] or 0
-                new_stock = old_stock + qty
-                conn.execute("UPDATE products SET stock_quantity = ? WHERE id = ?", (new_stock, pid))
-                conn.execute('''
-                    INSERT INTO inventory_history (product_id, transaction_type, quantity_change, previous_stock, new_stock, reference, supplier_id)
-                    VALUES (?, 'IN', ?, ?, ?, ?, ?)
-                ''', (pid, qty, old_stock, new_stock, f"Purchase #{purchase_id}", supplier_id))
+            old_stock = float(row["stock_quantity"] or 0) if row else 0
+            new_stock = old_stock + qty
+            
+            conn.execute('''
+                INSERT INTO warehouse_inventory (product_id, warehouse_id, stock_quantity)
+                VALUES (?, ?, ?)
+                ON CONFLICT(warehouse_id, product_id) DO UPDATE SET stock_quantity = ?
+            ''', (pid, wid, new_stock, new_stock))
+            
+            conn.execute('''
+                INSERT INTO inventory_history (product_id, transaction_type, quantity_change, previous_stock, new_stock, reference, supplier_id, warehouse_id)
+                VALUES (?, 'IN', ?, ?, ?, ?, ?, ?)
+            ''', (pid, qty, old_stock, new_stock, f"Purchase #{purchase_id}", supplier_id, wid))
 
         conn.commit()
         return jsonify({"ok": True, "purchase_id": purchase_id})
@@ -4402,11 +4678,12 @@ def update_purchase(purchase_id):
             diff = new_qty - old_qty
             
             if diff < 0:
-                cur_stock = conn.execute("SELECT name, stock_quantity FROM products WHERE id = ?", (pid,)).fetchone()
-                if cur_stock:
-                    projected_stock = float(cur_stock["stock_quantity"] or 0) + diff
-                    if projected_stock < 0:
-                        warnings.append(f"{cur_stock['name']} will drop to {projected_stock} stock.")
+                cur_stock = conn.execute("SELECT stock_quantity FROM warehouse_inventory WHERE product_id = ? AND warehouse_id = ?", (pid, wid)).fetchone()
+                current_stock = float(cur_stock["stock_quantity"] or 0) if cur_stock else 0
+                projected_stock = current_stock + diff
+                if projected_stock < 0:
+                    p_name = conn.execute("SELECT name FROM products WHERE id = ?", (pid,)).fetchone()["name"]
+                    warnings.append(f"{p_name} will drop to {projected_stock} stock.")
                         
         if warnings and not force:
             conn.rollback()
@@ -4423,18 +4700,22 @@ def update_purchase(purchase_id):
             diff = new_qty - old_qty
             
             if diff != 0:
-                cur_stock = conn.execute("SELECT stock_quantity FROM products WHERE id = ?", (pid,)).fetchone()
-                if cur_stock:
-                    current_stock = float(cur_stock["stock_quantity"] or 0)
-                    new_stock = current_stock + diff
-                    conn.execute("UPDATE products SET stock_quantity = ? WHERE id = ?", (new_stock, pid))
-                    
-                    # Log to history
-                    trans_type = 'IN' if diff > 0 else 'OUT'
-                    conn.execute('''
-                        INSERT INTO inventory_history (product_id, transaction_type, quantity_change, previous_stock, new_stock, reference, supplier_id)
-                        VALUES (?, ?, ?, ?, ?, ?, ?)
-                    ''', (pid, trans_type, abs(diff), current_stock, new_stock, f"Edit Purchase #{purchase_id}", supplier_id))
+                cur_stock = conn.execute("SELECT stock_quantity FROM warehouse_inventory WHERE product_id = ? AND warehouse_id = ?", (pid, wid)).fetchone()
+                current_stock = float(cur_stock["stock_quantity"] or 0) if cur_stock else 0
+                new_stock = current_stock + diff
+                
+                conn.execute('''
+                    INSERT INTO warehouse_inventory (product_id, warehouse_id, stock_quantity)
+                    VALUES (?, ?, ?)
+                    ON CONFLICT(warehouse_id, product_id) DO UPDATE SET stock_quantity = ?
+                ''', (pid, wid, new_stock, new_stock))
+                
+                # Log to history
+                trans_type = 'IN' if diff > 0 else 'OUT'
+                conn.execute('''
+                    INSERT INTO inventory_history (product_id, transaction_type, quantity_change, previous_stock, new_stock, reference, supplier_id, warehouse_id)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                ''', (pid, trans_type, abs(diff), current_stock, new_stock, f"Edit Purchase #{purchase_id}", supplier_id, wid))
                     
         # 4. Delete old items and insert new
         conn.execute("DELETE FROM purchase_items WHERE purchase_id = ?", (purchase_id,))
@@ -4502,11 +4783,12 @@ def delete_purchase(purchase_id):
             pid = item["product_id"]
             qty = float(item["qty"])
             
-            cur_stock = conn.execute("SELECT name, stock_quantity FROM products WHERE id = ?", (pid,)).fetchone()
-            if cur_stock:
-                projected_stock = float(cur_stock["stock_quantity"] or 0) - qty
-                if projected_stock < 0:
-                    warnings.append(f"{cur_stock['name']} will drop to {projected_stock} stock.")
+            cur_stock = conn.execute("SELECT stock_quantity FROM warehouse_inventory WHERE product_id = ? AND warehouse_id = ?", (pid, wid)).fetchone()
+            current_stock = float(cur_stock["stock_quantity"] or 0) if cur_stock else 0
+            projected_stock = current_stock - qty
+            if projected_stock < 0:
+                p_name = conn.execute("SELECT name FROM products WHERE id = ?", (pid,)).fetchone()["name"]
+                warnings.append(f"{p_name} will drop to {projected_stock} stock.")
                     
         if warnings and not force:
             conn.rollback()
@@ -4521,16 +4803,20 @@ def delete_purchase(purchase_id):
             pid = item["product_id"]
             qty = float(item["qty"])
             
-            cur_stock = conn.execute("SELECT stock_quantity FROM products WHERE id = ?", (pid,)).fetchone()
-            if cur_stock:
-                current_stock = float(cur_stock["stock_quantity"] or 0)
-                new_stock = current_stock - qty
-                conn.execute("UPDATE products SET stock_quantity = ? WHERE id = ?", (new_stock, pid))
-                
-                conn.execute('''
-                    INSERT INTO inventory_history (product_id, transaction_type, quantity_change, previous_stock, new_stock, reference, supplier_id)
-                    VALUES (?, 'OUT', ?, ?, ?, ?, ?)
-                ''', (pid, qty, current_stock, new_stock, f"Delete Purchase #{purchase_id}", supplier_id))
+            cur_stock = conn.execute("SELECT stock_quantity FROM warehouse_inventory WHERE product_id = ? AND warehouse_id = ?", (pid, wid)).fetchone()
+            current_stock = float(cur_stock["stock_quantity"] or 0) if cur_stock else 0
+            new_stock = current_stock - qty
+            
+            conn.execute('''
+                INSERT INTO warehouse_inventory (product_id, warehouse_id, stock_quantity)
+                VALUES (?, ?, ?)
+                ON CONFLICT(warehouse_id, product_id) DO UPDATE SET stock_quantity = ?
+            ''', (pid, wid, new_stock, new_stock))
+            
+            conn.execute('''
+                INSERT INTO inventory_history (product_id, transaction_type, quantity_change, previous_stock, new_stock, reference, supplier_id, warehouse_id)
+                VALUES (?, 'OUT', ?, ?, ?, ?, ?, ?)
+            ''', (pid, qty, current_stock, new_stock, f"Delete Purchase #{purchase_id}", supplier_id, wid))
                 
         # 3. Delete records
         conn.execute("DELETE FROM supplier_payments WHERE purchase_id = ?", (purchase_id,))

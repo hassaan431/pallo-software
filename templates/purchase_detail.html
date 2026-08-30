@@ -1,9 +1,14 @@
 {% extends "base.html" %}
+{% block title %}Shipment #{{ purchase.id }} - AK Distributors{% endblock %}
+{% block page_heading %}Purchases (Shipments){% endblock %}
 {% block content %}
 <div class="page-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem;">
   <div>
-    <h2 style="margin:0; font-size:1.25rem; font-weight:700;">Shipment #{{ purchase.id }}</h2>
-    <p style="color: var(--text-muted); margin-top: 0.25rem;">
+    <div style="display: flex; align-items: center; gap: 0.75rem;">
+      <a href="{{ url_for('purchases') }}" style="display: flex; align-items: center; justify-content: center; width: 32px; height: 32px; font-size: 1.25rem; line-height: 1; text-decoration: none; color: #000; background: #fff; border: 1px solid #e2e8f0; border-radius: 6px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); transition: box-shadow 0.2s;" onmouseover="this.style.boxShadow='0 4px 6px rgba(0,0,0,0.15)'" onmouseout="this.style.boxShadow='0 2px 4px rgba(0,0,0,0.1)'" title="Back">&larr;</a>
+      <h2 style="margin:0; font-size:1.25rem; font-weight:700;">Shipment #{{ purchase.id }}</h2>
+    </div>
+    <p style="color: var(--text-muted); margin-top: 0.25rem; margin-left: 2.5rem;">
       Supplier: <strong>{{ purchase.supplier_name }}</strong> &nbsp;|&nbsp; 
       Date: {{ purchase.purchase_date }} &nbsp;|&nbsp; 
       Ref: {{ purchase.reference_number }}

@@ -19,6 +19,7 @@
             <th>ID</th>
             <th>Username</th>
             <th>Role</th>
+            <th>Warehouse</th>
             <th>Status</th>
             <th>Actions</th>
           </tr>
@@ -36,6 +37,9 @@
               {% endif %}
             </td>
             <td>
+              {{ u.warehouse_name or 'All (Admin)' }}
+            </td>
+            <td>
               {% if u.is_active == 1 %}
                 <span class="status-badge status-paid">Active</span>
               {% else %}
@@ -43,7 +47,8 @@
               {% endif %}
             </td>
             <td>
-              <button class="btn btn-secondary btn-sm" onclick="openResetPassword({{ u.id }}, '{{ u.username }}')">Change Password</button>
+              <button class="btn btn-secondary btn-sm" onclick="openEditUser({{ u.id }}, '{{ u.username }}', '{{ u.role }}', '{{ u.warehouse_id or '' }}')">Edit User</button>
+              <button class="btn btn-outline btn-sm" onclick="openResetPassword({{ u.id }}, '{{ u.username }}')" style="margin-left: 8px;">Reset Password</button>
               
               {% if current_user.id != u.id %}
               <form action="{{ url_for('users_toggle_active', user_id=u.id) }}" method="POST" style="display: inline-block; margin-left: 8px;">
@@ -91,6 +96,15 @@
             <option value="admin">Admin (Full Access)</option>
           </select>
         </div>
+        <div class="modal-field">
+          <label for="newWarehouse">Assigned Warehouse</label>
+          <select class="form-control" id="newWarehouse" name="warehouse_id">
+            <option value="">-- None / All (Admin) --</option>
+            {% for w in warehouses %}
+            <option value="{{ w.id }}">{{ w.name }}</option>
+            {% endfor %}
+          </select>
+        </div>
         
         <div class="error-banner" id="addUserError" style="display:none; margin-top: 1rem;"></div>
         
@@ -129,7 +143,42 @@
   </div>
 </div>
 
-<script>
+  <!-- Edit User Modal (Simplified for Role/Warehouse changes) -->
+  <div id="editUserModal" class="modal-backdrop" aria-hidden="true">
+    <div class="modal" role="dialog" aria-modal="true" aria-label="Edit User">
+      <div class="modal-header">
+        <h3>Edit User: <span id="editUserTitle"></span></h3>
+        <button type="button" class="modal-close" data-close-modal="editUserModal" aria-label="Close">&times;</button>
+      </div>
+      <div class="modal-body">
+        <form id="editUserForm" method="POST">
+          <div class="modal-field">
+            <label for="editRole">Role</label>
+            <select class="form-control" id="editRole" name="role" required>
+              <option value="salesman">Salesman (POS Only)</option>
+              <option value="admin">Admin (Full Access)</option>
+            </select>
+          </div>
+          <div class="modal-field">
+            <label for="editWarehouse">Assigned Warehouse</label>
+            <select class="form-control" id="editWarehouse" name="warehouse_id">
+              <option value="">-- None / All (Admin) --</option>
+              {% for w in warehouses %}
+              <option value="{{ w.id }}">{{ w.name }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          
+          <div class="modal-actions" style="margin-top: 1.5rem; display: flex; justify-content: flex-end; gap: 0.75rem;">
+            <button type="button" class="btn btn-secondary" data-close-modal="editUserModal">Cancel</button>
+            <button type="submit" class="btn btn-primary">Save Changes</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <script>
 function openResetPassword(userId, username) {
   document.getElementById('resetUserId').value = userId;
   document.getElementById('resetPasswordUsername').textContent = username;
@@ -141,17 +190,21 @@ function openResetPassword(userId, username) {
   m.classList.add('is-open');
 }
 
+function openModal(modalId) {
+  const m = document.getElementById(modalId);
+  if(m) {
+    m.setAttribute('aria-hidden', 'false');
+    m.classList.add('is-open');
+  }
+}
+
 document.addEventListener('DOMContentLoaded', () => {
   // Modal toggles
   document.querySelectorAll('[data-open-modal]').forEach(btn => {
     btn.addEventListener('click', (e) => {
       e.preventDefault();
       const modalId = btn.getAttribute('data-open-modal');
-      const m = document.getElementById(modalId);
-      if(m) {
-        m.setAttribute('aria-hidden', 'false');
-        m.classList.add('is-open');
-      }
+      openModal(modalId);
     });
   });
 
@@ -226,7 +279,14 @@ document.addEventListener('DOMContentLoaded', () => {
         errorBanner.style.display = 'block';
       }
     });
-  }
-});
-</script>
+    }
+
+    function openEditUser(id, username, role, warehouse_id) {
+      document.getElementById('editUserTitle').textContent = username;
+      document.getElementById('editRole').value = role;
+      document.getElementById('editWarehouse').value = warehouse_id;
+      document.getElementById('editUserForm').action = `/users/edit/${id}`;
+      openModal('editUserModal');
+    }
+  </script>
 {% endblock %}
