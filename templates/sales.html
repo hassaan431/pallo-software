@@ -257,7 +257,7 @@
             <label class="field-label" for="warehouseId">Warehouse</label>
             <select class="form-control" id="warehouseId" name="warehouse_id">
               {% for w in warehouses %}
-                <option value="{{ w.id }}" {% if edit_mode and edit_sale.warehouse_id == w.id %}selected{% endif %}>{{ w.name }}</option>
+                <option value="{{ w.id }}" {% if edit_mode and edit_sale.warehouse_id == w.id %}selected{% elif not edit_mode and w.id == 1 %}selected{% endif %}>{{ w.name }}</option>
               {% endfor %}
             </select>
           </div>

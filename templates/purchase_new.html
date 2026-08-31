@@ -44,7 +44,7 @@
             <label for="warehouse_id" class="form-label">Warehouse <span style="color:var(--danger-text)">*</span></label>
             <select class="form-control" id="warehouse_id" required>
               {% for w in warehouses %}
-                <option value="{{ w.id }}" {% if purchase and purchase.warehouse_id == w.id %}selected{% endif %}>{{ w.name }}</option>
+                <option value="{{ w.id }}" {% if purchase and purchase.warehouse_id == w.id %}selected{% elif not purchase and w.id == 1 %}selected{% endif %}>{{ w.name }}</option>
               {% endfor %}
             </select>
           </div>

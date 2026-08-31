@@ -1,0 +1,254 @@
+{% extends "base.html" %}
+{% block title %}Transfer Inventory - AK Distributors{% endblock %}
+{% block page_heading %}Transfer Inventory{% endblock %}
+{% block content %}
+<div class="page-header" style="margin-bottom: 1.5rem;">
+  <h2 style="margin:0; font-size:1.25rem; font-weight:700;">Transfer Inventory</h2>
+  <p style="color: var(--text-muted); margin-top: 0.25rem;">Move multiple products from one warehouse to another.</p>
+</div>
+
+<div class="panel">
+  <div class="panel-body" style="padding: 2rem;">
+    <!-- TomSelect CSS & JS for searchable dropdowns -->
+    <link href="https://cdn.jsdelivr.net/npm/tom-select@2.2.2/dist/css/tom-select.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/tom-select@2.2.2/dist/js/tom-select.complete.min.js"></script>
+    <style>
+      .ts-control { border-radius: 8px; border: 1px solid var(--border-color); padding: 0.5rem 0.75rem; box-shadow: none; font-family: inherit; }
+      .ts-control.focus { border-color: var(--color-primary); box-shadow: 0 0 0 3px rgba(45, 106, 79, 0.1); }
+      .ts-dropdown { border-radius: 8px; border: 1px solid var(--border-color); box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06); font-family: inherit; z-index: 1000; }
+      .ts-dropdown .active { background-color: #f1f5f9; color: var(--color-text); }
+      .ts-dropdown .option { padding: 0.5rem 0.75rem; }
+      .ts-dropdown .ts-dropdown-content { max-height: 350px; }
+    </style>
+
+    <form id="transfer-form" onsubmit="submitTransfer(event)">
+      
+      <!-- Top Meta Info -->
+      <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem; margin-bottom: 2rem;">
+        <div>
+          <label class="form-label" for="source_warehouse_id">From Warehouse <span style="color:var(--danger-text)">*</span></label>
+          <select id="source_warehouse_id" class="form-control" required onchange="fetchSourceInventory()">
+            <option value="" disabled selected>Select Source...</option>
+            {% for w in warehouses %}
+            <option value="{{ w.id }}">{{ w.name }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        
+        <div>
+          <label class="form-label" for="destination_warehouse_id">To Warehouse <span style="color:var(--danger-text)">*</span></label>
+          <select id="destination_warehouse_id" class="form-control" required>
+            <option value="" disabled selected>Select Destination...</option>
+            {% for w in warehouses %}
+            <option value="{{ w.id }}">{{ w.name }}</option>
+            {% endfor %}
+          </select>
+        </div>
+
+        <div>
+          <label class="form-label" for="notes">Notes / Reference (Optional)</label>
+          <input type="text" id="notes" class="form-control" placeholder="e.g. Shipment #123">
+        </div>
+      </div>
+
+      <!-- Items Table -->
+      <div class="table-wrap" style="margin-bottom: 2rem; border: 1px solid var(--border-color); border-radius: 8px; overflow: visible;">
+        <table class="data-table" id="transfer-items-table" style="margin: 0; width: 100%;">
+          <thead style="background-color: #f8fafc;">
+            <tr>
+              <th style="width: 50%; padding: 1rem;">Product</th>
+              <th style="width: 20%; padding: 1rem;">Available Stock</th>
+              <th style="width: 20%; padding: 1rem;">Transfer Qty</th>
+              <th style="width: 10%; padding: 1rem; text-align: center;">Action</th>
+            </tr>
+          </thead>
+          <tbody id="items-tbody">
+            <!-- Rows added by JS -->
+          </tbody>
+        </table>
+        <div style="padding: 1rem; background-color: #f8fafc; border-top: 1px solid var(--border-color);">
+          <button type="button" class="btn btn-outline btn-sm" onclick="addTransferRow()">+ Add Row</button>
+        </div>
+      </div>
+
+      <div style="text-align: right; border-top: 1px solid var(--border-color); padding-top: 1.5rem;">
+        <a href="/inventory" class="btn btn-outline" style="margin-right: 0.75rem;">Cancel</a>
+        <button type="submit" class="btn btn-primary" id="save-transfer-btn">Complete Transfer</button>
+      </div>
+
+    </form>
+  </div>
+</div>
+
+<script>
+  const products = {{ products|tojson }};
+  const preselectProductId = "{{ preselect_product }}";
+  let productStockMap = {}; // Maps product_id -> stock_quantity in source warehouse
+
+  // Fetch inventory for the source warehouse when it changes
+  async function fetchSourceInventory() {
+    const wid = document.getElementById('source_warehouse_id').value;
+    if (!wid) return;
+
+    try {
+      const res = await fetch(`/products/list?warehouse_id=${wid}`);
+      const data = await res.json();
+      
+      productStockMap = {};
+      data.forEach(p => {
+        productStockMap[p.id] = p.stock_quantity;
+      });
+
+      // Update all existing rows with new stock data
+      document.querySelectorAll('#items-tbody tr').forEach(tr => {
+        const selectEl = tr.querySelector('.prod-select');
+        updateRowStock(tr, selectEl.value);
+      });
+    } catch (err) {
+      console.error("Failed to fetch inventory", err);
+    }
+  }
+
+  function updateRowStock(tr, productId) {
+    const stockSpan = tr.querySelector('.avail-stock');
+    if (productId && productStockMap[productId] !== undefined) {
+      stockSpan.textContent = productStockMap[productId];
+    } else {
+      stockSpan.textContent = '-';
+    }
+  }
+
+  const tbody = document.getElementById('items-tbody');
+
+  function addTransferRow(initialProductId = null) {
+    const tr = document.createElement('tr');
+    
+    let productOptions = '<option value="">-- Select Product --</option>';
+    products.forEach(p => {
+      const isSelected = initialProductId && initialProductId == p.id ? 'selected' : '';
+      productOptions += `<option value="${p.id}" ${isSelected}>${p.name} ${p.unit ? '(' + p.unit + ')' : ''}</option>`;
+    });
+
+    tr.innerHTML = `
+      <td style="padding: 1rem;">
+        <select class="form-control prod-select" required>
+          ${productOptions}
+        </select>
+      </td>
+      <td style="padding: 1rem; vertical-align: middle; font-weight: 500;">
+        <span class="avail-stock">-</span>
+      </td>
+      <td style="padding: 1rem;">
+        <input type="number" class="form-control qty-input" min="0.01" step="0.01" value="1" required>
+      </td>
+      <td style="padding: 1rem; text-align: center;">
+        <button type="button" class="btn btn-danger" style="padding: 0.25rem 0.5rem; line-height: 1; border-radius: 4px;" onclick="removeRow(this)">&times;</button>
+      </td>
+    `;
+    tbody.appendChild(tr);
+
+    // Initialize TomSelect for searchable dropdown
+    const selectEl = tr.querySelector('.prod-select');
+    new TomSelect(selectEl, {
+      create: false,
+      dropdownParent: 'body',
+      sortField: {
+        field: "text",
+        direction: "asc"
+      },
+      onChange: function(value) {
+        updateRowStock(tr, value);
+      }
+    });
+
+    if (initialProductId) {
+      updateRowStock(tr, initialProductId);
+    }
+  }
+
+  function removeRow(btn) {
+    btn.closest('tr').remove();
+  }
+
+  // Initial row
+  if (preselectProductId) {
+    addTransferRow(preselectProductId);
+  } else {
+    addTransferRow();
+  }
+
+  async function submitTransfer(e) {
+    e.preventDefault();
+    
+    const sourceWid = document.getElementById('source_warehouse_id').value;
+    const destWid = document.getElementById('destination_warehouse_id').value;
+    
+    if (sourceWid === destWid) {
+      alert("Source and Destination warehouses must be different.");
+      return;
+    }
+
+    const items = [];
+    let valid = true;
+
+    document.querySelectorAll('#items-tbody tr').forEach(tr => {
+      const pid = tr.querySelector('.prod-select').value;
+      const qty = parseFloat(tr.querySelector('.qty-input').value) || 0;
+      
+      if (!pid) {
+        alert("Please select a product for all rows.");
+        valid = false;
+        return;
+      }
+      
+      const availStock = productStockMap[pid] || 0;
+      if (qty > availStock) {
+        const prodName = tr.querySelector('.ts-control .item') ? tr.querySelector('.ts-control .item').textContent : 'Product';
+        alert(`Cannot transfer more than available stock for ${prodName}. Available: ${availStock}`);
+        valid = false;
+        return;
+      }
+
+      items.push({ product_id: pid, quantity: qty });
+    });
+
+    if (!valid) return;
+    if (items.length === 0) {
+      alert("Please add at least one product to transfer.");
+      return;
+    }
+
+    const payload = {
+      source_warehouse_id: sourceWid,
+      destination_warehouse_id: destWid,
+      notes: document.getElementById('notes').value,
+      items: items
+    };
+
+    const btn = document.getElementById('save-transfer-btn');
+    btn.disabled = true;
+    btn.textContent = 'Processing...';
+
+    try {
+      const res = await fetch('/inventory/transfer', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+      const data = await res.json();
+      
+      if (data.ok) {
+        window.location.href = '/inventory';
+      } else {
+        alert(data.error || "Failed to process transfer");
+        btn.disabled = false;
+        btn.textContent = 'Complete Transfer';
+      }
+    } catch (err) {
+      alert("Network error. Please try again.");
+      btn.disabled = false;
+      btn.textContent = 'Complete Transfer';
+    }
+  }
+</script>
+{% endblock %}

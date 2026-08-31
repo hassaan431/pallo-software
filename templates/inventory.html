@@ -149,6 +149,9 @@
 <div class="inline-flex" style="justify-content: space-between; margin-bottom: 1rem;">
   <h2 style="margin:0; font-size:1.25rem; font-weight:700;">Inventory</h2>
   <div style="display: flex; gap: 0.5rem;">
+    {% if current_user.role == 'admin' %}
+    <a href="/inventory/transfer/new" class="btn btn-outline">Transfer Stock</a>
+    {% endif %}
     <button type="button" class="btn btn-outline" id="openAddProductModal">Add Product (Catalog)</button>
     <a href="/purchases/new" class="btn btn-primary">Receive Shipment (Add Stock)</a>
   </div>
@@ -184,19 +187,21 @@
         {% endfor %}
       </select>
       {% endif %}
-      <input type="date" name="date_from" class="form-control" value="{{ request.args.get('date_from', '') }}" title="Date From" style="width: auto; padding: 0.25rem 0.5rem; height: auto;" onchange="this.form.submit()">
-      <input type="date" name="date_to" class="form-control" value="{{ request.args.get('date_to', '') }}" title="Date To" style="width: auto; padding: 0.25rem 0.5rem; height: auto;" onchange="this.form.submit()">
+      
+      <input type="text" id="productSearchInput" class="form-control" placeholder="Search products..." style="width: 150px; padding: 0.25rem 0.5rem; height: auto;" oninput="filterProductsTable()">
+      
+      <input type="{% if request.args.get('date_from') %}date{% else %}text{% endif %}" onfocus="(this.type='date')" onblur="if(!this.value) this.type='text'" name="date_from" class="form-control" placeholder="From" value="{{ request.args.get('date_from', '') }}" title="Date From" style="width: 105px; padding: 0.25rem 0.5rem; height: auto;" onchange="this.form.submit()">
+      <input type="{% if request.args.get('date_to') %}date{% else %}text{% endif %}" onfocus="(this.type='date')" onblur="if(!this.value) this.type='text'" name="date_to" class="form-control" placeholder="To" value="{{ request.args.get('date_to', '') }}" title="Date To" style="width: 105px; padding: 0.25rem 0.5rem; height: auto;" onchange="this.form.submit()">
       {% if request.args.get('date_from') or request.args.get('date_to') %}
-      <a href="/inventory{% if request.args.get('brand') %}?brand={{ request.args.get('brand')|urlencode }}{% endif %}" class="btn btn-secondary" style="padding: 0.25rem 0.5rem; text-decoration: none;">Clear Dates</a>
+      <a href="/inventory{% if request.args.get('brand') %}?brand={{ request.args.get('brand')|urlencode }}{% endif %}" class="btn btn-secondary" style="padding: 0.25rem 0.5rem; text-decoration: none;">Clear</a>
       {% endif %}
-      <input type="text" id="productSearchInput" class="form-control" placeholder="Search products..." style="width: 200px; padding: 0.25rem 0.5rem; height: auto;" oninput="filterProductsTable()">
       
       <div style="display: flex; align-items: center; gap: 0.25rem;">
         <input type="checkbox" name="open_only" id="filterOpenOnly" value="1" {% if request.args.get('open_only') == '1' %}checked{% endif %} onchange="this.form.submit()" style="width: auto; height: auto; margin: 0;">
-        <label for="filterOpenOnly" style="margin:0; font-size: 0.85rem; font-weight: 600; color: #4b5563; cursor: pointer;">Open Items</label>
+        <label for="filterOpenOnly" style="margin:0; font-size: 0.85rem; font-weight: 600; color: #4b5563; cursor: pointer; white-space: nowrap;">Open Items</label>
       </div>
 
-      <select name="brand" class="form-control" style="width: auto; padding: 0.25rem 0.5rem; height: auto;" onchange="this.form.submit()">
+      <select name="brand" class="form-control" style="width: auto; max-width: 120px; padding: 0.25rem 0.5rem; height: auto;" onchange="this.form.submit()">
         <option value="">All Brands</option>
         {% set unique_brands = [] %}
         {% for p in products %}
@@ -208,7 +213,18 @@
           <option value="{{ b }}" {% if request.args.get('brand') == b %}selected{% endif %}>{{ b }}</option>
         {% endfor %}
       </select>
-      <button type="submit" formaction="/inventory/download_csv" class="btn btn-secondary" style="padding: 0.25rem 0.75rem;">Download CSV</button>
+      
+      <div style="display: flex; align-items: center; gap: 0.25rem; border-left: 1px solid #d1d5db; padding-left: 0.5rem; margin-left: 0.25rem;">
+        <select name="stock_filter" class="form-control" style="width: auto; padding: 0.25rem 0.5rem; height: auto;" onchange="this.form.submit()">
+          <option value="">All Stock</option>
+          <option value="out_of_stock" {% if stock_filter == 'out_of_stock' %}selected{% endif %}>Out of Stock</option>
+          <option value="low_stock" {% if stock_filter == 'low_stock' %}selected{% endif %}>Low Stock</option>
+        </select>
+        {% if stock_filter == 'low_stock' %}
+        <input type="number" name="low_stock_threshold" value="{{ low_stock_threshold }}" class="form-control" title="Low Stock Threshold" style="width: 50px; padding: 0.25rem 0.5rem; height: auto;" onchange="this.form.submit()" min="1">
+        {% endif %}
+      </div>
+      <button type="submit" formaction="/inventory/download_csv" class="btn btn-secondary" style="padding: 0.25rem 0.5rem; font-size: 0.85rem; white-space: nowrap;">Download CSV</button>
     </form>
   </div>
   <div class="panel-body">
@@ -290,7 +306,7 @@
                 <span style="color: #6b7280;">-</span>
               {% endif %}
             </td>
-            <td>{{ qty_int }} <button class="btn btn-sm btn-outline-primary" style="padding: 2px 5px; font-size: 10px; margin-left: 5px;" onclick="openAdjustStockModal({{ p.id }}, '{{ p.name|e|replace("'", "\\'") }}', {{ qty_int }})" title="Adjust Stock"><i class="fas fa-edit"></i></button></td>
+            <td>{{ qty_int }}</td>
             <td class="sensitive-data" style="font-weight: 600; color: #1e293b;">${{ '%.2f' % ((p.stock_quantity|default(0)|float) * (p.cost_price|default(0)|float)) }}</td>
             <td>
 
@@ -321,6 +337,12 @@
               >
                 History
               </button>
+              
+              {% if current_user.role == 'admin' %}
+              <a href="/inventory/transfer/new?product_id={{ p.id }}" class="btn btn-secondary" style="padding: 3px 8px; font-size: 11px; border-radius: 4px; margin: 0 1px; text-decoration: none;">
+                Transfer
+              </a>
+              {% endif %}
 
               <button type="button" class="btn btn-danger" data-action="delete-product"
                 data-id="{{ p.id }}"
@@ -515,9 +537,8 @@
       </div>
     </div>
   </div>
-
   <!-- Edit Product Modal -->
-<div id="editProductModal" class="modal-backdrop" aria-hidden="true">
+  <div id="editProductModal" class="modal-backdrop" aria-hidden="true">
   <div class="modal" role="dialog" aria-modal="true" aria-label="Edit Product">
     <div class="modal-header">
       <h3>Edit Product</h3>

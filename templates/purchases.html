@@ -42,7 +42,10 @@
 </style>
 <div class="page-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem;">
   <h2 style="margin:0; font-size:1.25rem; font-weight:700;">Purchase History</h2>
-  <div>
+  <div style="display: flex; gap: 0.5rem;">
+    {% if current_user.role == 'admin' %}
+    <a href="/inventory/transfer/new" class="btn btn-outline">Transfer Stock</a>
+    {% endif %}
     <a href="/purchases/new" class="btn btn-primary">Receive Shipment</a>
   </div>
 </div>

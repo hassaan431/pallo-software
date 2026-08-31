@@ -249,7 +249,6 @@ document.addEventListener('DOMContentLoaded', () => {
       }
     });
   }
-  
   // Handle Password Reset
   const resetPasswordForm = document.getElementById('resetPasswordForm');
   if(resetPasswordForm) {
@@ -279,14 +278,15 @@ document.addEventListener('DOMContentLoaded', () => {
         errorBanner.style.display = 'block';
       }
     });
-    }
+  }
+});
 
-    function openEditUser(id, username, role, warehouse_id) {
-      document.getElementById('editUserTitle').textContent = username;
-      document.getElementById('editRole').value = role;
-      document.getElementById('editWarehouse').value = warehouse_id;
-      document.getElementById('editUserForm').action = `/users/edit/${id}`;
-      openModal('editUserModal');
-    }
-  </script>
+function openEditUser(id, username, role, warehouse_id) {
+  document.getElementById('editUserTitle').textContent = username;
+  document.getElementById('editRole').value = role;
+  document.getElementById('editWarehouse').value = warehouse_id;
+  document.getElementById('editUserForm').action = `/users/edit/${id}`;
+  openModal('editUserModal');
+}
+</script>
 {% endblock %}

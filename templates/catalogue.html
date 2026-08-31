@@ -291,7 +291,6 @@
           </select>
           {% endif %}
           <input type="text" class="search-bar" id="productSearch" placeholder="Search by name or code..." autocomplete="off">
-          <a href="{{ url_for('dashboard') }}" class="btn">Back to Dashboard</a>
           <a href="/logout" style="color:var(--text-muted); text-decoration:none; font-weight:600;">[Logout]</a>
         </div>
       </div>
@@ -447,7 +446,7 @@
 
     const productGrid = document.getElementById('productGrid');
     const categoryTabs = document.getElementById('categoryTabs');
-    const searchInput = document.getElementById('searchInput');
+    const searchInput = document.getElementById('productSearch');
     const cartItemsDiv = document.getElementById('cartItems');
     const cartTotalSpan = document.getElementById('cartTotal');
     const checkoutBtn = document.getElementById('checkoutBtn');
