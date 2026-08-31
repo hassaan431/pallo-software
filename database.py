@@ -113,6 +113,21 @@ def init_db():
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             );
 
+            CREATE TABLE IF NOT EXISTS warehouses (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name TEXT UNIQUE NOT NULL,
+                location TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            );
+
+            CREATE TABLE IF NOT EXISTS warehouse_inventory (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                warehouse_id INTEGER REFERENCES warehouses(id),
+                product_id INTEGER REFERENCES products(id),
+                stock_quantity REAL DEFAULT 0,
+                UNIQUE(warehouse_id, product_id)
+            );
+
             CREATE TABLE IF NOT EXISTS suppliers (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 name TEXT NOT NULL,
@@ -138,6 +153,15 @@ def init_db():
             conn.commit()
         except sqlite3.OperationalError:
             pass
+            
+        # Safely add warehouse_id to users, sales, inventory_history, purchases
+        tables_to_add_warehouse = ['users', 'sales', 'inventory_history', 'purchases']
+        for t in tables_to_add_warehouse:
+            try:
+                conn.execute(f"ALTER TABLE {t} ADD COLUMN warehouse_id INTEGER REFERENCES warehouses(id)")
+                conn.commit()
+            except sqlite3.OperationalError:
+                pass
         
         # Safely add brand column to products table
         try:
@@ -319,6 +343,26 @@ def _seed_default_data(conn):
         
     for name in _DEFAULT_CATEGORY_NAMES:
         cur.execute("INSERT OR IGNORE INTO categories (name) VALUES (?)", (name,))
+
+    # Seed Main Warehouse if not exists
+    cur.execute("SELECT id FROM warehouses WHERE name = 'Main Warehouse'")
+    if cur.fetchone() is None:
+        cur.execute("INSERT INTO warehouses (name, location) VALUES ('Main Warehouse', 'Headquarters')")
+        main_warehouse_id = cur.lastrowid
+        print("Created default 'Main Warehouse'")
+        
+        # Optionally, migrate stock_quantity from products to warehouse_inventory for the main warehouse
+        cur.execute("""
+            INSERT OR IGNORE INTO warehouse_inventory (warehouse_id, product_id, stock_quantity)
+            SELECT ?, id, COALESCE(stock_quantity, 0) FROM products
+        """, (main_warehouse_id,))
+        
+        # Set all users except admin to main warehouse, set all sales, purchases, inventory_history
+        cur.execute("UPDATE users SET warehouse_id = ? WHERE warehouse_id IS NULL AND role != 'admin'", (main_warehouse_id,))
+        cur.execute("UPDATE sales SET warehouse_id = ? WHERE warehouse_id IS NULL", (main_warehouse_id,))
+        cur.execute("UPDATE purchases SET warehouse_id = ? WHERE warehouse_id IS NULL", (main_warehouse_id,))
+        cur.execute("UPDATE inventory_history SET warehouse_id = ? WHERE warehouse_id IS NULL", (main_warehouse_id,))
+        
     conn.commit()
 
 
