@@ -383,8 +383,9 @@ def inventory():
     stock_filter = request.args.get("stock_filter", "")
     low_stock_threshold = float(request.args.get("low_stock_threshold", 5))
     warehouse_id_param = request.args.get("warehouse_id")
-    if warehouse_id_param is None and current_user.role == 'admin':
-        warehouse_id = "1"
+    # Default to None (All Warehouses) if not provided or empty
+    if warehouse_id_param == "" or warehouse_id_param is None:
+        warehouse_id = None
     else:
         warehouse_id = warehouse_id_param
 
@@ -502,9 +503,25 @@ def inventory_download_csv():
     date_from = request.args.get("date_from", "").strip()
     date_to = request.args.get("date_to", "").strip()
     
+    warehouse_id_param = request.args.get("warehouse_id")
+    if warehouse_id_param == "" or warehouse_id_param is None:
+        warehouse_id = None
+    else:
+        warehouse_id = warehouse_id_param
+
+    if current_user.role != 'admin' and current_user.warehouse_id:
+        warehouse_id = current_user.warehouse_id
+        
+    stock_filter = request.args.get("stock_filter", "")
+    low_stock_threshold = float(request.args.get("low_stock_threshold", 5))
+
     conn = get_connection()
     try:
-        query = """
+        stock_select = "COALESCE((SELECT SUM(stock_quantity) FROM warehouse_inventory WHERE product_id = p.id), 0)"
+        if warehouse_id:
+            stock_select = f"COALESCE((SELECT stock_quantity FROM warehouse_inventory WHERE product_id = p.id AND warehouse_id = ?), 0)"
+            
+        query = f"""
             SELECT
                 p.id,
                 p.name,
@@ -512,7 +529,7 @@ def inventory_download_csv():
                 p.unit,
                 p.cost_price,
                 p.selling_price,
-                p.stock_quantity,
+                {stock_select} AS stock_quantity,
                 p.created_at,
                 c.name AS category_name
             FROM products p
@@ -520,6 +537,9 @@ def inventory_download_csv():
             WHERE 1=1
         """
         params = []
+        if warehouse_id:
+            params.append(warehouse_id)
+            
         if brand:
             query += " AND p.brand = ?"
             params.append(brand)
@@ -530,7 +550,14 @@ def inventory_download_csv():
             query += " AND date(p.created_at) <= ?"
             params.append(date_to)
             
-        query += " ORDER BY p.name COLLATE NOCASE"
+        if stock_filter == "out_of_stock":
+            query = f"SELECT * FROM ({query}) WHERE stock_quantity <= 0"
+        elif stock_filter == "low_stock":
+            query = f"SELECT * FROM ({query}) WHERE stock_quantity > 0 AND stock_quantity <= ?"
+            params.append(low_stock_threshold)
+            
+        # The main query string for ordering
+        query += " ORDER BY name COLLATE NOCASE"
         cur = conn.execute(query, params)
         products = [dict(row) for row in cur.fetchall()]
     finally:
