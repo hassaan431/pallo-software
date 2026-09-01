@@ -4810,6 +4810,15 @@ def update_purchase(purchase_id):
     try:
         conn.execute("BEGIN")
         
+        # Determine warehouse_id
+        wid_raw = data.get("warehouse_id")
+        if wid_raw:
+            wid = int(wid_raw)
+        else:
+            # Fallback to the purchase's existing warehouse_id
+            cur = conn.execute("SELECT warehouse_id FROM purchases WHERE id = ?", (purchase_id,))
+            row = cur.fetchone()
+            wid = int(row["warehouse_id"]) if row and row["warehouse_id"] else (current_user.warehouse_id or 1)
         # 1. Fetch old items to calculate net stock changes
         old_items_db = conn.execute("SELECT product_id, qty FROM purchase_items WHERE purchase_id = ?", (purchase_id,)).fetchall()
         old_items = {}
