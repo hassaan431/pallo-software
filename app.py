@@ -425,6 +425,9 @@ def inventory():
         params = []
         if warehouse_id:
             params.append(warehouse_id)
+            if current_user.role != 'admin':
+                query += " AND EXISTS (SELECT 1 FROM warehouse_inventory wi WHERE wi.product_id = p.id AND wi.warehouse_id = ?)"
+                params.append(warehouse_id)
             
         if brand_filter:
             query += " AND p.brand = ?"
@@ -1590,8 +1593,7 @@ def products_list():
     wid = int(warehouse_id) if warehouse_id else (current_user.warehouse_id or 1)
     conn = get_connection()
     try:
-        cur = conn.execute(
-            """
+        query = """
             SELECT
                 p.id AS id,
                 p.name AS name,
@@ -1607,11 +1609,18 @@ def products_list():
             FROM products p
             LEFT JOIN brands b
                 ON LOWER(b.name) = LOWER(p.brand)
+            WHERE 1=1
+        """
+        params = [wid]
+        if current_user.role != 'admin':
+            query += " AND EXISTS (SELECT 1 FROM warehouse_inventory wi WHERE wi.product_id = p.id AND wi.warehouse_id = ?)"
+            params.append(wid)
+            
+        query += """
             GROUP BY p.id
             ORDER BY p.id DESC
-            """,
-            (wid,)
-        )
+        """
+        cur = conn.execute(query, tuple(params))
         rows = cur.fetchall()
         return jsonify(
             [
