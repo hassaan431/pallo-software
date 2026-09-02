@@ -19,6 +19,7 @@
             <th>ID</th>
             <th>Name</th>
             <th>Location</th>
+            <th>Commission Rate</th>
             <th>Actions</th>
           </tr>
         </thead>
@@ -28,13 +29,14 @@
             <td>{{ w.id }}</td>
             <td style="font-weight: 500;">{{ w.name }}</td>
             <td>{{ w.location or 'N/A' }}</td>
+            <td>{{ w.commission_rate or '0' }}%</td>
             <td>
-              <button class="btn btn-secondary btn-sm" onclick="openEditWarehouse({{ w.id }}, '{{ w.name|e }}', '{{ w.location|e }}')">Edit</button>
+              <button class="btn btn-secondary btn-sm" onclick="openEditWarehouse({{ w.id }}, '{{ w.name|e }}', '{{ w.location|e }}', '{{ w.commission_rate or 0 }}')">Edit</button>
             </td>
           </tr>
           {% else %}
           <tr>
-            <td colspan="4" class="text-center">No warehouses found.</td>
+            <td colspan="5" class="text-center">No warehouses found.</td>
           </tr>
           {% endfor %}
         </tbody>
@@ -59,6 +61,10 @@
         <div class="modal-field">
           <label for="newLocation">Location</label>
           <input type="text" class="form-control" id="newLocation" name="location">
+        </div>
+        <div class="modal-field">
+          <label for="newCommissionRate">Commission Rate (%)</label>
+          <input type="number" step="0.01" class="form-control" id="newCommissionRate" name="commission_rate" value="0">
         </div>
         
         <div class="modal-actions" style="margin-top: 1.5rem; display: flex; justify-content: flex-end; gap: 0.75rem;">
@@ -86,6 +92,10 @@
         <div class="modal-field">
           <label for="editLocation">Location</label>
           <input type="text" class="form-control" id="editLocation" name="location">
+        </div>
+        <div class="modal-field">
+          <label for="editCommissionRate">Commission Rate (%)</label>
+          <input type="number" step="0.01" class="form-control" id="editCommissionRate" name="commission_rate">
         </div>
         
         <div class="modal-actions" style="margin-top: 1.5rem; display: flex; justify-content: flex-end; gap: 0.75rem;">
@@ -135,10 +145,11 @@
     });
   });
 
-  function openEditWarehouse(id, name, location) {
+  function openEditWarehouse(id, name, location, commission_rate) {
     document.getElementById('editWarehouseForm').action = `/warehouses/edit/${id}`;
     document.getElementById('editName').value = name;
     document.getElementById('editLocation').value = location;
+    document.getElementById('editCommissionRate').value = commission_rate;
     openModal('editWarehouseModal');
   }
 </script>

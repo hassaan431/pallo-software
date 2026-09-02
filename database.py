@@ -88,6 +88,8 @@ def init_db():
                 grand_total REAL DEFAULT 0,
                 notes TEXT,
                 status TEXT DEFAULT 'unpaid',
+                commission_rate REAL DEFAULT 0,
+                commission_amount REAL DEFAULT 0,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             );
 
@@ -117,6 +119,7 @@ def init_db():
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 name TEXT UNIQUE NOT NULL,
                 location TEXT,
+                commission_rate REAL DEFAULT 0,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             );
 
@@ -162,6 +165,24 @@ def init_db():
                 conn.commit()
             except sqlite3.OperationalError:
                 pass
+
+        try:
+            conn.execute("ALTER TABLE sales ADD COLUMN commission_rate REAL DEFAULT 0")
+            conn.commit()
+        except sqlite3.OperationalError:
+            pass
+
+        try:
+            conn.execute("ALTER TABLE sales ADD COLUMN commission_amount REAL DEFAULT 0")
+            conn.commit()
+        except sqlite3.OperationalError:
+            pass
+
+        try:
+            conn.execute("ALTER TABLE warehouses ADD COLUMN commission_rate REAL DEFAULT 0")
+            conn.commit()
+        except sqlite3.OperationalError:
+            pass
         
         # Safely add brand column to products table
         try:

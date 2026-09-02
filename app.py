@@ -216,7 +216,7 @@ def dashboard():
             
         # Get today's sales
         daily_revenue_row = conn.execute(
-            f'SELECT COALESCE(SUM(grand_total), 0) as total_revenue FROM sales WHERE {daily_cond}', 
+            f'SELECT COALESCE(SUM(grand_total), 0) as total_revenue, COALESCE(SUM(commission_amount), 0) as total_commission FROM sales WHERE {daily_cond}', 
             tuple(daily_params)
         ).fetchone()
         
@@ -241,12 +241,13 @@ def dashboard():
         ).fetchone()
         
         daily_revenue = float(daily_revenue_row["total_revenue"] or 0)
+        daily_commission = float(daily_revenue_row["total_commission"] or 0)
         daily_cost = float(daily_cost_row["total_cost"] or 0)
-        daily_profit = daily_revenue - daily_cost
+        daily_profit = daily_revenue - daily_cost - daily_commission
         
         # Get monthly revenue and cost
         monthly_revenue_row = conn.execute(
-            f"SELECT COALESCE(SUM(grand_total), 0) as total_revenue FROM sales WHERE {month_cond}",
+            f"SELECT COALESCE(SUM(grand_total), 0) as total_revenue, COALESCE(SUM(commission_amount), 0) as total_commission FROM sales WHERE {month_cond}",
             tuple(month_params)
         ).fetchone()
         monthly_cost_row = conn.execute(
@@ -258,8 +259,9 @@ def dashboard():
         ).fetchone()
         
         monthly_revenue = float(monthly_revenue_row["total_revenue"] or 0)
+        monthly_commission = float(monthly_revenue_row["total_commission"] or 0)
         monthly_cost = float(monthly_cost_row["total_cost"] or 0)
-        monthly_profit = monthly_revenue - monthly_cost
+        monthly_profit = monthly_revenue - monthly_cost - monthly_commission
         monthly_margin = round((monthly_profit / monthly_revenue * 100), 2) if monthly_revenue > 0 else 0
         
         # Get daily expenses
@@ -2049,6 +2051,7 @@ def sales_data():
                 s.notes,
                 s.amount_paid,
                 s.remaining_amount,
+                s.commission_amount,
                 c.name as customer_name,
                 c.terms as customer_terms,
                 u.username as salesman_name,
@@ -2065,8 +2068,10 @@ def sales_data():
             d = dict(r)
             rev = float(d["grand_total"] or 0)
             cost = float(d["total_cost"] or 0)
-            d["profit_margin"] = round(((rev - cost) / rev * 100), 2) if rev > 0 else 0
-            d["profit_amount"] = round(rev - cost, 2)
+            commission = float(d["commission_amount"] or 0)
+            profit = rev - cost - commission
+            d["profit_margin"] = round((profit / rev * 100), 2) if rev > 0 else 0
+            d["profit_amount"] = round(profit, 2)
             sales_list.append(d)
         return jsonify(sales_list)
     finally:
@@ -2132,6 +2137,7 @@ def sales_export():
                 s.notes,
                 s.amount_paid,
                 s.remaining_amount,
+                s.commission_amount,
                 c.name as customer_name,
                 (SELECT COUNT(si.id) FROM sale_items si WHERE si.sale_id = s.id) as item_count,
                 (SELECT COALESCE(SUM(si.qty * COALESCE(si.packing_multiplier, 1.0) * si.cost_price), 0) FROM sale_items si WHERE si.sale_id = s.id) as total_cost
@@ -2156,8 +2162,10 @@ def sales_export():
         d = dict(r)
         rev = float(d["grand_total"] or 0)
         cost = float(d["total_cost"] or 0)
-        margin = round(((rev - cost) / rev * 100), 2) if rev > 0 else 0.0
-        profit_amount = round(rev - cost, 2)
+        commission = float(d["commission_amount"] or 0)
+        profit = rev - cost - commission
+        margin = round((profit / rev * 100), 2) if rev > 0 else 0.0
+        profit_amount = round(profit, 2)
         csv_rows.append([
             d["invoice_number"] or "",
             d["invoice_date"] or "",
@@ -2373,13 +2381,18 @@ def sales_new():
             except ValueError:
                 salesman_id = current_user.id
                 
+            wid = int(warehouse_id_raw) if warehouse_id_raw else (current_user.warehouse_id or 1)
+            wh_row = conn.execute("SELECT commission_rate FROM warehouses WHERE id = ?", (wid,)).fetchone()
+            commission_rate = float(wh_row["commission_rate"] or 0) if wh_row else 0
+            commission_amount = round(grand_total * (commission_rate / 100), 2)
+                
             cur = conn.execute(
                 """
                 INSERT INTO sales
                     (invoice_number, customer_id, invoice_date, due_date, terms, payment_type,
-                     discount_amount, subtotal, grand_total, notes, status, amount_paid, remaining_amount, salesman_id, warehouse_id)
+                     discount_amount, subtotal, grand_total, notes, status, amount_paid, remaining_amount, salesman_id, warehouse_id, commission_rate, commission_amount)
                 VALUES
-                    (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     invoice_number,
@@ -2396,7 +2409,9 @@ def sales_new():
                     amount_paid,
                     remaining_amount,
                     salesman_id,
-                    int(warehouse_id_raw) if warehouse_id_raw else (current_user.warehouse_id or 1),
+                    wid,
+                    commission_rate,
+                    commission_amount,
                 ),
             )
             sale_id = int(cur.lastrowid)
@@ -4217,12 +4232,13 @@ def warehouses_list():
 def warehouses_add():
     name = (request.form.get("name") or "").strip()
     location = (request.form.get("location") or "").strip()
+    commission_rate = float(request.form.get("commission_rate") or 0)
     if not name:
         return redirect(url_for("warehouses_list"))
         
     conn = get_connection()
     try:
-        conn.execute("INSERT INTO warehouses (name, location) VALUES (?, ?)", (name, location))
+        conn.execute("INSERT INTO warehouses (name, location, commission_rate) VALUES (?, ?, ?)", (name, location, commission_rate))
         conn.commit()
     except sqlite3.IntegrityError:
         pass
@@ -4235,12 +4251,13 @@ def warehouses_add():
 def warehouses_edit(warehouse_id):
     name = (request.form.get("name") or "").strip()
     location = (request.form.get("location") or "").strip()
+    commission_rate = float(request.form.get("commission_rate") or 0)
     if not name:
         return redirect(url_for("warehouses_list"))
         
     conn = get_connection()
     try:
-        conn.execute("UPDATE warehouses SET name = ?, location = ? WHERE id = ?", (name, location, warehouse_id))
+        conn.execute("UPDATE warehouses SET name = ?, location = ?, commission_rate = ? WHERE id = ?", (name, location, commission_rate, warehouse_id))
         conn.commit()
     except sqlite3.IntegrityError:
         pass
@@ -4411,18 +4428,23 @@ def pos_submit_order():
         
         print(f"DEBUG pos_submit_order: grand_total={grand_total}, amount_paid={amount_paid}, payment_type={payment_type}, remaining={remaining_amount}, status={status}")
 
+        # Fetch commission rate
+        wh_row = conn.execute("SELECT commission_rate FROM warehouses WHERE id = ?", (wid,)).fetchone()
+        commission_rate = float(wh_row["commission_rate"] or 0) if wh_row else 0
+        commission_amount = round(grand_total * (commission_rate / 100), 2)
+
         # Insert sale
         cur = conn.execute(
             """
             INSERT INTO sales
                 (invoice_number, customer_id, invoice_date, due_date, terms, payment_type,
-                 subtotal, grand_total, status, amount_paid, remaining_amount, salesman_id, warehouse_id)
+                 subtotal, grand_total, status, amount_paid, remaining_amount, salesman_id, warehouse_id, commission_rate, commission_amount)
             VALUES
-                (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 invoice_number, customer_id, invoice_date, data.get("due_date"), data.get("customer_terms"), payment_type,
-                subtotal, grand_total, status, amount_paid, remaining_amount, current_user.id, wid
+                subtotal, grand_total, status, amount_paid, remaining_amount, current_user.id, wid, commission_rate, commission_amount
             )
         )
         sale_id = int(cur.lastrowid)
