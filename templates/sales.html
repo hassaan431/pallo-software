@@ -475,6 +475,15 @@
               <option value="credit">Credit</option>
             </select>
           </div>
+          <div>
+            <label class="field-label" for="filterWarehouse" style="margin-bottom: 6px; display: block;">Warehouse</label>
+            <select class="form-control" id="filterWarehouse" style="padding: 8px 12px; border-radius: 6px;">
+              <option value="all" selected>All Warehouses</option>
+              {% for w in warehouses %}
+              <option value="{{ w.id }}">{{ w.name }}</option>
+              {% endfor %}
+            </select>
+          </div>
         </div>
         <div style="margin-top:0.9rem; display:flex; justify-content:flex-end; gap: 8px;">
           <button type="button" class="btn btn-primary" id="filterBtn">Filter</button>
@@ -1185,6 +1194,7 @@
   const filterDateTo = document.getElementById('filterDateTo');
   const filterCustomer = document.getElementById('filterCustomer');
   const filterPaymentType = document.getElementById('filterPaymentType');
+  const filterWarehouse = document.getElementById('filterWarehouse');
   const filterBtn = document.getElementById('filterBtn');
 
   function renderRecentSales(rows) {
@@ -1337,6 +1347,7 @@
     if (filterDateTo && filterDateTo.value) params.append('date_to', filterDateTo.value);
     if (filterCustomer && filterCustomer.value) params.append('customer_id', filterCustomer.value);
     if (filterPaymentType && filterPaymentType.value) params.append('payment_type', filterPaymentType.value);
+    if (filterWarehouse && filterWarehouse.value) params.append('warehouse_id', filterWarehouse.value);
     
     const filterSearch = document.getElementById('filterSearch');
     if (filterSearch && filterSearch.value) params.append('search', filterSearch.value);
@@ -1692,6 +1703,8 @@
             $${formatRate(item.rate)}</td>
           <td style="text-align:right">
             $${parseFloat(item.amount).toFixed(2)}</td>
+          <td style="text-align:right">
+            $${parseFloat(item.commission_amount || 0).toFixed(2)}</td>
         </tr>
       `).join('');
 
@@ -1714,7 +1727,7 @@
       let discountHtml = 
         parseFloat(data.discount_amount) > 0 ?
         `<tr>
-          <td colspan="4" 
+          <td colspan="5" 
             style="text-align:right;
             padding:4px 8px;">Discount:</td>
           <td style="text-align:right;
@@ -1826,6 +1839,12 @@
                 ${Number(data.profit_margin).toFixed(2)}%
               </div>
             </div>
+            <div style="margin-bottom:8px;">
+              <span style="color:#6b7280; font-size:12px;">COMMISSION</span>
+              <div style="font-weight:bold;">
+                $${parseFloat(data.commission_amount || 0).toFixed(2)}
+              </div>
+            </div>
             <div>
               <span style="color:#6b7280; 
                 font-size:12px;">PAID</span>
@@ -1859,12 +1878,15 @@
               <th style="padding:10px 8px; 
                 text-align:right; width:90px;">
                 Amount</th>
+              <th style="padding:10px 8px; 
+                text-align:right; width:90px;">
+                Commission</th>
             </tr>
           </thead>
           <tbody>${itemsHtml}</tbody>
           <tfoot>
             <tr style="border-top:2px solid #e5e7eb;">
-              <td colspan="4" 
+              <td colspan="5" 
                 style="text-align:right; 
                 padding:8px; color:#6b7280;">
                 Subtotal:</td>
@@ -1876,13 +1898,13 @@
             ${discountHtml}
             <tr style="background:#1a2332; 
               color:white;">
-              <td colspan="4" 
+              <td colspan="5" 
                 style="text-align:right; 
-                padding:10px 8px; 
+                padding:12px 8px; 
                 font-weight:bold;">
                 GRAND TOTAL:</td>
               <td style="text-align:right; 
-                padding:10px 8px; 
+                padding:12px 8px; 
                 font-weight:bold;">
                 $${parseFloat(
                   data.grand_total).toFixed(2)}</td>

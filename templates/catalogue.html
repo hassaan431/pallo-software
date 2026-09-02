@@ -465,7 +465,10 @@
       try {
         const prodRes = await fetch(`/products/list?warehouse_id=${document.getElementById("warehouseSelect") ? document.getElementById("warehouseSelect").value : ""}`).then(r => r.json());
         products = prodRes;
-        renderProducts(products);
+        
+        const activeCat = document.querySelector('.category-btn.active')?.dataset.id || 'all';
+        const searchVal = document.getElementById('searchInput')?.value || '';
+        renderProducts(activeCat, searchVal);
       } catch (e) { console.error(e); }
     }
 

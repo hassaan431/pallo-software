@@ -101,7 +101,8 @@ def init_db():
                 qty REAL DEFAULT 1,
                 rate REAL DEFAULT 0,
                 amount REAL DEFAULT 0,
-                cost_price REAL DEFAULT 0
+                cost_price REAL DEFAULT 0,
+                commission_amount REAL DEFAULT 0
             );
 
             CREATE TABLE IF NOT EXISTS inventory_history (
@@ -180,6 +181,12 @@ def init_db():
 
         try:
             conn.execute("ALTER TABLE warehouses ADD COLUMN commission_rate REAL DEFAULT 0")
+            conn.commit()
+        except sqlite3.OperationalError:
+            pass
+            
+        try:
+            conn.execute("ALTER TABLE sale_items ADD COLUMN commission_amount REAL DEFAULT 0")
             conn.commit()
         except sqlite3.OperationalError:
             pass

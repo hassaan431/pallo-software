@@ -233,7 +233,7 @@ def dashboard():
             month_cost_params.append(warehouse_id)
             
         daily_cost_row = conn.execute(
-            f'''SELECT COALESCE(SUM(si.qty * COALESCE(si.packing_multiplier, 1.0) * si.cost_price), 0) as total_cost 
+            f'''SELECT COALESCE(SUM((si.qty * COALESCE(si.packing_multiplier, 1.0) * si.cost_price) + COALESCE(si.commission_amount, 0)), 0) as total_cost 
                FROM sale_items si 
                JOIN sales s ON si.sale_id = s.id 
                WHERE {daily_cost_cond}''', 
@@ -251,7 +251,7 @@ def dashboard():
             tuple(month_params)
         ).fetchone()
         monthly_cost_row = conn.execute(
-            f'''SELECT COALESCE(SUM(si.qty * COALESCE(si.packing_multiplier, 1.0) * si.cost_price), 0) as total_cost 
+            f'''SELECT COALESCE(SUM((si.qty * COALESCE(si.packing_multiplier, 1.0) * si.cost_price) + COALESCE(si.commission_amount, 0)), 0) as total_cost 
                FROM sale_items si 
                JOIN sales s ON si.sale_id = s.id 
                WHERE {month_cost_cond}''',
@@ -298,7 +298,7 @@ def dashboard():
                 s.grand_total,
                 s.payment_type,
                 s.status,
-                (SELECT COALESCE(SUM(si.qty * COALESCE(si.packing_multiplier, 1.0) * si.cost_price), 0) FROM sale_items si WHERE si.sale_id = s.id) as total_cost
+                (SELECT COALESCE(SUM((si.qty * COALESCE(si.packing_multiplier, 1.0) * si.cost_price) + COALESCE(si.commission_amount, 0)), 0) FROM sale_items si WHERE si.sale_id = s.id) as total_cost
             FROM sales s
             LEFT JOIN customers c ON c.id = s.customer_id
             {recent_sales_cond}
@@ -1859,7 +1859,7 @@ def sales():
                 s.status,
                 COALESCE(s.amount_paid, 0) AS amount_paid,
                 COALESCE(s.remaining_amount, 0) AS remaining_amount,
-                COALESCE(SUM(si.qty * COALESCE(si.packing_multiplier, 1.0) * si.cost_price), 0) AS total_cost,
+                COALESCE(SUM((si.qty * COALESCE(si.packing_multiplier, 1.0) * si.cost_price) + COALESCE(si.commission_amount, 0)), 0) AS total_cost,
                 u.username AS salesman_name
             FROM sales s
             LEFT JOIN customers c ON c.id = s.customer_id
@@ -1984,6 +1984,7 @@ def sales_data():
     payment_type = (request.args.get("payment_type") or "").strip()
     salesman_id = (request.args.get("salesman_id") or "").strip()
     salesman_name_filter = (request.args.get("salesman_name") or "").strip()
+    warehouse_id = (request.args.get("warehouse_id") or "").strip()
     search = (request.args.get("search") or "").strip()
 
     conditions = []
@@ -2024,6 +2025,14 @@ def sales_data():
     if payment_type and payment_type not in ("all", ""):
         conditions.append("s.payment_type = ?")
         params.append(payment_type)
+        
+    if warehouse_id and warehouse_id not in ("all", ""):
+        try:
+            warehouse_id_int = int(warehouse_id)
+            conditions.append("s.warehouse_id = ?")
+            params.append(warehouse_id_int)
+        except ValueError:
+            pass
 
     if search:
         search_term = f"%{search.lower()}%"
@@ -2055,7 +2064,7 @@ def sales_data():
                 c.name as customer_name,
                 c.terms as customer_terms,
                 u.username as salesman_name,
-                (SELECT COALESCE(SUM(si.qty * COALESCE(si.packing_multiplier, 1.0) * si.cost_price), 0) FROM sale_items si WHERE si.sale_id = s.id) as total_cost
+                (SELECT COALESCE(SUM((si.qty * COALESCE(si.packing_multiplier, 1.0) * si.cost_price) + COALESCE(si.commission_amount, 0)), 0) FROM sale_items si WHERE si.sale_id = s.id) as total_cost
             FROM sales s
             LEFT JOIN customers c ON c.id = s.customer_id
             LEFT JOIN users u ON u.id = s.salesman_id
@@ -2069,7 +2078,7 @@ def sales_data():
             rev = float(d["grand_total"] or 0)
             cost = float(d["total_cost"] or 0)
             commission = float(d["commission_amount"] or 0)
-            profit = rev - cost - commission
+            profit = rev - cost
             d["profit_margin"] = round((profit / rev * 100), 2) if rev > 0 else 0
             d["profit_amount"] = round(profit, 2)
             sales_list.append(d)
@@ -2090,6 +2099,7 @@ def sales_export():
     customer_id = (request.args.get("customer_id") or "").strip()
     payment_type = (request.args.get("payment_type") or "").strip()
     search = (request.args.get("search") or "").strip()
+    warehouse_id = (request.args.get("warehouse_id") or "").strip()
 
     conditions = []
     params = []
@@ -2110,7 +2120,14 @@ def sales_export():
     if payment_type and payment_type not in ("all", ""):
         conditions.append("s.payment_type = ?")
         params.append(payment_type)
-
+        
+    if warehouse_id and warehouse_id not in ("all", ""):
+        try:
+            warehouse_id_int = int(warehouse_id)
+            conditions.append("s.warehouse_id = ?")
+            params.append(warehouse_id_int)
+        except ValueError:
+            pass
     if search:
         search_term = f"%{search.lower()}%"
         conditions.append("(LOWER(s.invoice_number) LIKE ? OR LOWER(c.name) LIKE ?)")
@@ -2140,7 +2157,7 @@ def sales_export():
                 s.commission_amount,
                 c.name as customer_name,
                 (SELECT COUNT(si.id) FROM sale_items si WHERE si.sale_id = s.id) as item_count,
-                (SELECT COALESCE(SUM(si.qty * COALESCE(si.packing_multiplier, 1.0) * si.cost_price), 0) FROM sale_items si WHERE si.sale_id = s.id) as total_cost
+                (SELECT COALESCE(SUM((si.qty * COALESCE(si.packing_multiplier, 1.0) * si.cost_price) + COALESCE(si.commission_amount, 0)), 0) FROM sale_items si WHERE si.sale_id = s.id) as total_cost
             FROM sales s
             LEFT JOIN customers c ON c.id = s.customer_id
             {where_sql}
@@ -2163,7 +2180,7 @@ def sales_export():
         rev = float(d["grand_total"] or 0)
         cost = float(d["total_cost"] or 0)
         commission = float(d["commission_amount"] or 0)
-        profit = rev - cost - commission
+        profit = rev - cost
         margin = round((profit / rev * 100), 2) if rev > 0 else 0.0
         profit_amount = round(profit, 2)
         csv_rows.append([
@@ -2384,7 +2401,11 @@ def sales_new():
             wid = int(warehouse_id_raw) if warehouse_id_raw else (current_user.warehouse_id or 1)
             wh_row = conn.execute("SELECT commission_rate FROM warehouses WHERE id = ?", (wid,)).fetchone()
             commission_rate = float(wh_row["commission_rate"] or 0) if wh_row else 0
-            commission_amount = round(grand_total * (commission_rate / 100), 2)
+            
+            commission_amount = 0
+            for li in parsed_items:
+                li["commission_amount"] = round(li["amount"] * (commission_rate / 100), 2)
+                commission_amount += li["commission_amount"]
                 
             cur = conn.execute(
                 """
@@ -2420,9 +2441,9 @@ def sales_new():
                 conn.execute(
                     """
                     INSERT INTO sale_items
-                        (sale_id, product_id, description, qty, rate, amount, cost_price, print_dual_units, packing_multiplier)
+                        (sale_id, product_id, description, qty, rate, amount, cost_price, print_dual_units, packing_multiplier, commission_amount)
                     VALUES
-                        (?, ?, ?, ?, ?, ?, COALESCE((SELECT cost_price FROM products WHERE id = ?), 0), ?, ?)
+                        (?, ?, ?, ?, ?, ?, COALESCE((SELECT cost_price FROM products WHERE id = ?), 0), ?, ?, ?)
                     """,
                     (
                         sale_id,
@@ -2434,6 +2455,7 @@ def sales_new():
                         li["product_id"],
                         li["print_dual_units"],
                         li["packing_multiplier"],
+                        li["commission_amount"],
                     ),
                 )
 
@@ -2987,9 +3009,10 @@ def sale_details(sale_id: int):
                 s.grand_total,
                 s.amount_paid,
                 s.remaining_amount,
+                s.commission_amount,
                 c.name as customer_name,
                 u.username as salesman_name,
-                (SELECT COALESCE(SUM(si.qty * COALESCE(si.packing_multiplier, 1.0) * si.cost_price), 0) FROM sale_items si WHERE si.sale_id = s.id) as total_cost
+                (SELECT COALESCE(SUM((si.qty * COALESCE(si.packing_multiplier, 1.0) * si.cost_price) + COALESCE(si.commission_amount, 0)), 0) FROM sale_items si WHERE si.sale_id = s.id) as total_cost
             FROM sales s
             LEFT JOIN customers c ON c.id = s.customer_id
             LEFT JOIN users u ON u.id = s.salesman_id
@@ -3008,7 +3031,8 @@ def sale_details(sale_id: int):
                 description,
                 qty,
                 rate,
-                amount
+                amount,
+                commission_amount
             FROM sale_items
             WHERE sale_id = ?
             ORDER BY id
@@ -3036,6 +3060,7 @@ def sale_details(sale_id: int):
             "remaining_amount": sale["remaining_amount"],
             "customer_name": sale["customer_name"],
             "salesman_name": sale["salesman_name"],
+            "commission_amount": sale["commission_amount"],
             "profit_margin": profit_margin,
             "profit_amount": profit_amount,
             "items": [dict(item) for item in items]
@@ -3419,7 +3444,7 @@ def reports_by_customer():
               c.area,
               COUNT(DISTINCT s.id) as invoice_count,
               COALESCE(SUM(si.amount), 0) as total_revenue,
-              COALESCE(SUM(si.qty * COALESCE(si.packing_multiplier, 1.0) * si.cost_price), 0) as total_cost,
+              COALESCE(SUM((si.qty * COALESCE(si.packing_multiplier, 1.0) * si.cost_price) + COALESCE(si.commission_amount, 0)), 0) as total_cost,
               (SELECT COALESCE(SUM(remaining_amount), 0) FROM sales WHERE customer_id = c.id) as outstanding,
               MAX(s.invoice_date) as last_sale_date
             FROM customers c
@@ -3506,7 +3531,7 @@ def reports_by_brand():
                 p.brand,
                 COALESCE(SUM(si.qty), 0) AS units_sold,
                 COALESCE(SUM(si.amount), 0) AS total_revenue,
-                COALESCE(SUM(si.qty * COALESCE(si.packing_multiplier, 1.0) * si.cost_price), 0) as total_cost
+                COALESCE(SUM((si.qty * COALESCE(si.packing_multiplier, 1.0) * si.cost_price) + COALESCE(si.commission_amount, 0)), 0) as total_cost
             FROM sale_items si
             JOIN products p ON p.id = si.product_id
             JOIN sales s ON s.id = si.sale_id
@@ -3555,7 +3580,7 @@ def reports_by_category():
                 COALESCE(cat.name, 'Uncategorized') AS category_name,
                 COALESCE(SUM(si.qty), 0) AS qty_sold,
                 COALESCE(SUM(si.amount), 0) AS total_revenue,
-                COALESCE(SUM(si.qty * COALESCE(si.packing_multiplier, 1.0) * si.cost_price), 0) as total_cost,
+                COALESCE(SUM((si.qty * COALESCE(si.packing_multiplier, 1.0) * si.cost_price) + COALESCE(si.commission_amount, 0)), 0) as total_cost,
                 SUM(p.stock_quantity) as current_stock
             FROM sale_items si
             JOIN products p ON p.id = si.product_id
@@ -3585,6 +3610,56 @@ def reports_by_category():
         })
     return jsonify(result)
 
+@app.route("/reports/commission", methods=["GET"])
+@admin_required
+def reports_commission():
+    conditions = ["s.customer_id IS NOT NULL"]
+    params = []
+    parse_date_filters(conditions, params)
+
+    brand = (request.args.get("brand") or "").strip()
+    if brand:
+        conditions.append("p.brand = ?")
+        params.append(brand)
+        
+    salesman_id = (request.args.get("salesman_id") or "").strip()
+    if salesman_id and salesman_id != "all":
+        try:
+            conditions.append("s.salesman_id = ?")
+            params.append(int(salesman_id))
+        except ValueError:
+            pass
+
+    where_sql = " AND ".join(conditions)
+
+    conn = get_connection()
+    try:
+        rows = conn.execute(
+            f'''
+            SELECT 
+              LOWER(COALESCE(u.username, 'admin')) as salesman_name,
+              COALESCE(SUM(si.commission_amount), 0) as commission_amount
+            FROM sales s
+            LEFT JOIN users u ON u.id = s.salesman_id
+            JOIN sale_items si ON si.sale_id = s.id
+            JOIN products p ON p.id = si.product_id
+            WHERE {where_sql}
+            GROUP BY LOWER(COALESCE(u.username, 'admin'))
+            ORDER BY commission_amount DESC
+            ''',
+            params,
+        ).fetchall()
+    finally:
+        conn.close()
+
+    result = []
+    for r in rows:
+        result.append({
+            "salesman_name": "Admin" if r["salesman_name"] == "admin" else r["salesman_name"].title(),
+            "commission_amount": float(r["commission_amount"] or 0)
+        })
+    return jsonify(result)
+
 @app.route("/reports/by-salesman", methods=["GET"])
 @admin_required
 def reports_by_salesman():
@@ -3603,7 +3678,7 @@ def reports_by_salesman():
               LOWER(COALESCE(u.username, 'admin')) as salesman_name,
               COUNT(DISTINCT s.id) as invoice_count,
               COALESCE(SUM(si.amount), 0) as total_revenue,
-              COALESCE(SUM(si.qty * COALESCE(si.packing_multiplier, 1.0) * si.cost_price), 0) as total_cost,
+              COALESCE(SUM((si.qty * COALESCE(si.packing_multiplier, 1.0) * si.cost_price) + COALESCE(si.commission_amount, 0)), 0) as total_cost,
               (SELECT COALESCE(SUM(remaining_amount), 0) FROM sales s2 
                LEFT JOIN users u2 ON u2.id = s2.salesman_id 
                WHERE LOWER(COALESCE(u2.username, 'admin')) = LOWER(COALESCE(u.username, 'admin'))) as outstanding
@@ -3663,7 +3738,7 @@ def reports_by_product():
                 COALESCE(cat.name, 'Uncategorized') as category,
                 COALESCE(SUM(si.qty), 0) as units_sold,
                 COALESCE(SUM(si.amount), 0) as total_revenue,
-                COALESCE(SUM(si.qty * COALESCE(si.packing_multiplier, 1.0) * si.cost_price), 0) as total_cost,
+                COALESCE(SUM((si.qty * COALESCE(si.packing_multiplier, 1.0) * si.cost_price) + COALESCE(si.commission_amount, 0)), 0) as total_cost,
                 p.stock_quantity as current_stock
             FROM sale_items si
             JOIN products p ON p.id = si.product_id
@@ -3907,7 +3982,7 @@ def reports_profit():
                 s.invoice_date,
                 COUNT(DISTINCT s.id) as invoice_count,
                 COALESCE(SUM(si.qty * si.rate), 0) as total_revenue,
-                COALESCE(SUM(si.qty * COALESCE(si.packing_multiplier, 1.0) * si.cost_price), 0) as total_cost
+                COALESCE(SUM((si.qty * COALESCE(si.packing_multiplier, 1.0) * si.cost_price) + COALESCE(si.commission_amount, 0)), 0) as total_cost
             FROM sales s
             JOIN sale_items si ON si.sale_id = s.id
             JOIN products p ON si.product_id = p.id
@@ -3983,7 +4058,7 @@ def reports_export(type: str):
                   c.area,
                   COUNT(DISTINCT s.id) as invoice_count,
                   COALESCE(SUM(si.amount), 0) as total_revenue,
-                  COALESCE(SUM(si.qty * COALESCE(si.packing_multiplier, 1.0) * si.cost_price), 0) as total_cost,
+                  COALESCE(SUM((si.qty * COALESCE(si.packing_multiplier, 1.0) * si.cost_price) + COALESCE(si.commission_amount, 0)), 0) as total_cost,
                   (SELECT COALESCE(SUM(remaining_amount), 0) FROM sales WHERE customer_id = c.id) as outstanding,
                   MAX(s.invoice_date) as last_sale_date
                 FROM customers c
@@ -4028,7 +4103,7 @@ def reports_export(type: str):
                     p.brand,
                     COALESCE(SUM(si.qty), 0) AS units_sold,
                     COALESCE(SUM(si.amount), 0) AS total_revenue,
-                    COALESCE(SUM(si.qty * COALESCE(si.packing_multiplier, 1.0) * si.cost_price), 0) as total_cost
+                    COALESCE(SUM((si.qty * COALESCE(si.packing_multiplier, 1.0) * si.cost_price) + COALESCE(si.commission_amount, 0)), 0) as total_cost
                 FROM sale_items si
                 JOIN products p ON p.id = si.product_id
                 JOIN sales s ON s.id = si.sale_id
@@ -4065,7 +4140,7 @@ def reports_export(type: str):
                     COALESCE(cat.name, 'Uncategorized') AS category_name,
                     COALESCE(SUM(si.qty), 0) AS qty_sold,
                     COALESCE(SUM(si.amount), 0) AS total_revenue,
-                    COALESCE(SUM(si.qty * COALESCE(si.packing_multiplier, 1.0) * si.cost_price), 0) as total_cost,
+                    COALESCE(SUM((si.qty * COALESCE(si.packing_multiplier, 1.0) * si.cost_price) + COALESCE(si.commission_amount, 0)), 0) as total_cost,
                     SUM(p.stock_quantity) as current_stock
                 FROM sale_items si
                 JOIN products p ON p.id = si.product_id
@@ -4107,7 +4182,7 @@ def reports_export(type: str):
                     COALESCE(cat.name, 'Uncategorized') as category,
                     COALESCE(SUM(si.qty), 0) as units_sold,
                     COALESCE(SUM(si.amount), 0) as total_revenue,
-                    COALESCE(SUM(si.qty * COALESCE(si.packing_multiplier, 1.0) * si.cost_price), 0) as total_cost,
+                    COALESCE(SUM((si.qty * COALESCE(si.packing_multiplier, 1.0) * si.cost_price) + COALESCE(si.commission_amount, 0)), 0) as total_cost,
                     p.stock_quantity as current_stock
                 FROM sale_items si
                 JOIN products p ON p.id = si.product_id
@@ -4431,7 +4506,11 @@ def pos_submit_order():
         # Fetch commission rate
         wh_row = conn.execute("SELECT commission_rate FROM warehouses WHERE id = ?", (wid,)).fetchone()
         commission_rate = float(wh_row["commission_rate"] or 0) if wh_row else 0
-        commission_amount = round(grand_total * (commission_rate / 100), 2)
+        
+        commission_amount = 0
+        for li in parsed_items:
+            li["commission_amount"] = round(li["amount"] * (commission_rate / 100), 2)
+            commission_amount += li["commission_amount"]
 
         # Insert sale
         cur = conn.execute(
@@ -4453,10 +4532,22 @@ def pos_submit_order():
         for li in parsed_items:
             conn.execute(
                 """
-                INSERT INTO sale_items (sale_id, product_id, description, qty, rate, amount, cost_price, packing_multiplier)
-                VALUES (?, ?, ?, ?, ?, ?, COALESCE((SELECT cost_price FROM products WHERE id = ?), 0.0), ?)
+                INSERT INTO sale_items
+                    (sale_id, product_id, description, qty, rate, amount, cost_price, packing_multiplier, commission_amount)
+                VALUES
+                    (?, ?, ?, ?, ?, ?, COALESCE((SELECT cost_price FROM products WHERE id = ?), 0.0), ?, ?)
                 """,
-                (sale_id, None if li["product_id"] == -1 else li["product_id"], li["description"], li["qty"], li["rate"], li["amount"], li["product_id"], li["packing_multiplier"])
+                (
+                    sale_id, 
+                    None if li["product_id"] == -1 else li["product_id"], 
+                    li["description"], 
+                    li["qty"], 
+                    li["rate"], 
+                    li["amount"], 
+                    li["product_id"], 
+                    li["packing_multiplier"],
+                    li["commission_amount"]
+                )
             )
             
             if li["product_id"] != -1:

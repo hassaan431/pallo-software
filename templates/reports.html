@@ -190,6 +190,7 @@
   <button type="button" class="tab-btn" data-tab="brand">🏷️ By Brand</button>
   <button type="button" class="tab-btn" data-tab="category">🗂️ By Category</button>
   <button type="button" class="tab-btn" data-tab="product">📦 By Product</button>
+  <button type="button" class="tab-btn" data-tab="commission">💰 Commission Report</button>
   <button type="button" class="tab-btn" data-tab="inventory-additions">➕ Inventory Additions</button>
 </div>
 
@@ -637,6 +638,45 @@
   </section>
 </div>
 
+<!-- COMMISSION TAB -->
+<div id="tab-commission" class="tab-content" style="display:none;">
+  <div class="panel" style="margin-bottom: 1rem;">
+    <div class="panel-body" style="padding: 1rem;">
+      <div style="display:flex; gap:0.9rem; align-items:end; flex-wrap:wrap;">
+        <div><label class="field-label">Date From</label><input type="date" class="form-control" id="comm_date_from"></div>
+        <div><label class="field-label">Date To</label><input type="date" class="form-control" id="comm_date_to"></div>
+        <div>
+          <label class="field-label">Brand</label>
+          <select class="form-control" id="commFilterBrand">
+            <option value="">All Brands</option>
+            {% for b in brands %}
+            <option value="{{ b }}">{{ b }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div style="display:flex; gap:0.5rem;">
+          <button type="button" class="btn btn-primary" onclick="loadCommissionReport()">Apply Filter</button>
+        </div>
+      </div>
+    </div>
+  </div>
+  <section class="panel" style="box-shadow:none;">
+    <div class="panel-body">
+      <div class="table-wrap">
+        <table class="data-table" id="commissionTable" style="margin-bottom: 2rem;">
+          <thead>
+            <tr>
+              <th data-sort="salesman_name">Salesman Name</th>
+              <th data-sort="commission_amount">Total Commission ($)</th>
+            </tr>
+          </thead>
+          <tbody id="commissionTableBody"></tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+</div>
+
 <script>
   function money(n) {
     const v = Number(n || 0);
@@ -664,6 +704,7 @@
     brand: [],
     category: [],
     product: [],
+    commission: [],
     profit: [],
     'inventory-additions': { summary: [], log: [] }
   };
@@ -674,6 +715,7 @@
     brand: { key: 'total_revenue', dir: -1 },
     category: { key: 'total_revenue', dir: -1 },
     product: { key: 'revenue', dir: -1 },
+    commission: { key: 'salesman_name', dir: 1 },
     profit: { key: 'date', dir: 1 }
   };
 
@@ -707,6 +749,10 @@
       if (document.getElementById('p_date_from').value) params.append('date_from', document.getElementById('p_date_from').value);
       if (document.getElementById('p_date_to').value) params.append('date_to', document.getElementById('p_date_to').value);
       if (document.getElementById('p_customer').value) params.append('customer_id', document.getElementById('p_customer').value);
+    } else if (type === 'commission') {
+      if (document.getElementById('comm_date_from').value) params.append('date_from', document.getElementById('comm_date_from').value);
+      if (document.getElementById('comm_date_to').value) params.append('date_to', document.getElementById('comm_date_to').value);
+      if (document.getElementById('commFilterBrand').value) params.append('brand', document.getElementById('commFilterBrand').value);
     } else if (type === 'profit') {
       if (document.getElementById('profit_date_from').value) params.append('from_date', document.getElementById('profit_date_from').value);
       if (document.getElementById('profit_date_to').value) params.append('to_date', document.getElementById('profit_date_to').value);
@@ -727,7 +773,7 @@
   const tabButtons = Array.from(document.querySelectorAll('.tab-btn'));
   function setActiveTab(tabKey) {
     tabButtons.forEach((b) => b.classList.toggle('is-active', b.getAttribute('data-tab') === tabKey));
-    const tabs = ['salesman', 'customer', 'brand', 'category', 'product', 'profit', 'inventory-additions'];
+    const tabs = ['salesman', 'customer', 'brand', 'category', 'product', 'commission', 'profit', 'inventory-additions'];
     tabs.forEach((k) => {
       const el = document.getElementById('tab-' + k);
       if (el) { el.style.display = (k === tabKey) ? 'block' : 'none'; }
@@ -742,6 +788,7 @@
         if (tabKey === 'brand') loadBrandReport();
         if (tabKey === 'category') loadCategoryReport();
         if (tabKey === 'product') loadProductReport();
+        if (tabKey === 'commission') loadCommissionReport();
         if (tabKey === 'profit') { loadProfitReport(); }
     }
   }
@@ -754,6 +801,44 @@
     const rows = await fetch('/reports/by-salesman?' + params.toString(), { credentials: 'same-origin' }).then(r => r.json());
     cache.salesman = rows || [];
     renderSalesman();
+  }
+
+  async function loadCommissionReport() {
+    const params = getFiltersParams('commission');
+    const rows = await fetch('/reports/commission?' + params.toString(), { credentials: 'same-origin' }).then(r => r.json());
+    cache.commission = rows || [];
+    
+    const tbody = document.getElementById('commissionTableBody');
+    if (!tbody) return;
+    
+    if (!rows || rows.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="2" class="empty-state">No commission data found for these filters.</td></tr>';
+      return;
+    }
+    
+    tbody.innerHTML = '';
+    let totalCom = 0;
+    rows.forEach(r => {
+      totalCom += parseFloat(r.commission_amount || 0);
+      const tr = document.createElement('tr');
+      tr.innerHTML = `
+        <td>${r.salesman_name || 'Admin'}</td>
+        <td class="sensitive-data" style="font-weight:600;">${money(r.commission_amount || 0)}</td>
+      `;
+      tbody.appendChild(tr);
+    });
+    
+    const trTotal = document.createElement('tr');
+    trTotal.style.background = '#1a2332';
+    trTotal.style.color = 'white';
+    trTotal.innerHTML = `
+      <td style="text-align:right; padding:12px 8px; font-weight:bold;">Total:</td>
+      <td class="sensitive-data" style="padding:12px 8px; font-weight:bold;">${money(totalCom)}</td>
+    `;
+    tbody.appendChild(trTotal);
+    
+    const t = document.getElementById('commissionTable');
+    if (t) initTableSort(t);
   }
 
   async function loadCustomerReport() {
@@ -1417,6 +1502,13 @@
   if (salesmanFrom && salesmanTo) {
     salesmanFrom.value = formatDate(firstDay);
     salesmanTo.value = formatDate(lastDay);
+  }
+
+  const commFrom = document.getElementById('comm_date_from');
+  const commTo = document.getElementById('comm_date_to');
+  if (commFrom && commTo) {
+    commFrom.value = formatDate(firstDay);
+    commTo.value = formatDate(lastDay);
   }
 
   // Init profit on load
