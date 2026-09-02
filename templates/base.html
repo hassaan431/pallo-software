@@ -31,6 +31,23 @@
     #privacyModeToggle:hover {
       transform: scale(1.1);
     }
+    
+    .sidebar-section {
+      font-size: 0.7rem;
+      font-weight: 700;
+      color: var(--color-text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      margin: 1.25rem 1rem 0.25rem 1.25rem;
+    }
+    
+    .sidebar-nav a {
+      font-size: 0.85rem !important;
+      padding: 0.5rem 1.25rem !important;
+    }
+    .sidebar-nav a .nav-emoji {
+      font-size: 1rem !important;
+    }
   </style>
 </head>
 <body>
@@ -59,54 +76,64 @@
         </div>
       </div>
 
-      <div style="flex:1; min-height:0;">
+      <div style="flex:1; min-height:0; overflow-y: auto; overflow-x: hidden;">
         <nav class="sidebar-nav" aria-label="Main navigation" style="padding:0 0 1rem 0;">
           {% if current_user.role == 'admin' %}
+          <div class="sidebar-section">Dashboards</div>
           <a href="{{ url_for('dashboard') }}" class="{{ 'is-active' if request.endpoint == 'dashboard' else '' }}">
             <span class="nav-emoji" aria-hidden="true">📊</span>
             <span class="nav-label">Dashboard</span>
           </a>
+          <a href="{{ url_for('reports') }}" class="{{ 'is-active' if request.endpoint == 'reports' else '' }}">
+            <span class="nav-emoji" aria-hidden="true">📈</span>
+            <span class="nav-label">Reports</span>
+          </a>
+
+          <div class="sidebar-section">Products</div>
           <a href="{{ url_for('inventory') }}" class="{{ 'is-active' if request.endpoint == 'inventory' else '' }}">
             <span class="nav-emoji" aria-hidden="true">📦</span>
-            <span class="nav-label">Products</span>
-          </a>
-          <a href="{{ url_for('suppliers_page') }}" class="{{ 'is-active' if request.endpoint == 'suppliers_page' else '' }}">
-            <span class="nav-emoji" aria-hidden="true">🏭</span>
-            <span class="nav-label">Suppliers & Brands</span>
+            <span class="nav-label">Inventory</span>
           </a>
           <a href="/purchases" class="{{ 'is-active' if request.path.startswith('/purchases') else '' }}">
-            <span class="nav-emoji" aria-hidden="true">📦</span>
+            <span class="nav-emoji" aria-hidden="true">📥</span>
             <span class="nav-label">Purchases (Shipments)</span>
           </a>
-          <a href="/expenses" class="{{ 'is-active' if request.path.startswith('/expenses') else '' }}">
-            <span class="nav-emoji" aria-hidden="true">💸</span>
-            <span class="nav-label">Expenses</span>
+          <a href="{{ url_for('inventory_transfers') }}" class="{{ 'is-active' if request.endpoint == 'inventory_transfers' else '' }}" title="Transfers">
+            <span class="nav-emoji" aria-hidden="true">🚚</span>
+            <span class="nav-label">Transfers</span>
           </a>
-          <a href="{{ url_for('customers') }}" class="{{ 'is-active' if request.endpoint == 'customers' else '' }}">
-            <span class="nav-emoji" aria-hidden="true">👥</span>
-            <span class="nav-label">Customers</span>
-          </a>
-          <a href="{{ url_for('sales') }}" class="{{ 'is-active' if request.endpoint == 'sales' else '' }}">
-            <span class="nav-emoji" aria-hidden="true">🧾</span>
-            <span class="nav-label">Sales</span>
-          </a>
-          <a href="{{ url_for('suppliers_page') }}" class="{% if request.endpoint == 'suppliers_page' %}is-active{% endif %}" title="Suppliers">
+
+          <div class="sidebar-section">Suppliers & Brands</div>
+          <a href="{{ url_for('suppliers_page') }}" class="{{ 'is-active' if request.endpoint == 'suppliers_page' else '' }}">
             <span class="nav-emoji" aria-hidden="true">🏢</span>
-            <span class="nav-label">Suppliers</span>
+            <span class="nav-label">Suppliers & Brands</span>
           </a>
           <a href="{{ url_for('warehouses_list') }}" class="{% if request.endpoint == 'warehouses_list' %}is-active{% endif %}" title="Warehouses">
             <span class="nav-emoji" aria-hidden="true">🏭</span>
             <span class="nav-label">Warehouses</span>
           </a>
-          <a href="{{ url_for('reports') }}" class="{{ 'is-active' if request.endpoint == 'reports' else '' }}">
-            <span class="nav-emoji" aria-hidden="true">📈</span>
-            <span class="nav-label">Reports</span>
+
+          <div class="sidebar-section">Sales & Customers</div>
+          <a href="{{ url_for('sales') }}" class="{{ 'is-active' if request.endpoint == 'sales' else '' }}">
+            <span class="nav-emoji" aria-hidden="true">🧾</span>
+            <span class="nav-label">Sales</span>
+          </a>
+          <a href="{{ url_for('customers') }}" class="{{ 'is-active' if request.endpoint == 'customers' else '' }}">
+            <span class="nav-emoji" aria-hidden="true">👥</span>
+            <span class="nav-label">Customers</span>
+          </a>
+
+          <div class="sidebar-section">Administration</div>
+          <a href="/expenses" class="{{ 'is-active' if request.path.startswith('/expenses') else '' }}">
+            <span class="nav-emoji" aria-hidden="true">💸</span>
+            <span class="nav-label">Expenses</span>
           </a>
           <a href="{{ url_for('users_list') }}" class="{% if request.endpoint == 'users_list' %}is-active{% endif %}" title="Users">
             <span class="nav-emoji" aria-hidden="true">👤</span>
             <span class="nav-label">Users</span>
           </a>
           {% endif %}
+          <div class="sidebar-section">Tools</div>
           <a href="{{ url_for('pos') }}" target="_blank">
             <span class="nav-emoji" aria-hidden="true">📱</span>
             <span class="nav-label">POS Catalogue</span>

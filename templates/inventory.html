@@ -11,6 +11,11 @@
   .row-low-stock th {
     background: #fff8e1 !important;
   }
+  
+  .data-table th, .data-table td {
+    font-size: 0.85rem !important;
+    padding: 0.5rem 0.75rem !important;
+  }
 
   .btn-edit {
     background: #2563eb;
@@ -236,10 +241,9 @@
             <th>Product Details</th>
             <th>Brand</th>
             <th>Category</th>
-            <th>Public?</th>
+            <th>Stock Qty</th>
             <th>Selling Price</th>
             <th>MARGIN</th>
-            <th>Stock Qty</th>
             <th>Stock Value</th>
             <th>Actions</th>
           </tr>
@@ -283,13 +287,7 @@
             </td>
             <td class="searchable-brand">{{ p.brand or '' }}</td>
             <td>{{ p.category_name or '' }}</td>
-            <td>
-              {% if p.is_public %}
-                <span style="background: #dcfce7; color: #166534; padding: 2px 6px; border-radius: 4px; font-size: 0.75rem; font-weight: 600;">Yes</span>
-              {% else %}
-                <span style="background: #fee2e2; color: #991b1b; padding: 2px 6px; border-radius: 4px; font-size: 0.75rem; font-weight: 600;">No</span>
-              {% endif %}
-            </td>
+            <td>{{ qty_int }}</td>
 
             <td>${{ p.selling_price|format_rate }}</td>
             <td>
@@ -306,7 +304,6 @@
                 <span style="color: #6b7280;">-</span>
               {% endif %}
             </td>
-            <td>{{ qty_int }}</td>
             <td class="sensitive-data" style="font-weight: 600; color: #1e293b;">${{ '%.2f' % ((p.stock_quantity|default(0)|float) * (p.cost_price|default(0)|float)) }}</td>
             <td>
 

@@ -141,6 +141,21 @@ def init_db():
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             );
 
+            CREATE TABLE IF NOT EXISTS inventory_transfers (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                source_warehouse_id INTEGER REFERENCES warehouses(id),
+                destination_warehouse_id INTEGER REFERENCES warehouses(id),
+                notes TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            );
+
+            CREATE TABLE IF NOT EXISTS inventory_transfer_items (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                transfer_id INTEGER REFERENCES inventory_transfers(id),
+                product_id INTEGER REFERENCES products(id),
+                quantity REAL NOT NULL
+            );
+
             """
         )
         

@@ -243,7 +243,7 @@ def dashboard():
         daily_revenue = float(daily_revenue_row["total_revenue"] or 0)
         daily_commission = float(daily_revenue_row["total_commission"] or 0)
         daily_cost = float(daily_cost_row["total_cost"] or 0)
-        daily_profit = daily_revenue - daily_cost - daily_commission
+        daily_profit = daily_revenue - daily_cost
         
         # Get monthly revenue and cost
         monthly_revenue_row = conn.execute(
@@ -261,7 +261,7 @@ def dashboard():
         monthly_revenue = float(monthly_revenue_row["total_revenue"] or 0)
         monthly_commission = float(monthly_revenue_row["total_commission"] or 0)
         monthly_cost = float(monthly_cost_row["total_cost"] or 0)
-        monthly_profit = monthly_revenue - monthly_cost - monthly_commission
+        monthly_profit = monthly_revenue - monthly_cost
         monthly_margin = round((monthly_profit / monthly_revenue * 100), 2) if monthly_revenue > 0 else 0
         
         # Get daily expenses
@@ -1036,6 +1036,9 @@ def inventory_transfer():
     conn = get_connection()
     try:
         conn.execute("BEGIN")
+        cursor = conn.execute("INSERT INTO inventory_transfers (source_warehouse_id, destination_warehouse_id, notes) VALUES (?, ?, ?)", (source_wid, dest_wid, notes))
+        transfer_id = cursor.lastrowid
+        
         for item in items:
             product_id = int(item.get("product_id", 0))
             quantity = float(item.get("quantity", 0))
@@ -1063,6 +1066,9 @@ def inventory_transfer():
             conn.execute("UPDATE warehouse_inventory SET stock_quantity = ? WHERE product_id = ? AND warehouse_id = ?", (new_source_stock, product_id, source_wid))
             conn.execute("INSERT INTO warehouse_inventory (product_id, warehouse_id, stock_quantity) VALUES (?, ?, ?) ON CONFLICT(warehouse_id, product_id) DO UPDATE SET stock_quantity = ?", (product_id, dest_wid, new_dest_stock, new_dest_stock))
 
+            # Insert into transfer items
+            conn.execute("INSERT INTO inventory_transfer_items (transfer_id, product_id, quantity) VALUES (?, ?, ?)", (transfer_id, product_id, quantity))
+
             # Log history
             ref_note = f"Transfer to Warehouse {dest_wid}"
             if notes:
@@ -1087,6 +1093,108 @@ def inventory_transfer():
     except Exception as e:
         print(f"Error transferring stock: {e}")
         return jsonify({"ok": False, "error": "Failed to transfer stock due to a server error."}), 500
+    finally:
+        conn.close()
+
+@app.route("/inventory/transfers", methods=["GET"])
+@admin_required
+def inventory_transfers():
+    conn = get_connection()
+    try:
+        transfers_raw = conn.execute("""
+            SELECT 
+                it.id,
+                it.created_at AS transfer_date,
+                it.notes,
+                w1.name AS source_warehouse,
+                w2.name AS destination_warehouse,
+                it.source_warehouse_id,
+                it.destination_warehouse_id
+            FROM inventory_transfers it
+            LEFT JOIN warehouses w1 ON it.source_warehouse_id = w1.id
+            LEFT JOIN warehouses w2 ON it.destination_warehouse_id = w2.id
+            ORDER BY it.id DESC
+        """).fetchall()
+        
+        transfers = []
+        for t in transfers_raw:
+            t_dict = dict(t)
+            items_raw = conn.execute("""
+                SELECT 
+                    iti.quantity,
+                    p.name AS product_name,
+                    p.id AS product_id
+                FROM inventory_transfer_items iti
+                JOIN products p ON p.id = iti.product_id
+                WHERE iti.transfer_id = ?
+            """, (t["id"],)).fetchall()
+            t_dict["items"] = [dict(i) for i in items_raw]
+            transfers.append(t_dict)
+            
+        return render_template("inventory_transfers.html", transfers=transfers)
+    finally:
+        conn.close()
+
+@app.route("/inventory/transfers/<int:transfer_id>/delete", methods=["POST"])
+@admin_required
+def delete_transfer(transfer_id):
+    conn = get_connection()
+    try:
+        conn.execute("BEGIN")
+        transfer = conn.execute("SELECT * FROM inventory_transfers WHERE id = ?", (transfer_id,)).fetchone()
+        if not transfer:
+            return jsonify({"ok": False, "error": "Transfer not found"}), 404
+            
+        items = conn.execute("SELECT product_id, quantity FROM inventory_transfer_items WHERE transfer_id = ?", (transfer_id,)).fetchall()
+        
+        source_wid = transfer["source_warehouse_id"]
+        dest_wid = transfer["destination_warehouse_id"]
+        
+        for item in items:
+            product_id = item["product_id"]
+            qty = float(item["quantity"])
+            
+            # Revert destination stock (reduce)
+            dest_stock_row = conn.execute("SELECT stock_quantity FROM warehouse_inventory WHERE product_id = ? AND warehouse_id = ?", (product_id, dest_wid)).fetchone()
+            current_dest = float(dest_stock_row["stock_quantity"] or 0) if dest_stock_row else 0.0
+            new_dest = current_dest - qty
+            if new_dest < 0:
+                p_name = conn.execute("SELECT name FROM products WHERE id = ?", (product_id,)).fetchone()["name"]
+                conn.execute("ROLLBACK")
+                return jsonify({"ok": False, "error": f"Cannot delete: Reversing this transfer would cause negative stock ({new_dest}) for product {p_name} in destination warehouse."}), 400
+            
+            conn.execute("UPDATE warehouse_inventory SET stock_quantity = ? WHERE product_id = ? AND warehouse_id = ?", (new_dest, product_id, dest_wid))
+            
+            # Revert source stock (increase)
+            source_stock_row = conn.execute("SELECT stock_quantity FROM warehouse_inventory WHERE product_id = ? AND warehouse_id = ?", (product_id, source_wid)).fetchone()
+            current_source = float(source_stock_row["stock_quantity"] or 0) if source_stock_row else 0.0
+            new_source = current_source + qty
+            
+            conn.execute('''
+                INSERT INTO warehouse_inventory (product_id, warehouse_id, stock_quantity)
+                VALUES (?, ?, ?)
+                ON CONFLICT(warehouse_id, product_id) DO UPDATE SET stock_quantity = ?
+            ''', (product_id, source_wid, new_source, new_source))
+            
+            # Log reversal
+            conn.execute(
+                "INSERT INTO inventory_history (product_id, transaction_type, quantity_change, previous_stock, new_stock, reference, warehouse_id) VALUES (?, ?, ?, ?, ?, ?, ?)",
+                (product_id, "Transfer Reversal", qty, current_source, new_source, f"Reversed Transfer #{transfer_id}", source_wid)
+            )
+            conn.execute(
+                "INSERT INTO inventory_history (product_id, transaction_type, quantity_change, previous_stock, new_stock, reference, warehouse_id) VALUES (?, ?, ?, ?, ?, ?, ?)",
+                (product_id, "Transfer Reversal", -qty, current_dest, new_dest, f"Reversed Transfer #{transfer_id}", dest_wid)
+            )
+            
+        # Delete records
+        conn.execute("DELETE FROM inventory_transfer_items WHERE transfer_id = ?", (transfer_id,))
+        conn.execute("DELETE FROM inventory_transfers WHERE id = ?", (transfer_id,))
+        
+        conn.commit()
+        return jsonify({"ok": True})
+    except Exception as e:
+        conn.execute("ROLLBACK")
+        return jsonify({"ok": False, "error": str(e)}), 500
     finally:
         conn.close()
 
@@ -5044,10 +5152,11 @@ def delete_purchase(purchase_id):
     try:
         conn.execute("BEGIN")
         
-        purchase = conn.execute("SELECT supplier_id FROM purchases WHERE id = ?", (purchase_id,)).fetchone()
+        purchase = conn.execute("SELECT supplier_id, warehouse_id FROM purchases WHERE id = ?", (purchase_id,)).fetchone()
         if not purchase:
             return jsonify({"ok": False, "error": "Purchase not found"}), 404
         supplier_id = purchase["supplier_id"]
+        wid = purchase["warehouse_id"] or 1
             
         items = conn.execute("SELECT product_id, qty FROM purchase_items WHERE purchase_id = ?", (purchase_id,)).fetchall()
         
