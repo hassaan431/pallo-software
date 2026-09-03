@@ -2033,43 +2033,38 @@ def products_search():
     
     conn = get_connection()
     try:
+        base_query = f"""
+            SELECT
+                id,
+                name,
+                brand,
+                selling_price,
+                cost_price,
+                unit,
+                {stock_query} AS stock_quantity,
+                is_open,
+                supplier_id
+            FROM products
+            WHERE 1=1
+        """
+        
         if not q:
-            cur = conn.execute(
-                f"""
-                SELECT
-                    id,
-                    name,
-                    brand,
-                    selling_price,
-                    cost_price,
-                    unit,
-                    {stock_query} AS stock_quantity,
-                    is_open,
-                    supplier_id
-                FROM products
-                ORDER BY name COLLATE NOCASE
-                LIMIT 20
-                """, (wid,)
-            )
+            query = base_query
+            params = [wid]
         else:
-            cur = conn.execute(
-                f"""
-                SELECT
-                    id,
-                    name,
-                    brand,
-                    selling_price,
-                    cost_price,
-                    unit,
-                    {stock_query} AS stock_quantity,
-                    is_open,
-                    supplier_id
-                FROM products
-                WHERE name LIKE ? OR brand LIKE ?
-                ORDER BY name COLLATE NOCASE
-                LIMIT 15
-                """, (warehouse_id, like, like) if warehouse_id else (like, like),
-            )
+            query = base_query + " AND (name LIKE ? OR brand LIKE ?)"
+            params = [wid, like, like]
+            
+        if current_user.role != 'admin':
+            query += " AND EXISTS (SELECT 1 FROM warehouse_inventory wi WHERE wi.product_id = products.id AND wi.warehouse_id = ?)"
+            params.append(wid)
+            
+        if not q:
+            query += " ORDER BY name COLLATE NOCASE LIMIT 20"
+        else:
+            query += " ORDER BY name COLLATE NOCASE LIMIT 15"
+            
+        cur = conn.execute(query, tuple(params))
         results = []
         for r in cur.fetchall():
             results.append(
