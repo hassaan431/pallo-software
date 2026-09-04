@@ -11,7 +11,7 @@ export default function Footer() {
           <div>
             <h3 className="font-heading font-bold text-white text-xl mb-4">AK Distributors</h3>
             <p className="text-sm leading-relaxed mb-6">
-              Your trusted partner in premium wholesale food distribution. Connecting global brands and fresh ingredients to supermarkets, grocers, and foodservice across California and beyond.
+              Your trusted partner in premium wholesale food distribution. Connecting desi brands and fresh ingredients to supermarkets, grocers, and foodservice across California and beyond.
             </p>
             <p className="text-xs text-slate-500">
               Licensed Wholesale Distributor
@@ -22,22 +22,19 @@ export default function Footer() {
           <div>
             <h4 className="font-heading font-semibold text-white text-lg mb-4">Quick Links</h4>
             <ul className="space-y-3 text-sm">
+              <li><Link href="/" className="hover:text-brand-primary transition-colors">Home</Link></li>
               <li><Link href="/products" className="hover:text-brand-primary transition-colors">Our Products</Link></li>
               <li><Link href="/brands" className="hover:text-brand-primary transition-colors">Featured Brands</Link></li>
               <li><Link href="/about" className="hover:text-brand-primary transition-colors">About Us</Link></li>
-              <li><Link href="/contact" className="hover:text-brand-primary transition-colors">Contact Us</Link></li>
-              <li><Link href="/faq" className="hover:text-brand-primary transition-colors">FAQ & Support</Link></li>
             </ul>
           </div>
 
-          {/* Column 3: Resources */}
+          {/* Column 3: Legal & Policies */}
           <div>
-            <h4 className="font-heading font-semibold text-white text-lg mb-4">Resources</h4>
+            <h4 className="font-heading font-semibold text-white text-lg mb-4">Policies & Terms</h4>
             <ul className="space-y-3 text-sm">
-              <li><Link href="/catalogs" className="hover:text-brand-primary transition-colors">Download PDF Catalog</Link></li>
               <li><Link href="/terms" className="hover:text-brand-primary transition-colors">Terms of Trade</Link></li>
               <li><Link href="/privacy" className="hover:text-brand-primary transition-colors">Privacy Policy</Link></li>
-              <li><Link href="/shipping" className="hover:text-brand-primary transition-colors">Shipping & Returns</Link></li>
             </ul>
           </div>
 

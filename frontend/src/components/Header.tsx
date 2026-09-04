@@ -86,17 +86,17 @@ export default function Header({ categories, brands }: HeaderProps) {
               </AnimatePresence>
             </div>
             
+            <Link href="/" className="font-semibold text-slate-700 hover:text-brand-primary transition-colors">Home</Link>
+            <Link href="/products" className="font-semibold text-slate-700 hover:text-brand-primary transition-colors">Products</Link>
             <Link href="/brands" className="font-semibold text-slate-700 hover:text-brand-primary transition-colors">Brands</Link>
-            <Link href="/catalogs" className="font-semibold text-slate-700 hover:text-brand-primary transition-colors">Catalogs</Link>
             <Link href="/about" className="font-semibold text-slate-700 hover:text-brand-primary transition-colors">About Us</Link>
-            <Link href="/contact" className="font-semibold text-slate-700 hover:text-brand-primary transition-colors">Contact Us</Link>
           </nav>
 
           {/* Action Button & Mobile Toggle */}
           <div className="flex items-center gap-4">
-            <button className="hidden md:inline-flex bg-brand-primary hover:bg-brand-primary-hover text-white px-6 py-2.5 rounded-full font-semibold transition-transform hover:scale-95 cursor-pointer">
+            <a href="tel:+19163545678" className="hidden md:inline-flex bg-brand-primary hover:bg-brand-primary-hover text-white px-6 py-2.5 rounded-full font-semibold transition-transform hover:scale-95 cursor-pointer">
               Request a Quote
-            </button>
+            </a>
             <button 
               className="md:hidden p-2 text-slate-700 cursor-pointer"
               onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
@@ -117,14 +117,13 @@ export default function Header({ categories, brands }: HeaderProps) {
             className="md:hidden bg-white border-t border-slate-100 overflow-hidden"
           >
             <nav className="flex flex-col px-4 py-6 gap-4">
-              <Link href="/products" className="text-lg font-semibold text-slate-700">Products</Link>
-              <Link href="/brands" className="text-lg font-semibold text-slate-700">Brands</Link>
-              <Link href="/catalogs" className="text-lg font-semibold text-slate-700">Catalogs</Link>
-              <Link href="/about" className="text-lg font-semibold text-slate-700">About Us</Link>
-              <Link href="/contact" className="text-lg font-semibold text-slate-700">Contact Us</Link>
-              <button className="bg-brand-primary text-white px-6 py-3 rounded-full font-semibold mt-4 text-center cursor-pointer">
+              <Link href="/" onClick={() => setIsMobileMenuOpen(false)} className="text-lg font-semibold text-slate-700 hover:text-brand-primary">Home</Link>
+              <Link href="/products" onClick={() => setIsMobileMenuOpen(false)} className="text-lg font-semibold text-slate-700 hover:text-brand-primary">Products</Link>
+              <Link href="/brands" onClick={() => setIsMobileMenuOpen(false)} className="text-lg font-semibold text-slate-700 hover:text-brand-primary">Brands</Link>
+              <Link href="/about" onClick={() => setIsMobileMenuOpen(false)} className="text-lg font-semibold text-slate-700 hover:text-brand-primary">About Us</Link>
+              <a href="tel:+19163545678" onClick={() => setIsMobileMenuOpen(false)} className="bg-brand-primary text-white px-6 py-3 rounded-full font-semibold mt-4 text-center cursor-pointer block shadow-md">
                 Request a Quote
-              </button>
+              </a>
             </nav>
           </motion.div>
         )}

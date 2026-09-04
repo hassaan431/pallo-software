@@ -1,5 +1,6 @@
 import Database from 'better-sqlite3';
 import path from 'path';
+import fs from 'fs';
 
 export interface Category {
   id: number;
@@ -9,6 +10,7 @@ export interface Category {
 export interface Brand {
   id: number;
   name: string;
+  logo_filename?: string;
 }
 
 export interface Product {
@@ -47,11 +49,43 @@ export function getCategories(): Category[] {
   }
 }
 
+export function getBrandLogoFilename(brandName: string): string | undefined {
+  if (!brandName) return undefined;
+  const brandsDir = path.resolve(process.cwd(), 'public/static/logos/brands');
+  if (!fs.existsSync(brandsDir)) return undefined;
+
+  const exactPath = path.join(brandsDir, `${brandName}.png`);
+  if (fs.existsSync(exactPath)) return `${brandName}.png`;
+
+  const normalize = (s: string) => s.trim().toLowerCase().replace(/[\W_]+/g, '');
+  const b = normalize(brandName);
+  if (!b) return undefined;
+
+  try {
+    const files = fs.readdirSync(brandsDir);
+    for (const file of files) {
+      if (!file.endsWith('.png')) continue;
+      const fNorm = normalize(file.replace('.png', ''));
+      if (!fNorm) continue;
+      if (b === fNorm || fNorm.includes(b) || b.includes(fNorm)) {
+        return file;
+      }
+    }
+  } catch (e) {
+    // Ignore read errors
+  }
+  return undefined;
+}
+
 export function getBrands(): Brand[] {
   const database = getDb();
   if (!database) return [];
   try {
-    return database.prepare('SELECT id, name FROM brands ORDER BY name ASC').all() as Brand[];
+    const brands = database.prepare('SELECT id, name FROM brands ORDER BY name ASC').all() as Brand[];
+    return brands.map(brand => ({
+      ...brand,
+      logo_filename: getBrandLogoFilename(brand.name)
+    }));
   } catch (e) {
     console.error("Failed to fetch brands:", e);
     return [];
