@@ -639,7 +639,7 @@ def inventory_add():
     except ValueError:
         return redirect(url_for("inventory"))
 
-    if not product_name or not category_id:
+    if not product_name or not category_id or not brand:
         return redirect(url_for("inventory"))
 
     import os
@@ -871,7 +871,7 @@ def inventory_edit(product_id: int):
     except ValueError:
         return redirect(url_for("inventory"))
 
-    if not product_name or not category_id:
+    if not product_name or not category_id or not brand:
         return redirect(url_for("inventory"))
 
     remove_image = request.form.get("remove_image") == "1"
@@ -966,7 +966,10 @@ def inventory_edit(product_id: int):
 def inventory_adjust_stock():
     product_id = int(request.form.get("product_id", 0))
     raw_wid = request.form.get("warehouse_id", "").strip()
-    warehouse_id = int(raw_wid) if raw_wid else 1
+    try:
+        warehouse_id = int(raw_wid) if raw_wid and raw_wid.lower() != 'none' else (current_user.warehouse_id or 1)
+    except ValueError:
+        warehouse_id = current_user.warehouse_id or 1
     new_stock = request.form.get("new_stock", "").strip()
 
     if not product_id or warehouse_id <= 0 or not new_stock:
@@ -1454,7 +1457,7 @@ def suppliers_page():
         suppliers = [dict(r) for r in cur_suppliers.fetchall()]
         
         cur_brands = conn.execute("""
-            SELECT b.*, COUNT(p.id) as products_count
+            SELECT b.*, b.commission_rate, COUNT(p.id) as products_count
             FROM brands b
             LEFT JOIN products p ON b.name = p.brand
             GROUP BY b.id
@@ -1554,6 +1557,7 @@ def supplier_history(supplier_id):
 @admin_required
 def brands_edit(brand_id):
     name = request.form.get("name", "").strip()
+    commission_rate = float(request.form.get("commission_rate") or 0)
     if not name:
         return "Brand name is required.", 400
         
@@ -1563,7 +1567,7 @@ def brands_edit(brand_id):
         old_brand_name = conn.execute("SELECT name FROM brands WHERE id = ?", (brand_id,)).fetchone()
         if old_brand_name:
             old_name = old_brand_name["name"]
-            conn.execute("UPDATE brands SET name = ? WHERE id = ?", (name, brand_id))
+            conn.execute("UPDATE brands SET name = ?, commission_rate = ? WHERE id = ?", (name, commission_rate, brand_id))
             conn.execute("UPDATE products SET brand = ? WHERE brand = ?", (name, old_name))
         conn.commit()
     finally:
@@ -2511,13 +2515,21 @@ def sales_new():
                 salesman_id = current_user.id
                 
             wid = int(warehouse_id_raw) if warehouse_id_raw else (current_user.warehouse_id or 1)
-            wh_row = conn.execute("SELECT commission_rate FROM warehouses WHERE id = ?", (wid,)).fetchone()
-            commission_rate = float(wh_row["commission_rate"] or 0) if wh_row else 0
+            wh_row = conn.execute("SELECT commission_applies FROM warehouses WHERE id = ?", (wid,)).fetchone()
+            commission_applies = int(wh_row["commission_applies"] or 0) if wh_row else 0
             
             commission_amount = 0
             for li in parsed_items:
-                li["commission_amount"] = round(li["amount"] * (commission_rate / 100), 2)
+                if commission_applies:
+                    br_row = conn.execute("SELECT b.commission_rate FROM products p LEFT JOIN brands b ON LOWER(p.brand) = LOWER(b.name) WHERE p.id = ?", (li["product_id"],)).fetchone()
+                    item_comm_rate = float(br_row["commission_rate"] or 0) if br_row and br_row["commission_rate"] is not None else 0
+                else:
+                    item_comm_rate = 0
+                li["commission_amount"] = round(li["amount"] * (item_comm_rate / 100), 2)
                 commission_amount += li["commission_amount"]
+                
+            # We don't have a single commission rate anymore, so we store 0
+            commission_rate = 0
                 
             cur = conn.execute(
                 """
@@ -2985,12 +2997,29 @@ def sales_update(sale_id: int):
             except ValueError:
                 salesman_id = current_user.id
                 
+            # Calculate commission for the updated sale
+            sale_info = conn.execute("SELECT warehouse_id FROM sales WHERE id = ?", (sale_id,)).fetchone()
+            wid = int(sale_info["warehouse_id"]) if sale_info and sale_info["warehouse_id"] else (current_user.warehouse_id or 1)
+            
+            wh_row = conn.execute("SELECT commission_applies FROM warehouses WHERE id = ?", (wid,)).fetchone()
+            commission_applies = int(wh_row["commission_applies"] or 0) if wh_row else 0
+            
+            commission_amount = 0
+            for li in parsed_items:
+                if commission_applies:
+                    br_row = conn.execute("SELECT b.commission_rate FROM products p LEFT JOIN brands b ON LOWER(p.brand) = LOWER(b.name) WHERE p.id = ?", (li["product_id"],)).fetchone()
+                    item_comm_rate = float(br_row["commission_rate"] or 0) if br_row and br_row["commission_rate"] is not None else 0
+                else:
+                    item_comm_rate = 0
+                li["commission_amount"] = round(li["amount"] * (item_comm_rate / 100), 2)
+                commission_amount += li["commission_amount"]
+
             conn.execute(
                 """
                 UPDATE sales
                 SET invoice_number = ?, customer_id = ?, invoice_date = ?, due_date = ?,
                     terms = ?, payment_type = ?, discount_amount = ?, subtotal = ?,
-                    grand_total = ?, notes = ?, status = ?, amount_paid = ?, remaining_amount = ?, salesman_id = ?
+                    grand_total = ?, notes = ?, status = ?, amount_paid = ?, remaining_amount = ?, salesman_id = ?, commission_amount = ?
                 WHERE id = ?
                 """,
                 (
@@ -3008,6 +3037,7 @@ def sales_update(sale_id: int):
                     amount_paid,
                     remaining_amount,
                     salesman_id,
+                    commission_amount,
                     sale_id,
                 ),
             )
@@ -3020,9 +3050,9 @@ def sales_update(sale_id: int):
                 conn.execute(
                     """
                     INSERT INTO sale_items
-                        (sale_id, product_id, description, qty, rate, amount, cost_price, print_dual_units, packing_multiplier)
+                        (sale_id, product_id, description, qty, rate, amount, cost_price, print_dual_units, packing_multiplier, commission_amount)
                     VALUES
-                        (?, ?, ?, ?, ?, ?, COALESCE((SELECT cost_price FROM products WHERE id = ?), 0), ?, ?)
+                        (?, ?, ?, ?, ?, ?, COALESCE((SELECT cost_price FROM products WHERE id = ?), 0), ?, ?, ?)
                     """,
                     (
                         sale_id,
@@ -3034,16 +3064,17 @@ def sales_update(sale_id: int):
                         li["product_id"],
                         li["print_dual_units"],
                         li["packing_multiplier"],
+                        li["commission_amount"],
                     ),
                 )
 
             # Apply net stock changes
-            sale_info = conn.execute("SELECT invoice_number, warehouse_id FROM sales WHERE id = ?", (sale_id,)).fetchone()
-            invoice_number = sale_info["invoice_number"] if sale_info else str(sale_id)
-            wid = int(sale_info["warehouse_id"]) if sale_info and sale_info["warehouse_id"] else (current_user.warehouse_id or 1)
+            sale_info_stock = conn.execute("SELECT invoice_number, warehouse_id FROM sales WHERE id = ?", (sale_id,)).fetchone()
+            invoice_number = sale_info_stock["invoice_number"] if sale_info_stock else str(sale_id)
+            wid_stock = int(sale_info_stock["warehouse_id"]) if sale_info_stock and sale_info_stock["warehouse_id"] else (current_user.warehouse_id or 1)
             
             for product_id, net_deduct in net_deductions.items():
-                cur = conn.execute("SELECT stock_quantity FROM warehouse_inventory WHERE product_id = ? AND warehouse_id = ?", (product_id, wid))
+                cur = conn.execute("SELECT stock_quantity FROM warehouse_inventory WHERE product_id = ? AND warehouse_id = ?", (product_id, wid_stock))
                 row = cur.fetchone()
                 old_stock = float(row["stock_quantity"] or 0) if row else 0
 
@@ -3478,6 +3509,82 @@ def record_payment(sale_id):
 
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)})
+
+
+@app.route("/reports/stock-distribution/data", methods=["GET"])
+@admin_required
+def stock_distribution_data():
+    brand_filter = request.args.get("brand", "").strip()
+    stock_level = request.args.get("stock_level", "").strip()
+    low_stock_threshold = float(request.args.get("low_stock_threshold", 5))
+
+    conn = get_connection()
+    try:
+        warehouses = conn.execute("SELECT id, name FROM warehouses ORDER BY id").fetchall()
+        wh_list = [{"id": w["id"], "name": w["name"]} for w in warehouses]
+
+        query = """
+            SELECT 
+                p.id, p.name, p.brand, p.cost_price
+            FROM products p
+            WHERE 1=1
+        """
+        params = []
+        if brand_filter:
+            query += " AND p.brand = ?"
+            params.append(brand_filter)
+            
+        query += " ORDER BY p.name COLLATE NOCASE"
+        
+        products = conn.execute(query, params).fetchall()
+        
+        # Now fetch all inventory
+        inv_rows = conn.execute("SELECT product_id, warehouse_id, stock_quantity FROM warehouse_inventory").fetchall()
+        
+        inv_map = {} # product_id -> warehouse_id -> qty
+        for r in inv_rows:
+            pid = r["product_id"]
+            wid = r["warehouse_id"]
+            qty = float(r["stock_quantity"] or 0)
+            if pid not in inv_map:
+                inv_map[pid] = {}
+            inv_map[pid][wid] = qty
+            
+        results = []
+        for p in products:
+            pid = p["id"]
+            p_inv = inv_map.get(pid, {})
+            total_stock = sum(p_inv.values())
+            
+            # Apply stock level filter
+            if stock_level == "low" and (total_stock <= 0 or total_stock > low_stock_threshold):
+                continue
+            if stock_level == "no_stock" and total_stock > 0:
+                continue
+            if stock_level == "in_stock" and total_stock <= 0:
+                continue
+                
+            total_value = total_stock * float(p["cost_price"] or 0)
+            
+            stocks = {}
+            for w in wh_list:
+                stocks[str(w["id"])] = p_inv.get(w["id"], 0)
+                
+            results.append({
+                "id": pid,
+                "name": p["name"],
+                "brand": p["brand"],
+                "stocks": stocks,
+                "total_stock": total_stock,
+                "total_value": total_value
+            })
+            
+        return jsonify({
+            "warehouses": wh_list,
+            "products": results
+        })
+    finally:
+        conn.close()
 
 
 @app.route("/reports")
@@ -4419,13 +4526,13 @@ def warehouses_list():
 def warehouses_add():
     name = (request.form.get("name") or "").strip()
     location = (request.form.get("location") or "").strip()
-    commission_rate = float(request.form.get("commission_rate") or 0)
+    commission_applies = 1 if request.form.get("commission_applies") == "1" else 0
     if not name:
         return redirect(url_for("warehouses_list"))
         
     conn = get_connection()
     try:
-        conn.execute("INSERT INTO warehouses (name, location, commission_rate) VALUES (?, ?, ?)", (name, location, commission_rate))
+        conn.execute("INSERT INTO warehouses (name, location, commission_applies) VALUES (?, ?, ?)", (name, location, commission_applies))
         conn.commit()
     except sqlite3.IntegrityError:
         pass
@@ -4438,13 +4545,13 @@ def warehouses_add():
 def warehouses_edit(warehouse_id):
     name = (request.form.get("name") or "").strip()
     location = (request.form.get("location") or "").strip()
-    commission_rate = float(request.form.get("commission_rate") or 0)
+    commission_applies = 1 if request.form.get("commission_applies") == "1" else 0
     if not name:
         return redirect(url_for("warehouses_list"))
         
     conn = get_connection()
     try:
-        conn.execute("UPDATE warehouses SET name = ?, location = ?, commission_rate = ? WHERE id = ?", (name, location, commission_rate, warehouse_id))
+        conn.execute("UPDATE warehouses SET name = ?, location = ?, commission_applies = ? WHERE id = ?", (name, location, commission_applies, warehouse_id))
         conn.commit()
     except sqlite3.IntegrityError:
         pass
@@ -4616,13 +4723,20 @@ def pos_submit_order():
         print(f"DEBUG pos_submit_order: grand_total={grand_total}, amount_paid={amount_paid}, payment_type={payment_type}, remaining={remaining_amount}, status={status}")
 
         # Fetch commission rate
-        wh_row = conn.execute("SELECT commission_rate FROM warehouses WHERE id = ?", (wid,)).fetchone()
-        commission_rate = float(wh_row["commission_rate"] or 0) if wh_row else 0
+        wh_row = conn.execute("SELECT commission_applies FROM warehouses WHERE id = ?", (wid,)).fetchone()
+        commission_applies = int(wh_row["commission_applies"] or 0) if wh_row else 0
         
         commission_amount = 0
         for li in parsed_items:
-            li["commission_amount"] = round(li["amount"] * (commission_rate / 100), 2)
+            if commission_applies:
+                br_row = conn.execute("SELECT b.commission_rate FROM products p LEFT JOIN brands b ON LOWER(p.brand) = LOWER(b.name) WHERE p.id = ?", (li["product_id"],)).fetchone()
+                item_comm_rate = float(br_row["commission_rate"] or 0) if br_row and br_row["commission_rate"] is not None else 0
+            else:
+                item_comm_rate = 0
+            li["commission_amount"] = round(li["amount"] * (item_comm_rate / 100), 2)
             commission_amount += li["commission_amount"]
+
+        commission_rate = 0
 
         # Insert sale
         cur = conn.execute(

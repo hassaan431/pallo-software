@@ -192,6 +192,7 @@
   <button type="button" class="tab-btn" data-tab="product">📦 By Product</button>
   <button type="button" class="tab-btn" data-tab="commission">💰 Commission Report</button>
   <button type="button" class="tab-btn" data-tab="inventory-additions">➕ Inventory Additions</button>
+  <button type="button" class="tab-btn" data-tab="stock-distribution">🏢 Stock Distribution</button>
 </div>
 
 <!-- CUSTOMER TAB -->
@@ -553,6 +554,53 @@
   </section>
 </div>
 
+<div id="tab-stock-distribution" class="tab-content" style="display:none;">
+  <section class="panel">
+    <div class="panel-header">
+      <h2>Stock Distribution</h2>
+    </div>
+    <div class="panel-body">
+      <div style="padding: 1.5rem 1.5rem 0 1.5rem;">
+        <div class="filter-bar" style="display: flex; gap: 1rem; align-items: flex-end; margin-bottom: 1.5rem; flex-wrap: wrap; background: #f8fafc; padding: 12px 16px; border-radius: 8px; border: 1px solid #e2e8f0;">
+          <div>
+            <label class="field-label" style="font-size: 0.8rem; margin-bottom: 4px; display: block;">Brand</label>
+            <select id="sdFilterBrand" class="form-control" style="width: 150px; padding: 4px 8px; font-size: 0.85rem; height: 32px;">
+              <option value="">All Brands</option>
+              {% for b in brands %}
+                <option value="{{ b }}">{{ b }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div>
+            <label class="field-label" style="font-size: 0.8rem; margin-bottom: 4px; display: block;">Stock Level</label>
+            <select id="sdFilterStock" class="form-control" style="width: 150px; padding: 4px 8px; font-size: 0.85rem; height: 32px;">
+              <option value="">All Items</option>
+              <option value="in_stock">In Stock</option>
+              <option value="low">Low Stock</option>
+              <option value="no_stock">Out of Stock</option>
+            </select>
+          </div>
+          <div>
+            <button class="btn btn-primary" style="height: 32px; padding: 0 16px; font-size: 0.85rem;" onclick="loadStockDistributionReport()">Apply Filters</button>
+          </div>
+        </div>
+      </div>
+      <div class="table-wrap" style="margin-top: 1rem;">
+        <table class="data-table" id="stockDistributionTable">
+          <thead>
+            <tr id="sdTableHeader">
+              <!-- Dynamically built -->
+            </tr>
+          </thead>
+          <tbody id="sdTableBody">
+            <tr><td colspan="10" style="text-align:center;">Loading...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+</div>
+
 <div id="tab-profit" class="tab-content">
   <section class="panel">
     <div class="panel-header">
@@ -706,7 +754,8 @@
     product: [],
     commission: [],
     profit: [],
-    'inventory-additions': { summary: [], log: [] }
+    'inventory-additions': { summary: [], log: [] },
+    'stock-distribution': { warehouses: [], products: [] }
   };
 
   let sortState = {
@@ -716,7 +765,8 @@
     category: { key: 'total_revenue', dir: -1 },
     product: { key: 'revenue', dir: -1 },
     commission: { key: 'salesman_name', dir: 1 },
-    profit: { key: 'date', dir: 1 }
+    profit: { key: 'date', dir: 1 },
+    'stock-distribution': { key: 'name', dir: 1 }
   };
 
   let salesmanDetails = [];
@@ -760,6 +810,9 @@
       if (document.getElementById('ia_date_from').value) params.append('date_from', document.getElementById('ia_date_from').value);
       if (document.getElementById('ia_date_to').value) params.append('date_to', document.getElementById('ia_date_to').value);
       if (document.getElementById('ia_supplier').value) params.append('supplier_id', document.getElementById('ia_supplier').value);
+    } else if (type === 'stock-distribution') {
+      if (document.getElementById('sdFilterBrand').value) params.append('brand', document.getElementById('sdFilterBrand').value);
+      if (document.getElementById('sdFilterStock').value) params.append('stock_level', document.getElementById('sdFilterStock').value);
     }
     return params;
   }
@@ -773,7 +826,7 @@
   const tabButtons = Array.from(document.querySelectorAll('.tab-btn'));
   function setActiveTab(tabKey) {
     tabButtons.forEach((b) => b.classList.toggle('is-active', b.getAttribute('data-tab') === tabKey));
-    const tabs = ['salesman', 'customer', 'brand', 'category', 'product', 'commission', 'profit', 'inventory-additions'];
+    const tabs = ['salesman', 'customer', 'brand', 'category', 'product', 'commission', 'profit', 'inventory-additions', 'stock-distribution'];
     tabs.forEach((k) => {
       const el = document.getElementById('tab-' + k);
       if (el) { el.style.display = (k === tabKey) ? 'block' : 'none'; }
@@ -782,7 +835,9 @@
     // Load data if empty
     if (tabKey === 'inventory-additions' && cache['inventory-additions'].summary.length === 0 && cache['inventory-additions'].log.length === 0) {
         loadInventoryAdditionsReport();
-    } else if (tabKey !== 'inventory-additions' && cache[tabKey] && cache[tabKey].length === 0) {
+    } else if (tabKey === 'stock-distribution' && cache['stock-distribution'].products.length === 0) {
+        loadStockDistributionReport();
+    } else if (tabKey !== 'inventory-additions' && tabKey !== 'stock-distribution' && cache[tabKey] && cache[tabKey].length === 0) {
         if (tabKey === 'salesman') loadSalesmanReport();
         if (tabKey === 'customer') loadCustomerReport();
         if (tabKey === 'brand') loadBrandReport();
@@ -1334,6 +1389,83 @@
     const rows = await fetch('/reports/profit?' + params.toString(), { credentials: 'same-origin' }).then(r => r.json());
     cache.profit = rows || [];
     renderProfit();
+  }
+
+  async function loadStockDistributionReport() {
+    let params = getFiltersParams('stock-distribution');
+    const res = await fetch('/reports/stock-distribution/data?' + params.toString(), { credentials: 'same-origin' }).then(r => r.json());
+    cache['stock-distribution'] = res;
+    renderStockDistribution();
+  }
+
+  function triggerSort(table, key) {
+    if (sortState[table].key === key) {
+      sortState[table].dir *= -1;
+    } else {
+      sortState[table].key = key;
+      sortState[table].dir = 1;
+    }
+    if (table === 'stock-distribution') renderStockDistribution();
+  }
+
+  function renderStockDistribution() {
+    const data = cache['stock-distribution'];
+    if (!data || !data.warehouses) return;
+    
+    let products = data.products.slice();
+    const state = sortState['stock-distribution'];
+    if (state.key) {
+        products.sort((a, b) => {
+            let valA = a[state.key] !== undefined ? a[state.key] : '';
+            let valB = b[state.key] !== undefined ? b[state.key] : '';
+            if (typeof valA === 'string') valA = valA.toLowerCase();
+            if (typeof valB === 'string') valB = valB.toLowerCase();
+            if (valA < valB) return -1 * state.dir;
+            if (valA > valB) return 1 * state.dir;
+            return 0;
+        });
+    }
+
+    const header = document.getElementById('sdTableHeader');
+    const tbody = document.getElementById('sdTableBody');
+    if (!header || !tbody) return;
+    
+    let theadHtml = `
+      <th onclick="triggerSort('stock-distribution', 'name')" style="cursor:pointer;" data-sort>Product</th>
+      <th onclick="triggerSort('stock-distribution', 'brand')" style="cursor:pointer;" data-sort>Brand</th>
+    `;
+    data.warehouses.forEach(w => {
+      // sort by warehouse stock
+      theadHtml += `<th style="text-align:right">${w.name}</th>`;
+    });
+    theadHtml += `
+      <th onclick="triggerSort('stock-distribution', 'total_stock')" style="cursor:pointer; text-align:right;" data-sort>Total Inventory</th>
+      <th onclick="triggerSort('stock-distribution', 'total_value')" style="cursor:pointer; text-align:right;" data-sort>Total Value</th>
+    `;
+    header.innerHTML = theadHtml;
+    
+    if (products.length === 0) {
+      tbody.innerHTML = `<tr><td colspan="${data.warehouses.length + 4}" style="text-align:center;">No products match the filters.</td></tr>`;
+      return;
+    }
+    
+    tbody.innerHTML = '';
+    products.forEach(p => {
+      const tr = document.createElement('tr');
+      let html = `
+        <td style="font-weight:500">${p.name}</td>
+        <td>${p.brand || '-'}</td>
+      `;
+      data.warehouses.forEach(w => {
+        html += `<td style="text-align:right">${qty(p.stocks[w.id] || 0)}</td>`;
+      });
+      html += `
+        <td style="text-align:right; font-weight:600;">${qty(p.total_stock)}</td>
+        <td style="text-align:right; font-weight:600;">${money(p.total_value)}</td>
+      `;
+      tr.innerHTML = html;
+      tbody.appendChild(tr);
+    });
   }
   
   let profitChartInstance = null;

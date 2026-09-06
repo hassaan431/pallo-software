@@ -19,6 +19,14 @@ const outfit = Outfit({
 export const metadata: Metadata = {
   title: "AK Distributors LLC",
   description: "Premium Wholesale Food Distribution in California",
+  icons: {
+    icon: [
+      { url: "/favicon.ico" },
+      { url: "/favicon.png", type: "image/png" },
+    ],
+    shortcut: "/favicon.ico",
+    apple: "/apple-touch-icon.png",
+  },
 };
 
 export default function RootLayout({

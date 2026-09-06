@@ -60,7 +60,8 @@ def init_db():
 
             CREATE TABLE IF NOT EXISTS brands (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
-                name TEXT UNIQUE NOT NULL
+                name TEXT UNIQUE NOT NULL,
+                commission_rate REAL DEFAULT 0
             );
 
             CREATE TABLE IF NOT EXISTS products (
@@ -121,6 +122,7 @@ def init_db():
                 name TEXT UNIQUE NOT NULL,
                 location TEXT,
                 commission_rate REAL DEFAULT 0,
+                commission_applies INTEGER DEFAULT 0,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             );
 
@@ -202,6 +204,18 @@ def init_db():
             
         try:
             conn.execute("ALTER TABLE sale_items ADD COLUMN commission_amount REAL DEFAULT 0")
+            conn.commit()
+        except sqlite3.OperationalError:
+            pass
+            
+        try:
+            conn.execute("ALTER TABLE warehouses ADD COLUMN commission_applies INTEGER DEFAULT 0")
+            conn.commit()
+        except sqlite3.OperationalError:
+            pass
+            
+        try:
+            conn.execute("ALTER TABLE brands ADD COLUMN commission_rate REAL DEFAULT 0")
             conn.commit()
         except sqlite3.OperationalError:
             pass

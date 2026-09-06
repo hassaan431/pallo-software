@@ -523,8 +523,13 @@
             <label for="adjustStockNew">New Stock Quantity</label>
             <input type="number" step="any" class="form-control" id="adjustStockNew" name="new_stock" required>
           </div>
-          <div class="modal-field" style="display:none;">
-            <input type="hidden" name="warehouse_id" value="{{ current_warehouse_id }}">
+          <div class="modal-field">
+            <label for="adjustStockWarehouse">Warehouse</label>
+            <select class="form-control" id="adjustStockWarehouse" name="warehouse_id" required>
+              {% for w in warehouses %}
+                <option value="{{ w.id }}" {% if current_warehouse_id == w.id %}selected{% endif %}>{{ w.name }}</option>
+              {% endfor %}
+            </select>
           </div>
           <div class="modal-footer">
             <button type="button" class="btn" onclick="closeModal(document.getElementById('adjustStockModal'))">Cancel</button>
