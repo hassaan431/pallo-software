@@ -88,10 +88,6 @@
             <span class="nav-emoji" aria-hidden="true">📈</span>
             <span class="nav-label">Reports</span>
           </a>
-          <a href="{{ url_for('duplicate_sales_report') }}" class="{{ 'is-active' if request.endpoint == 'duplicate_sales_report' else '' }}">
-            <span class="nav-emoji" aria-hidden="true">📑</span>
-            <span class="nav-label">Duplicate Sales</span>
-          </a>
 
           <div class="sidebar-section">Products</div>
           <a href="{{ url_for('inventory') }}" class="{{ 'is-active' if request.endpoint == 'inventory' else '' }}">
