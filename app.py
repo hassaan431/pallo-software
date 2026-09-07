@@ -2335,7 +2335,7 @@ from flask import Response
 @app.route("/sales/import-csv-template", methods=["GET"])
 @admin_required
 def sales_import_csv_template():
-    output = io.StringIO()
+    output = StringIO()
     writer = csv.writer(output)
     writer.writerow(["Invoice Number", "Invoice Date", "Customer Name", "Product Name", "Quantity", "Rate", "Warehouse Name", "Salesman Name"])
     writer.writerow(["INV-OLD-001", "2026-09-01", "Walk-in Customer", "Chicken Flavor Spread Classic", 10, 5.0, "Main Warehouse", "salesman"])
