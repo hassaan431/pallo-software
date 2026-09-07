@@ -561,6 +561,8 @@ def inventory_download_csv():
         elif stock_filter == "low_stock":
             query = f"SELECT * FROM ({query}) WHERE stock_quantity > 0 AND stock_quantity <= ?"
             params.append(low_stock_threshold)
+        else:
+            query = f"SELECT * FROM ({query})"
             
         # The main query string for ordering
         query += " ORDER BY name COLLATE NOCASE"
