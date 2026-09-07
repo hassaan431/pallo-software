@@ -740,6 +740,17 @@
     }).format(v);
   }
 
+  function sdMoney(n) {
+    const v = Number(n || 0);
+    const decimals = Math.abs(v) < 10 ? 2 : 1;
+    return new Intl.NumberFormat('en-US', { 
+      style: 'currency', 
+      currency: 'USD',
+      minimumFractionDigits: decimals,
+      maximumFractionDigits: decimals
+    }).format(v);
+  }
+
   function qty(n) {
     const v = Number(n || 0);
     if (Math.abs(v - Math.round(v)) < 1e-9) return String(Math.round(v));
@@ -1461,14 +1472,14 @@
       let html = `
         <td style="font-weight:500">${p.name}</td>
         <td>${p.brand || '-'}</td>
-        <td style="text-align:right">${money(p.cost_price || 0)}</td>
+        <td style="text-align:right">${sdMoney(p.cost_price || 0)}</td>
       `;
       data.warehouses.forEach(w => {
         html += `<td style="text-align:right">${qty(p.stocks[w.id] || 0)}</td>`;
       });
       html += `
         <td style="text-align:right; font-weight:600;">${qty(p.total_stock)}</td>
-        <td style="text-align:right; font-weight:600;">${money(p.total_value)}</td>
+        <td style="text-align:right; font-weight:600;">${sdMoney(p.total_value)}</td>
       `;
       tr.innerHTML = html;
       tbody.appendChild(tr);
