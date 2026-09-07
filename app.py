@@ -1968,6 +1968,9 @@ def sales():
         
         users_rows = conn.execute("SELECT id, username, role FROM users ORDER BY username").fetchall()
         users_list = [dict(r) for r in users_rows]
+        
+        products_rows = conn.execute("SELECT id, name FROM products ORDER BY name COLLATE NOCASE").fetchall()
+        products_list = [dict(r) for r in products_rows]
 
         query = """
             SELECT
@@ -2018,7 +2021,8 @@ def sales():
         next_invoice_number=get_next_invoice_number(),
         today=date.today().isoformat(),
         all_users=users_list,
-        warehouses=warehouses_list
+        warehouses=warehouses_list,
+        products=products_list
     )
 @app.route("/sales/next-invoice", methods=["GET"])
 @login_required
@@ -2104,6 +2108,7 @@ def sales_data():
     salesman_id = (request.args.get("salesman_id") or "").strip()
     salesman_name_filter = (request.args.get("salesman_name") or "").strip()
     warehouse_id = (request.args.get("warehouse_id") or "").strip()
+    product_id = (request.args.get("product_id") or "").strip()
     search = (request.args.get("search") or "").strip()
 
     conditions = []
@@ -2120,6 +2125,14 @@ def sales_data():
             customer_id_int = int(customer_id)
             conditions.append("s.customer_id = ?")
             params.append(customer_id_int)
+        except ValueError:
+            pass
+            
+    if product_id and product_id not in ("all", ""):
+        try:
+            product_id_int = int(product_id)
+            conditions.append("s.id IN (SELECT sale_id FROM sale_items WHERE product_id = ?)")
+            params.append(product_id_int)
         except ValueError:
             pass
             
@@ -4184,9 +4197,12 @@ def reports_by_product():
         params.append(customer_id)
         
     warehouse_id = (request.args.get("warehouse_id") or "").strip()
+    
+    stock_column = "p.stock_quantity as current_stock"
     if warehouse_id and warehouse_id != "all":
         conditions.append("s.warehouse_id = ?")
         params.append(int(warehouse_id))
+        stock_column = f"COALESCE((SELECT stock_quantity FROM warehouse_inventory WHERE product_id = p.id AND warehouse_id = {int(warehouse_id)}), 0) as current_stock"
         
     where_sql = " AND ".join(conditions)
 
@@ -4202,7 +4218,7 @@ def reports_by_product():
                 COALESCE(SUM(si.qty), 0) as units_sold,
                 COALESCE(SUM(si.amount), 0) as total_revenue,
                 COALESCE(SUM((si.qty * COALESCE(si.packing_multiplier, 1.0) * si.cost_price) + COALESCE(si.commission_amount, 0)), 0) as total_cost,
-                p.stock_quantity as current_stock
+                {stock_column}
             FROM sale_items si
             JOIN products p ON p.id = si.product_id
             LEFT JOIN categories cat ON cat.id = p.category_id
