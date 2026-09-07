@@ -1467,7 +1467,13 @@
     }
     
     tbody.innerHTML = '';
+    let sumTotalStock = 0;
+    let sumTotalValue = 0;
+    
     products.forEach(p => {
+      sumTotalStock += (p.total_stock || 0);
+      sumTotalValue += (p.total_value || 0);
+      
       const tr = document.createElement('tr');
       let html = `
         <td style="font-weight:500">${p.name}</td>
@@ -1484,6 +1490,16 @@
       tr.innerHTML = html;
       tbody.appendChild(tr);
     });
+    
+    // Add summary row
+    const sumTr = document.createElement('tr');
+    sumTr.style.backgroundColor = '#f8fafc';
+    sumTr.style.borderTop = '2px solid #cbd5e1';
+    let sumHtml = `<td colspan="${3 + data.warehouses.length}" style="text-align:right; font-weight:bold; font-size:1.05rem; color:#0f172a;">Totals:</td>`;
+    sumHtml += `<td style="text-align:right; font-weight:bold; font-size:1.05rem; color:#0f172a;">${qty(sumTotalStock)}</td>`;
+    sumHtml += `<td style="text-align:right; font-weight:bold; font-size:1.05rem; color:#0f172a;">${sdMoney(sumTotalValue)}</td>`;
+    sumTr.innerHTML = sumHtml;
+    tbody.appendChild(sumTr);
   }
   
   let profitChartInstance = null;
