@@ -224,9 +224,80 @@
 <div id="stockErrorBanner" class="error-banner" style="display: none;"></div>
 
 <section class="panel">
-  <div class="panel-header">
+  <div class="panel-header" style="display: flex; justify-content: space-between; align-items: center;">
     <h2>{% if edit_mode %}Edit Sale{% else %}New Sale{% endif %}</h2>
+    {% if not edit_mode %}
+    <div id="importCsvBlock">
+      <button class="btn btn-secondary" style="font-size: 0.85rem;" onclick="document.getElementById('importCsvModal').style.display='flex'">Import Old Sales (CSV)</button>
+    </div>
+    {% endif %}
   </div>
+  
+  {% if not edit_mode %}
+  <div id="importCsvModal" style="display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 1000; align-items: center; justify-content: center;">
+    <div class="panel" style="background: white; padding: 2rem; border-radius: 12px; width: 450px; max-width: 90vw;">
+      <h3 style="margin-top: 0;">Bulk Upload Sales via CSV</h3>
+      <p style="font-size: 0.9rem; color: #64748b; margin-bottom: 1rem;">
+        Upload a CSV file to automatically generate sales invoices. Make sure your Customer and Product names match the database exactly.
+      </p>
+      <a href="{{ url_for('sales_import_csv_template') }}" style="font-size: 0.85rem; color: var(--color-primary); display: inline-block; margin-bottom: 1rem; font-weight: 600;">Download CSV Template</a>
+      
+      <div id="csvImportError" class="error-banner" style="display: none; font-size: 0.85rem; padding: 0.75rem;"></div>
+      <div id="csvImportSuccess" style="display: none; background: #ecfdf5; color: #059669; border: 1px solid #a7f3d0; padding: 0.75rem; border-radius: 8px; margin-bottom: 1rem; font-size: 0.85rem; font-weight: 600;"></div>
+      
+      <form id="csvImportForm">
+        <input type="file" id="csvFileInput" accept=".csv" class="form-control" style="margin-bottom: 1.5rem;">
+        <div style="display: flex; justify-content: flex-end; gap: 0.5rem;">
+          <button type="button" class="btn btn-secondary" onclick="document.getElementById('importCsvModal').style.display='none'">Cancel</button>
+          <button type="button" class="btn btn-primary" onclick="submitCsvImport()">Upload & Import</button>
+        </div>
+      </form>
+    </div>
+  </div>
+  <script>
+    async function submitCsvImport() {
+      const fileInput = document.getElementById('csvFileInput');
+      const errorDiv = document.getElementById('csvImportError');
+      const successDiv = document.getElementById('csvImportSuccess');
+      
+      errorDiv.style.display = 'none';
+      successDiv.style.display = 'none';
+      
+      if (!fileInput.files.length) {
+        errorDiv.innerText = "Please select a CSV file first.";
+        errorDiv.style.display = 'block';
+        return;
+      }
+      
+      const formData = new FormData();
+      formData.append('file', fileInput.files[0]);
+      
+      try {
+        const response = await fetch("{{ url_for('sales_import_csv') }}", {
+          method: 'POST',
+          body: formData
+        });
+        
+        const data = await response.json();
+        
+        if (data.success) {
+          successDiv.innerText = data.message;
+          successDiv.style.display = 'block';
+          setTimeout(() => {
+            window.location.reload();
+          }, 1500);
+        } else {
+          errorDiv.innerText = data.error;
+          errorDiv.style.display = 'block';
+        }
+      } catch (err) {
+        errorDiv.innerText = "An unexpected error occurred during import.";
+        errorDiv.style.display = 'block';
+      }
+    }
+  </script>
+  {% endif %}
+
   <div class="panel-body" style="padding: 1.35rem;">
     <form id="saleForm" method="post" action="{% if edit_mode %}{{ url_for('sales_update', sale_id=edit_sale.id) }}{% else %}{{ url_for('sales_new') }}{% endif %}" target="_self">
       <div class="sale-grid">

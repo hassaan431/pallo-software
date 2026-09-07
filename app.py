@@ -2327,6 +2327,180 @@ def sales_export():
     return resp
 
 
+import csv
+from io import StringIO
+from flask import Response
+
+@app.route("/sales/import-csv-template", methods=["GET"])
+@admin_required
+def sales_import_csv_template():
+    output = StringIO()
+    writer = csv.writer(output)
+    writer.writerow([
+        "Invoice Number", "Invoice Date", "Customer Name", 
+        "Product Name", "Quantity", "Rate", "Warehouse Name"
+    ])
+    writer.writerow([
+        "INV-OLD-001", "2026-09-01", "Walk-in Customer", 
+        "Chicken Flavor Spread Classic", "10", "5.0", "Main Warehouse"
+    ])
+    return Response(
+        output.getvalue(),
+        mimetype="text/csv",
+        headers={"Content-Disposition": "attachment;filename=sales_import_template.csv"}
+    )
+
+@app.route("/sales/import-csv", methods=["POST"])
+@admin_required
+def sales_import_csv():
+    if 'file' not in request.files:
+        return jsonify({"success": False, "error": "No file uploaded."})
+    
+    file = request.files['file']
+    if file.filename == '':
+        return jsonify({"success": False, "error": "No file selected."})
+    
+    if not file.filename.endswith('.csv'):
+        return jsonify({"success": False, "error": "Invalid file type. Please upload a CSV file."})
+    
+    try:
+        content = file.read().decode('utf-8-sig')
+        reader = csv.DictReader(StringIO(content))
+        
+        # Validate headers
+        required_headers = [
+            "Invoice Number", "Invoice Date", "Customer Name", 
+            "Product Name", "Quantity", "Rate", "Warehouse Name"
+        ]
+        
+        headers = reader.fieldnames
+        if not headers or not all(h in headers for h in required_headers):
+            return jsonify({"success": False, "error": f"Invalid CSV headers. Expected: {', '.join(required_headers)}"})
+        
+        rows = list(reader)
+        if not rows:
+            return jsonify({"success": False, "error": "The CSV file is empty."})
+        
+        conn = get_connection()
+        try:
+            # 1. Validation Pass
+            customers_cache = {}
+            products_cache = {}
+            warehouses_cache = {}
+            
+            invoices = {} # Group by Invoice Number
+            
+            for i, row in enumerate(rows, start=2): # +2 for 1-based index and header row
+                inv_num = row.get("Invoice Number", "").strip()
+                inv_date = row.get("Invoice Date", "").strip()
+                c_name = row.get("Customer Name", "").strip()
+                p_name = row.get("Product Name", "").strip()
+                qty_str = row.get("Quantity", "").strip()
+                rate_str = row.get("Rate", "").strip()
+                w_name = row.get("Warehouse Name", "").strip()
+                
+                if not inv_num or not inv_date or not c_name or not p_name or not qty_str or not rate_str or not w_name:
+                    return jsonify({"success": False, "error": f"Row {i}: Missing required fields."})
+                
+                try:
+                    qty = float(qty_str)
+                    rate = float(rate_str)
+                except ValueError:
+                    return jsonify({"success": False, "error": f"Row {i}: Quantity and Rate must be numbers."})
+                
+                # Validate Customer
+                if c_name not in customers_cache:
+                    c_row = conn.execute("SELECT id FROM customers WHERE name = ?", (c_name,)).fetchone()
+                    if not c_row:
+                        return jsonify({"success": False, "error": f"Row {i}: Customer '{c_name}' not found in database."})
+                    customers_cache[c_name] = c_row["id"]
+                    
+                # Validate Product
+                if p_name not in products_cache:
+                    p_row = conn.execute("SELECT id, cost_price, packing_multiplier FROM products WHERE name = ?", (p_name,)).fetchone()
+                    if not p_row:
+                        return jsonify({"success": False, "error": f"Row {i}: Product '{p_name}' not found in database."})
+                    products_cache[p_name] = p_row
+                    
+                # Validate Warehouse
+                if w_name not in warehouses_cache:
+                    w_row = conn.execute("SELECT id FROM warehouses WHERE name = ?", (w_name,)).fetchone()
+                    if not w_row:
+                        return jsonify({"success": False, "error": f"Row {i}: Warehouse '{w_name}' not found in database."})
+                    warehouses_cache[w_name] = w_row["id"]
+                
+                # Check for existing invoice numbers in DB
+                db_inv = conn.execute("SELECT id FROM sales WHERE invoice_number = ?", (inv_num,)).fetchone()
+                if db_inv:
+                    return jsonify({"success": False, "error": f"Row {i}: Invoice Number '{inv_num}' already exists in database."})
+                
+                # Group items
+                if inv_num not in invoices:
+                    invoices[inv_num] = {
+                        "date": inv_date,
+                        "customer_id": customers_cache[c_name],
+                        "warehouse_id": warehouses_cache[w_name],
+                        "items": []
+                    }
+                else:
+                    # Enforce that all rows for the same invoice have the same customer, date, warehouse
+                    if invoices[inv_num]["customer_id"] != customers_cache[c_name]:
+                        return jsonify({"success": False, "error": f"Row {i}: Invoice '{inv_num}' has multiple different customers."})
+                    if invoices[inv_num]["warehouse_id"] != warehouses_cache[w_name]:
+                        return jsonify({"success": False, "error": f"Row {i}: Invoice '{inv_num}' has multiple different warehouses."})
+                
+                invoices[inv_num]["items"].append({
+                    "product_id": products_cache[p_name]["id"],
+                    "cost_price": float(products_cache[p_name]["cost_price"] or 0),
+                    "packing_multiplier": float(products_cache[p_name]["packing_multiplier"] or 1.0),
+                    "qty": qty,
+                    "rate": rate,
+                    "amount": qty * rate
+                })
+
+            # 2. Insertion Pass
+            for inv_num, data in invoices.items():
+                subtotal = sum(item["amount"] for item in data["items"])
+                # Note: Defaulting payment to cash and fully paid for old invoices
+                sale_cur = conn.execute(
+                    '''INSERT INTO sales 
+                       (invoice_number, customer_id, invoice_date, payment_type, subtotal, grand_total, amount_paid, remaining_amount, status, warehouse_id) 
+                       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)''',
+                    (inv_num, data["customer_id"], data["date"], 'cash', subtotal, subtotal, subtotal, 0, 'paid', data["warehouse_id"])
+                )
+                sale_id = sale_cur.lastrowid
+                
+                for item in data["items"]:
+                    conn.execute(
+                        '''INSERT INTO sale_items 
+                           (sale_id, product_id, qty, rate, amount, cost_price, packing_multiplier) 
+                           VALUES (?, ?, ?, ?, ?, ?, ?)''',
+                        (sale_id, item["product_id"], item["qty"], item["rate"], item["amount"], item["cost_price"], item["packing_multiplier"])
+                    )
+                    
+                    # Adjust stock in warehouse_inventory
+                    conn.execute(
+                        '''UPDATE warehouse_inventory 
+                           SET stock_quantity = stock_quantity - ? 
+                           WHERE warehouse_id = ? AND product_id = ?''',
+                        (item["qty"], data["warehouse_id"], item["product_id"])
+                    )
+                    # Adjust global stock in products table
+                    conn.execute(
+                        "UPDATE products SET stock_quantity = stock_quantity - ? WHERE id = ?",
+                        (item["qty"], item["product_id"])
+                    )
+            
+            conn.commit()
+            return jsonify({"success": True, "message": f"Successfully imported {len(invoices)} invoices."})
+        except Exception as e:
+            conn.rollback()
+            return jsonify({"success": False, "error": f"Database error: {str(e)}"})
+        finally:
+            conn.close()
+    except Exception as e:
+        return jsonify({"success": False, "error": f"Error parsing CSV: {str(e)}"})
+
 @app.route("/sales/new", methods=["POST"])
 @admin_required
 def sales_new():

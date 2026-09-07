@@ -1,0 +1,4 @@
+Invoice Number,Invoice Date,Customer Name,Product Name,Quantity,Rate,Warehouse Name
+INV-OLD-001,2026-09-01,Walk-in Customer,Chicken Flavor Spread Classic,10,5.0,Main Warehouse
+INV-OLD-001,2026-09-01,Walk-in Customer,Chicken Flavor Spread BBQ,5,5.5,Main Warehouse
+INV-OLD-002,2026-09-02,Walk-in Customer,ZAIN FOOD-BLACK PEPPER (200G-7 OZ),20,3.0,LA Warehouse
