@@ -2335,16 +2335,13 @@ from flask import Response
 @app.route("/sales/import-csv-template", methods=["GET"])
 @admin_required
 def sales_import_csv_template():
-    output = StringIO()
+    output = io.StringIO()
     writer = csv.writer(output)
-    writer.writerow([
-        "Invoice Number", "Invoice Date", "Customer Name", 
-        "Product Name", "Quantity", "Rate", "Warehouse Name"
-    ])
-    writer.writerow([
-        "INV-OLD-001", "2026-09-01", "Walk-in Customer", 
-        "Chicken Flavor Spread Classic", "10", "5.0", "Main Warehouse"
-    ])
+    writer.writerow(["Invoice Number", "Invoice Date", "Customer Name", "Product Name", "Quantity", "Rate", "Warehouse Name", "Salesman Name"])
+    writer.writerow(["INV-OLD-001", "2026-09-01", "Walk-in Customer", "Chicken Flavor Spread Classic", 10, 5.0, "Main Warehouse", "salesman"])
+    writer.writerow(["INV-OLD-001", "2026-09-01", "Walk-in Customer", "Chicken Flavor Spread BBQ", 5, 5.5, "Main Warehouse", "salesman"])
+    writer.writerow(["INV-OLD-002", "2026-09-02", "Walk-in Customer", "ZAIN FOOD-BLACK PEPPER (200G-7 OZ)", 20, 3.0, "LA Warehouse", "salesman"])
+    output.seek(0)
     return Response(
         output.getvalue(),
         mimetype="text/csv",
@@ -2371,7 +2368,8 @@ def sales_import_csv():
         # Validate headers
         required_headers = [
             "Invoice Number", "Invoice Date", "Customer Name", 
-            "Product Name", "Quantity", "Rate", "Warehouse Name"
+            "Product Name", "Quantity", "Rate", "Warehouse Name",
+            "Salesman Name"
         ]
         
         headers = reader.fieldnames
@@ -2388,6 +2386,7 @@ def sales_import_csv():
             customers_cache = {}
             products_cache = {}
             warehouses_cache = {}
+            users_cache = {}
             
             invoices = {} # Group by Invoice Number
             
@@ -2399,8 +2398,9 @@ def sales_import_csv():
                 qty_str = row.get("Quantity", "").strip()
                 rate_str = row.get("Rate", "").strip()
                 w_name = row.get("Warehouse Name", "").strip()
+                s_name = row.get("Salesman Name", "").strip()
                 
-                if not inv_num or not inv_date or not c_name or not p_name or not qty_str or not rate_str or not w_name:
+                if not inv_num or not inv_date or not c_name or not p_name or not qty_str or not rate_str or not w_name or not s_name:
                     return jsonify({"success": False, "error": f"Row {i}: Missing required fields."})
                 
                 try:
@@ -2425,33 +2425,52 @@ def sales_import_csv():
                     
                 # Validate Warehouse
                 if w_name not in warehouses_cache:
-                    w_row = conn.execute("SELECT id FROM warehouses WHERE name = ?", (w_name,)).fetchone()
+                    w_row = conn.execute("SELECT id, commission_applies FROM warehouses WHERE name = ?", (w_name,)).fetchone()
                     if not w_row:
                         return jsonify({"success": False, "error": f"Row {i}: Warehouse '{w_name}' not found in database."})
-                    warehouses_cache[w_name] = w_row["id"]
+                    warehouses_cache[w_name] = w_row
+                    
+                # Validate Salesman
+                if s_name not in users_cache:
+                    u_row = conn.execute("SELECT id FROM users WHERE username = ?", (s_name,)).fetchone()
+                    if not u_row:
+                        return jsonify({"success": False, "error": f"Row {i}: Salesman '{s_name}' not found in database (username)."})
+                    users_cache[s_name] = u_row["id"]
                 
                 # Group items by CSV Invoice Number (used to club multiple items into a single invoice)
                 if inv_num not in invoices:
                     invoices[inv_num] = {
                         "date": inv_date,
                         "customer_id": customers_cache[c_name],
-                        "warehouse_id": warehouses_cache[w_name],
+                        "warehouse_id": warehouses_cache[w_name]["id"],
+                        "commission_applies": warehouses_cache[w_name]["commission_applies"],
+                        "salesman_id": users_cache[s_name],
                         "items": []
                     }
                 else:
-                    # Enforce that all rows for the same invoice have the same customer, date, warehouse
+                    # Enforce that all rows for the same invoice have the same customer, date, warehouse, salesman
                     if invoices[inv_num]["customer_id"] != customers_cache[c_name]:
                         return jsonify({"success": False, "error": f"Row {i}: Invoice '{inv_num}' has multiple different customers."})
-                    if invoices[inv_num]["warehouse_id"] != warehouses_cache[w_name]:
+                    if invoices[inv_num]["warehouse_id"] != warehouses_cache[w_name]["id"]:
                         return jsonify({"success": False, "error": f"Row {i}: Invoice '{inv_num}' has multiple different warehouses."})
+                    if invoices[inv_num]["salesman_id"] != users_cache[s_name]:
+                        return jsonify({"success": False, "error": f"Row {i}: Invoice '{inv_num}' has multiple different salesmen."})
                 
+                # Pre-calculate item commission if applies
+                comm_amount = 0.0
+                if invoices[inv_num]["commission_applies"]:
+                    br_row = conn.execute("SELECT b.commission_rate FROM products p LEFT JOIN brands b ON LOWER(p.brand) = LOWER(b.name) WHERE p.id = ?", (products_cache[p_name]["id"],)).fetchone()
+                    item_comm_rate = float(br_row["commission_rate"] or 0) if br_row and br_row["commission_rate"] is not None else 0
+                    comm_amount = round((qty * rate) * (item_comm_rate / 100), 2)
+                    
                 invoices[inv_num]["items"].append({
                     "product_id": products_cache[p_name]["id"],
                     "cost_price": float(products_cache[p_name]["cost_price"] or 0),
                     "packing_multiplier": 1.0,
                     "qty": qty,
                     "rate": rate,
-                    "amount": qty * rate
+                    "amount": qty * rate,
+                    "commission_amount": comm_amount
                 })
 
             # 2. Insertion Pass: Auto-generate sequential invoice numbers continuing after last sale
@@ -2473,21 +2492,23 @@ def sales_import_csv():
                 generated_invoices.append(auto_inv_number)
 
                 subtotal = sum(item["amount"] for item in data["items"])
+                total_comm = sum(item["commission_amount"] for item in data["items"])
+                
                 # Note: Defaulting payment to cash and fully paid for old invoices
                 sale_cur = conn.execute(
                     '''INSERT INTO sales 
-                       (invoice_number, customer_id, invoice_date, payment_type, subtotal, grand_total, amount_paid, remaining_amount, status, warehouse_id, notes) 
-                       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)''',
-                    (auto_inv_number, data["customer_id"], data["date"], 'cash', subtotal, subtotal, subtotal, 0, 'paid', data["warehouse_id"], f"Bulk import (Old ref: {club_key})")
+                       (invoice_number, customer_id, invoice_date, payment_type, subtotal, grand_total, amount_paid, remaining_amount, status, warehouse_id, salesman_id, commission_amount, commission_rate, notes) 
+                       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)''',
+                    (auto_inv_number, data["customer_id"], data["date"], 'cash', subtotal, subtotal, subtotal, 0, 'paid', data["warehouse_id"], data["salesman_id"], total_comm, 0, f"Bulk import (Old ref: {club_key})")
                 )
                 sale_id = sale_cur.lastrowid
                 
                 for item in data["items"]:
                     conn.execute(
                         '''INSERT INTO sale_items 
-                           (sale_id, product_id, qty, rate, amount, cost_price, packing_multiplier) 
-                           VALUES (?, ?, ?, ?, ?, ?, ?)''',
-                        (sale_id, item["product_id"], item["qty"], item["rate"], item["amount"], item["cost_price"], item["packing_multiplier"])
+                           (sale_id, product_id, qty, rate, amount, cost_price, packing_multiplier, commission_amount) 
+                           VALUES (?, ?, ?, ?, ?, ?, ?, ?)''',
+                        (sale_id, item["product_id"], item["qty"], item["rate"], item["amount"], item["cost_price"], item["packing_multiplier"], item["commission_amount"])
                     )
                     
                     # Fetch old stock for inventory tracking
