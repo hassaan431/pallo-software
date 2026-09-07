@@ -780,11 +780,6 @@
   const formatNumber = (num) => {
     return Number(num || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   };
-  
-  function money4(n) {
-    const v = Number(n || 0);
-    return v.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 4 });
-  };
 
   function getFiltersParams(type) {
     const params = new URLSearchParams();
@@ -1466,7 +1461,7 @@
       let html = `
         <td style="font-weight:500">${p.name}</td>
         <td>${p.brand || '-'}</td>
-        <td style="text-align:right">${money4(p.cost_price || 0)}</td>
+        <td style="text-align:right">${money(p.cost_price || 0)}</td>
       `;
       data.warehouses.forEach(w => {
         html += `<td style="text-align:right">${qty(p.stocks[w.id] || 0)}</td>`;
