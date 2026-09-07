@@ -1,0 +1,58 @@
+{% extends "base.html" %}
+{% block title %}Duplicate Sales — AK Distributors{% endblock %}
+{% block content %}
+<header class="header">
+  <div>
+    <h1>Duplicate Sales Report</h1>
+    <p class="text-muted">Invoices with the exact same customer and identical products/quantities.</p>
+  </div>
+</header>
+
+<div class="card" style="margin-top: 1rem;">
+  <div class="table-wrap">
+    {% if duplicates %}
+      {% for dup in duplicates %}
+      <div style="margin-bottom: 2rem; border: 1px solid var(--color-border); border-radius: 8px; padding: 1rem;">
+        <h3 style="margin-top: 0; color: var(--color-primary);">Customer: {{ dup.customer_name }}</h3>
+        
+        <h4 style="margin-bottom: 0.5rem; font-size: 0.9rem; color: var(--color-text-muted);">Matching Items:</h4>
+        <ul style="margin-top: 0; margin-bottom: 1rem; padding-left: 1.5rem;">
+          {% for item_name, qty in dup.items_display %}
+          <li>{{ item_name }} <span class="text-muted">(Qty: {{ qty }})</span></li>
+          {% endfor %}
+        </ul>
+        
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>Invoice Number</th>
+              <th>Date</th>
+              <th style="text-align: right;">Total Amount</th>
+              <th style="text-align: center;">Action</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for sale in dup.sales %}
+            <tr>
+              <td><strong>{{ sale.invoice_number }}</strong></td>
+              <td>{{ sale.invoice_date }}</td>
+              <td style="text-align: right;" class="sensitive-data">${{ "%.2f"|format(sale.grand_total) }}</td>
+              <td style="text-align: center;">
+                <a href="{{ url_for('sale_detail', sale_id=sale.id) }}" class="btn btn-secondary" style="padding: 0.25rem 0.5rem; font-size: 0.8rem;" target="_blank">View</a>
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      {% endfor %}
+    {% else %}
+      <div style="text-align: center; padding: 3rem 1rem;">
+        <div style="font-size: 3rem; margin-bottom: 1rem;">✅</div>
+        <h3>No Duplicate Sales Found</h3>
+        <p class="text-muted">There are no invoices with the exact same customer and matching items.</p>
+      </div>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}
