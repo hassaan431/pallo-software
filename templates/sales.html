@@ -1,21 +1,6 @@
 {% extends "base.html" %}
 {% block title %}Sales — AK Distributors{% endblock %}
 {% block page_heading %}Sales{% endblock %}
-{% block extra_head %}
-<link href="https://cdn.jsdelivr.net/npm/tom-select@2.2.2/dist/css/tom-select.css" rel="stylesheet">
-<style>
-  .ts-control {
-    border-radius: 6px;
-    padding: 8px 12px;
-    border: 1px solid #d1d5db;
-    box-shadow: none;
-    font-family: 'Inter', sans-serif;
-  }
-  .ts-dropdown {
-    font-family: 'Inter', sans-serif;
-  }
-</style>
-{% endblock %}
 {% block content %}
 <style>
   .sale-grid {
@@ -550,15 +535,6 @@
               <option value="all" selected>All Customers</option>
               {% for c in customers %}
               <option value="{{ c.id }}">{{ c.name }}</option>
-              {% endfor %}
-            </select>
-          </div>
-          <div style="min-width: 200px;">
-            <label class="field-label" for="filterProduct" style="margin-bottom: 6px; display: block;">Product</label>
-            <select id="filterProduct" placeholder="Search product...">
-              <option value="all" selected>All Products</option>
-              {% for p in products %}
-              <option value="{{ p.id }}">{{ p.name }}</option>
               {% endfor %}
             </select>
           </div>
@@ -1289,7 +1265,6 @@
   const filterDateFrom = document.getElementById('filterDateFrom');
   const filterDateTo = document.getElementById('filterDateTo');
   const filterCustomer = document.getElementById('filterCustomer');
-  const filterProduct = document.getElementById('filterProduct');
   const filterPaymentType = document.getElementById('filterPaymentType');
   const filterWarehouse = document.getElementById('filterWarehouse');
   const filterBtn = document.getElementById('filterBtn');
@@ -1443,7 +1418,6 @@
     if (filterDateFrom && filterDateFrom.value) params.append('date_from', filterDateFrom.value);
     if (filterDateTo && filterDateTo.value) params.append('date_to', filterDateTo.value);
     if (filterCustomer && filterCustomer.value) params.append('customer_id', filterCustomer.value);
-    if (filterProduct && filterProduct.value && filterProduct.value !== "all") params.append('product_id', filterProduct.value);
     if (filterPaymentType && filterPaymentType.value) params.append('payment_type', filterPaymentType.value);
     if (filterWarehouse && filterWarehouse.value) params.append('warehouse_id', filterWarehouse.value);
     
@@ -2197,17 +2171,5 @@ async function submitRecordPayment() {
         alert('Error: ' + result.error);
     }
 }
-</script>
-<script src="https://cdn.jsdelivr.net/npm/tom-select@2.2.2/dist/js/tom-select.complete.min.js"></script>
-<script>
-  document.addEventListener("DOMContentLoaded", function() {
-    new TomSelect("#filterProduct",{
-      create: false,
-      sortField: {
-        field: "text",
-        direction: "asc"
-      }
-    });
-  });
 </script>
 {% endblock %}
