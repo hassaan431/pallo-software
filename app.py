@@ -3516,6 +3516,7 @@ def record_payment(sale_id):
 def stock_distribution_data():
     brand_filter = request.args.get("brand", "").strip()
     stock_level = request.args.get("stock_level", "").strip()
+    product_search = request.args.get("product", "").strip()
     low_stock_threshold = float(request.args.get("low_stock_threshold", 5))
 
     conn = get_connection()
@@ -3533,6 +3534,9 @@ def stock_distribution_data():
         if brand_filter:
             query += " AND p.brand = ?"
             params.append(brand_filter)
+        if product_search:
+            query += " AND p.name LIKE ?"
+            params.append(f"%{product_search}%")
             
         query += " ORDER BY p.name COLLATE NOCASE"
         
@@ -3574,6 +3578,7 @@ def stock_distribution_data():
                 "id": pid,
                 "name": p["name"],
                 "brand": p["brand"],
+                "cost_price": float(p["cost_price"] or 0),
                 "stocks": stocks,
                 "total_stock": total_stock,
                 "total_value": total_value

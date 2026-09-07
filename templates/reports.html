@@ -563,6 +563,10 @@
       <div style="padding: 1.5rem 1.5rem 0 1.5rem;">
         <div class="filter-bar" style="display: flex; gap: 1rem; align-items: flex-end; margin-bottom: 1.5rem; flex-wrap: wrap; background: #f8fafc; padding: 12px 16px; border-radius: 8px; border: 1px solid #e2e8f0;">
           <div>
+            <label class="field-label" style="font-size: 0.8rem; margin-bottom: 4px; display: block;">Product Search</label>
+            <input type="text" id="sdFilterProduct" class="form-control" placeholder="Search by name..." style="width: 180px; padding: 4px 8px; font-size: 0.85rem; height: 32px;">
+          </div>
+          <div>
             <label class="field-label" style="font-size: 0.8rem; margin-bottom: 4px; display: block;">Brand</label>
             <select id="sdFilterBrand" class="form-control" style="width: 150px; padding: 4px 8px; font-size: 0.85rem; height: 32px;">
               <option value="">All Brands</option>
@@ -813,6 +817,7 @@
     } else if (type === 'stock-distribution') {
       if (document.getElementById('sdFilterBrand').value) params.append('brand', document.getElementById('sdFilterBrand').value);
       if (document.getElementById('sdFilterStock').value) params.append('stock_level', document.getElementById('sdFilterStock').value);
+      if (document.getElementById('sdFilterProduct').value) params.append('product', document.getElementById('sdFilterProduct').value);
     }
     return params;
   }
@@ -1433,6 +1438,7 @@
     let theadHtml = `
       <th onclick="triggerSort('stock-distribution', 'name')" style="cursor:pointer;" data-sort>Product</th>
       <th onclick="triggerSort('stock-distribution', 'brand')" style="cursor:pointer;" data-sort>Brand</th>
+      <th onclick="triggerSort('stock-distribution', 'cost_price')" style="cursor:pointer; text-align:right;" data-sort>Cost Price</th>
     `;
     data.warehouses.forEach(w => {
       // sort by warehouse stock
@@ -1445,7 +1451,7 @@
     header.innerHTML = theadHtml;
     
     if (products.length === 0) {
-      tbody.innerHTML = `<tr><td colspan="${data.warehouses.length + 4}" style="text-align:center;">No products match the filters.</td></tr>`;
+      tbody.innerHTML = `<tr><td colspan="${data.warehouses.length + 5}" style="text-align:center;">No products match the filters.</td></tr>`;
       return;
     }
     
@@ -1455,6 +1461,7 @@
       let html = `
         <td style="font-weight:500">${p.name}</td>
         <td>${p.brand || '-'}</td>
+        <td style="text-align:right">${money(p.cost_price || 0)}</td>
       `;
       data.warehouses.forEach(w => {
         html += `<td style="text-align:right">${qty(p.stocks[w.id] || 0)}</td>`;
