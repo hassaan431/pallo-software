@@ -2429,12 +2429,7 @@ def sales_import_csv():
                         return jsonify({"success": False, "error": f"Row {i}: Warehouse '{w_name}' not found in database."})
                     warehouses_cache[w_name] = w_row["id"]
                 
-                # Check for existing invoice numbers in DB
-                db_inv = conn.execute("SELECT id FROM sales WHERE invoice_number = ?", (inv_num,)).fetchone()
-                if db_inv:
-                    return jsonify({"success": False, "error": f"Row {i}: Invoice Number '{inv_num}' already exists in database."})
-                
-                # Group items
+                # Group items by CSV Invoice Number (used to club multiple items into a single invoice)
                 if inv_num not in invoices:
                     invoices[inv_num] = {
                         "date": inv_date,
@@ -2458,15 +2453,31 @@ def sales_import_csv():
                     "amount": qty * rate
                 })
 
-            # 2. Insertion Pass
-            for inv_num, data in invoices.items():
+            # 2. Insertion Pass: Auto-generate sequential invoice numbers continuing after last sale
+            rows = conn.execute(
+                "SELECT invoice_number FROM sales WHERE invoice_number LIKE 'AK-%' OR invoice_number LIKE 'Q-%'"
+            ).fetchall()
+            nums = []
+            for r in rows:
+                inv = str(r["invoice_number"]).strip()
+                m = re.search(r"(\d+)$", inv)
+                if m:
+                    nums.append(int(m.group(1)))
+            next_num = (max(nums) + 1) if nums else 1
+
+            generated_invoices = []
+            for club_key, data in invoices.items():
+                auto_inv_number = f"AK-{next_num:06d}"
+                next_num += 1
+                generated_invoices.append(auto_inv_number)
+
                 subtotal = sum(item["amount"] for item in data["items"])
                 # Note: Defaulting payment to cash and fully paid for old invoices
                 sale_cur = conn.execute(
                     '''INSERT INTO sales 
-                       (invoice_number, customer_id, invoice_date, payment_type, subtotal, grand_total, amount_paid, remaining_amount, status, warehouse_id) 
-                       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)''',
-                    (inv_num, data["customer_id"], data["date"], 'cash', subtotal, subtotal, subtotal, 0, 'paid', data["warehouse_id"])
+                       (invoice_number, customer_id, invoice_date, payment_type, subtotal, grand_total, amount_paid, remaining_amount, status, warehouse_id, notes) 
+                       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)''',
+                    (auto_inv_number, data["customer_id"], data["date"], 'cash', subtotal, subtotal, subtotal, 0, 'paid', data["warehouse_id"], f"Bulk import (Old ref: {club_key})")
                 )
                 sale_id = sale_cur.lastrowid
                 
@@ -2478,6 +2489,14 @@ def sales_import_csv():
                         (sale_id, item["product_id"], item["qty"], item["rate"], item["amount"], item["cost_price"], item["packing_multiplier"])
                     )
                     
+                    # Fetch old stock for inventory tracking
+                    wh_stock_row = conn.execute(
+                        "SELECT stock_quantity FROM warehouse_inventory WHERE warehouse_id = ? AND product_id = ?",
+                        (data["warehouse_id"], item["product_id"])
+                    ).fetchone()
+                    old_stock = wh_stock_row["stock_quantity"] if wh_stock_row and wh_stock_row["stock_quantity"] is not None else 0
+                    new_stock = old_stock - item["qty"]
+
                     # Adjust stock in warehouse_inventory
                     conn.execute(
                         '''UPDATE warehouse_inventory 
@@ -2490,9 +2509,22 @@ def sales_import_csv():
                         "UPDATE products SET stock_quantity = stock_quantity - ? WHERE id = ?",
                         (item["qty"], item["product_id"])
                     )
+                    # Add to inventory history
+                    conn.execute('''
+                        INSERT INTO inventory_history (product_id, transaction_type, quantity_change, previous_stock, new_stock, reference, warehouse_id)
+                        VALUES (?, ?, ?, ?, ?, ?, ?)
+                    ''', (item["product_id"], 'OUT', -item["qty"], old_stock, new_stock, f'Invoice #{auto_inv_number}', data["warehouse_id"]))
             
             conn.commit()
-            return jsonify({"success": True, "message": f"Successfully imported {len(invoices)} invoices."})
+            if generated_invoices:
+                if len(generated_invoices) == 1:
+                    inv_range_str = generated_invoices[0]
+                else:
+                    inv_range_str = f"{generated_invoices[0]} to {generated_invoices[-1]}"
+                msg = f"Successfully imported {len(invoices)} invoice(s) ({inv_range_str})."
+            else:
+                msg = "No invoices found to import."
+            return jsonify({"success": True, "message": msg})
         except Exception as e:
             conn.rollback()
             return jsonify({"success": False, "error": f"Database error: {str(e)}"})

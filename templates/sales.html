@@ -238,7 +238,8 @@
     <div class="panel" style="background: white; padding: 2rem; border-radius: 12px; width: 450px; max-width: 90vw;">
       <h3 style="margin-top: 0;">Bulk Upload Sales via CSV</h3>
       <p style="font-size: 0.9rem; color: #64748b; margin-bottom: 1rem;">
-        Upload a CSV file to automatically generate sales invoices. Make sure your Customer and Product names match the database exactly.
+        Upload a CSV file to generate sales invoices. Multiple rows with the same <strong>Invoice Number</strong> are clubbed together into one invoice. 
+        New sequential invoice numbers (e.g. <code>AK-000045</code>) will be generated automatically continuing from your last sale.
       </p>
       <a href="{{ url_for('sales_import_csv_template') }}" style="font-size: 0.85rem; color: var(--color-primary); display: inline-block; margin-bottom: 1rem; font-weight: 600;">Download CSV Template</a>
       
