@@ -2417,7 +2417,7 @@ def sales_import_csv():
                     
                 # Validate Product
                 if p_name not in products_cache:
-                    p_row = conn.execute("SELECT id, cost_price, packing_multiplier FROM products WHERE name = ?", (p_name,)).fetchone()
+                    p_row = conn.execute("SELECT id, cost_price FROM products WHERE name = ?", (p_name,)).fetchone()
                     if not p_row:
                         return jsonify({"success": False, "error": f"Row {i}: Product '{p_name}' not found in database."})
                     products_cache[p_name] = p_row
@@ -2447,7 +2447,7 @@ def sales_import_csv():
                 invoices[inv_num]["items"].append({
                     "product_id": products_cache[p_name]["id"],
                     "cost_price": float(products_cache[p_name]["cost_price"] or 0),
-                    "packing_multiplier": float(products_cache[p_name]["packing_multiplier"] or 1.0),
+                    "packing_multiplier": 1.0,
                     "qty": qty,
                     "rate": rate,
                     "amount": qty * rate
