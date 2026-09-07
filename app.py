@@ -3838,6 +3838,9 @@ def reports():
 
         cur_s = conn.execute("SELECT id, name FROM suppliers ORDER BY name COLLATE NOCASE")
         suppliers = [dict(r) for r in cur_s.fetchall()]
+
+        cur_w = conn.execute("SELECT id, name FROM warehouses ORDER BY name COLLATE NOCASE")
+        warehouses = [dict(r) for r in cur_w.fetchall()]
     finally:
         conn.close()
 
@@ -3846,7 +3849,8 @@ def reports():
         customers=customers,
         products=products,
         brands=brands,
-        suppliers=suppliers
+        suppliers=suppliers,
+        warehouses=warehouses
     )
 
 
@@ -4178,6 +4182,11 @@ def reports_by_product():
     if customer_id:
         conditions.append("s.customer_id = ?")
         params.append(customer_id)
+        
+    warehouse_id = (request.args.get("warehouse_id") or "").strip()
+    if warehouse_id and warehouse_id != "all":
+        conditions.append("s.warehouse_id = ?")
+        params.append(int(warehouse_id))
         
     where_sql = " AND ".join(conditions)
 

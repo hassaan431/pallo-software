@@ -427,6 +427,15 @@
             {% endfor %}
           </select>
         </div>
+        <div>
+          <label class="field-label">Warehouse</label>
+          <select class="form-control" id="p_warehouse">
+            <option value="all">All Warehouses</option>
+            {% for w in warehouses %}
+              <option value="{{ w.id }}">{{ w.name }}</option>
+            {% endfor %}
+          </select>
+        </div>
         <div style="display:flex; gap:0.5rem;">
           <button type="button" class="btn btn-primary" onclick="loadProductReport()">Apply Filter</button>
           <button type="button" class="btn btn-secondary" onclick="exportCsv('product')">Export CSV</button>
@@ -814,6 +823,7 @@
       if (document.getElementById('p_date_from').value) params.append('date_from', document.getElementById('p_date_from').value);
       if (document.getElementById('p_date_to').value) params.append('date_to', document.getElementById('p_date_to').value);
       if (document.getElementById('p_customer').value) params.append('customer_id', document.getElementById('p_customer').value);
+      if (document.getElementById('p_warehouse') && document.getElementById('p_warehouse').value) params.append('warehouse_id', document.getElementById('p_warehouse').value);
     } else if (type === 'commission') {
       if (document.getElementById('comm_date_from').value) params.append('date_from', document.getElementById('comm_date_from').value);
       if (document.getElementById('comm_date_to').value) params.append('date_to', document.getElementById('comm_date_to').value);
