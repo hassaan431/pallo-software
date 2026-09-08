@@ -2916,6 +2916,7 @@ def sales_edit(sale_id: int):
                 s.notes,
                 s.status,
                 s.salesman_id,
+                s.warehouse_id,
                 u.username AS salesman_name
             FROM sales s
             LEFT JOIN users u ON u.id = s.salesman_id
@@ -2945,7 +2946,7 @@ def sales_edit(sale_id: int):
                 si.amount,
                 si.print_dual_units,
                 COALESCE(si.packing_multiplier, 1.0) as packing_multiplier,
-                p.stock_quantity,
+                COALESCE((SELECT stock_quantity FROM warehouse_inventory WHERE product_id = p.id AND warehouse_id = ?), 0) AS stock_quantity,
                 p.is_open,
                 p.unit,
                 p.name
@@ -2953,7 +2954,7 @@ def sales_edit(sale_id: int):
             LEFT JOIN products p ON p.id = si.product_id
             WHERE si.sale_id = ?
             """,
-            (sale_id,),
+            (sale["warehouse_id"] or 1, sale_id,),
         ).fetchall()
         
         # Convert to dict and add stock quantity
@@ -2997,6 +2998,9 @@ def sales_edit(sale_id: int):
         users_rows = conn.execute("SELECT id, username, role FROM users ORDER BY username").fetchall()
         users_list = [dict(r) for r in users_rows]
         
+        # Get warehouses
+        warehouses = conn.execute("SELECT id, name FROM warehouses ORDER BY name").fetchall()
+        
     finally:
         conn.close()
     
@@ -3005,6 +3009,7 @@ def sales_edit(sale_id: int):
         customers=[dict(c) for c in customers],
         recent_sales=[dict(r) for r in recent_sales],
         all_users=users_list,
+        warehouses=[dict(w) for w in warehouses],
         next_invoice_number=get_next_invoice_number(),
         today=date.today().isoformat(),
         edit_mode=True,
@@ -3130,62 +3135,41 @@ def sales_update(sale_id: int):
         if grand_total < 0:
             grand_total = 0.00
 
+        is_quote = "generate_quote" in request.form
+
         # Calculate amount_paid and remaining_amount based on payment_type
-        if payment_type == 'cash':
-            amount_paid = grand_total
-            remaining_amount = 0
-            status = 'paid'
-        elif payment_type == 'cheque':
-            amount_paid = grand_total
-            remaining_amount = 0
-            status = 'paid'
-        elif payment_type == 'credit':
-            # amount_paid comes from form (paid upfront field)
-            # Validate it doesn't exceed grand_total
-            if amount_paid > grand_total:
+        if is_quote:
+            amount_paid = 0
+            remaining_amount = grand_total
+            status = 'quote'
+        else:
+            if payment_type == 'cash':
                 amount_paid = grand_total
-            remaining_amount = grand_total - amount_paid
-            if remaining_amount <= 0:
                 remaining_amount = 0
                 status = 'paid'
-            elif amount_paid > 0:
-                status = 'partial'
+            elif payment_type == 'cheque':
+                amount_paid = grand_total
+                remaining_amount = 0
+                status = 'paid'
+            elif payment_type == 'credit':
+                # amount_paid comes from form (paid upfront field)
+                # Validate it doesn't exceed grand_total
+                if amount_paid > grand_total:
+                    amount_paid = grand_total
+                remaining_amount = grand_total - amount_paid
+                if remaining_amount <= 0:
+                    remaining_amount = 0
+                    status = 'paid'
+                elif amount_paid > 0:
+                    status = 'partial'
+                else:
+                    status = 'unpaid'
             else:
                 status = 'unpaid'
-        else:
-            status = 'unpaid'
 
         if "generate_quote" in request.form:
-            from invoice_generator import generate_pdf_from_data
-            conn_quote = get_connection()
-            try:
-                cust_row = conn_quote.execute("SELECT id, name, bill_address, ship_address, phone FROM customers WHERE id = ?", (customer_id,)).fetchone()
-                customer_data = dict(cust_row) if cust_row else {"name": "Quotation", "bill_address": "", "ship_address": "", "phone": ""}
-                
-                for item in parsed_items:
-                    prod = conn_quote.execute("SELECT name, brand FROM products WHERE id = ?", (item["product_id"],)).fetchone()
-                    item["product_name"] = prod["name"] if prod else ""
-                    item["product_brand"] = prod["brand"] if prod else ""
-            finally:
-                conn_quote.close()
-                
-            sale_data = {
-                "invoice_number": f"Q-{invoice_number}" if invoice_number else f"Q-Sale-{sale_id}",
-                "invoice_date": invoice_date,
-                "due_date": due_date,
-                "terms": terms,
-                "subtotal": subtotal,
-                "discount_amount": discount_amount,
-                "grand_total": grand_total,
-                "payment_type": payment_type,
-                "amount_paid": amount_paid,
-                "remaining_amount": remaining_amount
-            }
-            
-            pdf_bytes = generate_pdf_from_data(sale_data, customer_data, parsed_items, is_quote=True)
-            resp = Response(pdf_bytes, mimetype="application/pdf")
-            resp.headers["Content-Disposition"] = f'attachment; filename="{sale_data["invoice_number"]}.pdf"'
-            return resp
+            # We don't generate inline anymore. Let it save to the DB, then redirect to sales_invoice_pdf at the end.
+            pass
 
         conn = get_connection()
         try:
@@ -3239,11 +3223,30 @@ def sales_update(sale_id: int):
             except ValueError:
                 salesman_id = current_user.id
                 
-            # Calculate commission for the updated sale
-            sale_info = conn.execute("SELECT warehouse_id FROM sales WHERE id = ?", (sale_id,)).fetchone()
-            wid = int(sale_info["warehouse_id"]) if sale_info and sale_info["warehouse_id"] else (current_user.warehouse_id or 1)
+            sale_info = conn.execute("SELECT warehouse_id, status FROM sales WHERE id = ?", (sale_id,)).fetchone()
+            old_wid = int(sale_info["warehouse_id"]) if sale_info and sale_info["warehouse_id"] else (current_user.warehouse_id or 1)
+            new_wid = int(warehouse_id_raw) if warehouse_id_raw else old_wid
+            was_quote = (sale_info["status"] == "quote") if sale_info else False
             
-            wh_row = conn.execute("SELECT commission_applies FROM warehouses WHERE id = ?", (wid,)).fetchone()
+            # If the original was a quote, it didn't deduct stock yet, so treat old_qty as 0
+            if was_quote:
+                old_qty_by_product = defaultdict(float)
+
+            # If converting a quote to a sale, we must assign a new AK- invoice number
+            if was_quote and not is_quote:
+                if invoice_number and invoice_number.startswith("Q-"):
+                    potential_invoice_num = "AK-" + invoice_number[2:]
+                    exists = conn.execute("SELECT 1 FROM sales WHERE invoice_number = ? AND id != ?", (potential_invoice_num, sale_id)).fetchone()
+                    if not exists:
+                        invoice_number = potential_invoice_num
+                    else:
+                        invoice_number = get_next_invoice_number()
+                else:
+                    # Just in case it was blank or not Q-
+                    invoice_number = get_next_invoice_number()
+
+            # Calculate commission for the updated sale
+            wh_row = conn.execute("SELECT commission_applies FROM warehouses WHERE id = ?", (new_wid,)).fetchone()
             commission_applies = int(wh_row["commission_applies"] or 0) if wh_row else 0
             
             commission_amount = 0
@@ -3261,7 +3264,7 @@ def sales_update(sale_id: int):
                 UPDATE sales
                 SET invoice_number = ?, customer_id = ?, invoice_date = ?, due_date = ?,
                     terms = ?, payment_type = ?, discount_amount = ?, subtotal = ?,
-                    grand_total = ?, notes = ?, status = ?, amount_paid = ?, remaining_amount = ?, salesman_id = ?, commission_amount = ?
+                    grand_total = ?, notes = ?, status = ?, amount_paid = ?, remaining_amount = ?, salesman_id = ?, warehouse_id = ?, commission_amount = ?
                 WHERE id = ?
                 """,
                 (
@@ -3279,6 +3282,7 @@ def sales_update(sale_id: int):
                     amount_paid,
                     remaining_amount,
                     salesman_id,
+                    new_wid,
                     commission_amount,
                     sale_id,
                 ),
@@ -3310,50 +3314,95 @@ def sales_update(sale_id: int):
                     ),
                 )
 
-            # Apply net stock changes
-            sale_info_stock = conn.execute("SELECT invoice_number, warehouse_id FROM sales WHERE id = ?", (sale_id,)).fetchone()
+            # Apply stock changes depending on warehouse change
+            sale_info_stock = conn.execute("SELECT invoice_number FROM sales WHERE id = ?", (sale_id,)).fetchone()
             invoice_number = sale_info_stock["invoice_number"] if sale_info_stock else str(sale_id)
-            wid_stock = int(sale_info_stock["warehouse_id"]) if sale_info_stock and sale_info_stock["warehouse_id"] else (current_user.warehouse_id or 1)
             
-            for product_id, net_deduct in net_deductions.items():
-                cur = conn.execute("SELECT stock_quantity FROM warehouse_inventory WHERE product_id = ? AND warehouse_id = ?", (product_id, wid_stock))
-                row = cur.fetchone()
-                old_stock = float(row["stock_quantity"] or 0) if row else 0
-
-                # Ensure we don't go negative on deduction
-                if net_deduct > 0:
-                    upd = conn.execute(
-                        """
-                        UPDATE warehouse_inventory
-                        SET stock_quantity = stock_quantity - ?
-                        WHERE product_id = ? AND warehouse_id = ? AND stock_quantity >= ?
-                        """,
-                        (net_deduct, product_id, wid, net_deduct - 1e-9),
-                    )
-                    if upd.rowcount == 0:
-                        cur = conn.execute("SELECT name FROM products WHERE id = ?", (product_id,))
+            # If we are keeping it as a quote, do NOT touch inventory
+            if not is_quote:
+                if old_wid == new_wid:
+                    for product_id, net_deduct in net_deductions.items():
+                        if net_deduct == 0:
+                            continue
+                        cur = conn.execute("SELECT stock_quantity FROM warehouse_inventory WHERE product_id = ? AND warehouse_id = ?", (product_id, new_wid))
                         row = cur.fetchone()
-                        product_name = row["name"] if row else "Unknown Product"
-                        raise ValueError(f"Insufficient stock for {product_name}.")
+                        old_stock = float(row["stock_quantity"] or 0) if row else 0
+
+                        if net_deduct > 0:
+                            upd = conn.execute(
+                                """
+                                UPDATE warehouse_inventory
+                                SET stock_quantity = stock_quantity - ?
+                                WHERE product_id = ? AND warehouse_id = ? AND stock_quantity >= ?
+                                """,
+                                (net_deduct, product_id, new_wid, net_deduct - 1e-9),
+                            )
+                            if upd.rowcount == 0:
+                                raise ValueError("Insufficient stock during update.")
+                        else:
+                            conn.execute(
+                                """
+                                INSERT INTO warehouse_inventory (product_id, warehouse_id, stock_quantity)
+                                VALUES (?, ?, ?)
+                                ON CONFLICT(warehouse_id, product_id) DO UPDATE SET stock_quantity = stock_quantity - ?
+                                """,
+                                (product_id, new_wid, -net_deduct, net_deduct),
+                            )
+                        
+                        new_stock = old_stock - net_deduct
+                        trans_type = 'OUT' if net_deduct > 0 else 'IN'
+                        qty_change = -net_deduct if net_deduct > 0 else abs(net_deduct)
+                        
+                        conn.execute("""
+                            INSERT INTO inventory_history (product_id, transaction_type, quantity_change, previous_stock, new_stock, reference, warehouse_id)
+                            VALUES (?, ?, ?, ?, ?, ?, ?)
+                        """, (product_id, trans_type, qty_change, old_stock, new_stock, f'Invoice #{invoice_number} Edit', new_wid))
                 else:
-                    # net_deduct < 0, meaning we restore stock (net_deduct is negative, so subtract negative = add)
-                    conn.execute(
-                        """
-                        INSERT INTO warehouse_inventory (product_id, warehouse_id, stock_quantity)
-                        VALUES (?, ?, ?)
-                        ON CONFLICT(warehouse_id, product_id) DO UPDATE SET stock_quantity = stock_quantity - ?
-                        """,
-                        (product_id, wid, -net_deduct, net_deduct),
-                    )
-                
-                new_stock = old_stock - net_deduct
-                trans_type = 'OUT' if net_deduct > 0 else 'IN'
-                qty_change = -net_deduct if net_deduct > 0 else abs(net_deduct)
-                
-                conn.execute("""
-                    INSERT INTO inventory_history (product_id, transaction_type, quantity_change, previous_stock, new_stock, reference, warehouse_id)
-                    VALUES (?, ?, ?, ?, ?, ?, ?)
-                """, (product_id, trans_type, qty_change, old_stock, new_stock, f'Invoice #{invoice_number} Edit', wid))
+                    # Warehouse changed. Restore all old items to old_wid, deduct all new items from new_wid.
+                    # 1. Restore old
+                    for product_id, qty in old_qty_by_product.items():
+                        if qty <= 0: continue
+                        cur = conn.execute("SELECT stock_quantity FROM warehouse_inventory WHERE product_id = ? AND warehouse_id = ?", (product_id, old_wid))
+                        row = cur.fetchone()
+                        old_stock = float(row["stock_quantity"] or 0) if row else 0
+                        
+                        conn.execute(
+                            """
+                            INSERT INTO warehouse_inventory (product_id, warehouse_id, stock_quantity)
+                            VALUES (?, ?, ?)
+                            ON CONFLICT(warehouse_id, product_id) DO UPDATE SET stock_quantity = stock_quantity + ?
+                            """,
+                            (product_id, old_wid, qty, qty),
+                        )
+                        new_stock = old_stock + qty
+                        conn.execute("""
+                            INSERT INTO inventory_history (product_id, transaction_type, quantity_change, previous_stock, new_stock, reference, warehouse_id)
+                            VALUES (?, ?, ?, ?, ?, ?, ?)
+                        """, (product_id, 'IN', qty, old_stock, new_stock, f'Invoice #{invoice_number} Edit (Restored)', old_wid))
+                        
+                    # 2. Deduct new
+                    for product_id, qty in new_qty_by_product.items():
+                        if qty <= 0: continue
+                        cur = conn.execute("SELECT stock_quantity FROM warehouse_inventory WHERE product_id = ? AND warehouse_id = ?", (product_id, new_wid))
+                        row = cur.fetchone()
+                        old_stock = float(row["stock_quantity"] or 0) if row else 0
+                        
+                        upd = conn.execute(
+                            """
+                            UPDATE warehouse_inventory
+                            SET stock_quantity = stock_quantity - ?
+                            WHERE product_id = ? AND warehouse_id = ? AND stock_quantity >= ?
+                            """,
+                            (qty, product_id, new_wid, qty - 1e-9),
+                        )
+                        if upd.rowcount == 0:
+                            raise ValueError("Insufficient stock in new warehouse.")
+                            
+                        new_stock = old_stock - qty
+                        conn.execute("""
+                            INSERT INTO inventory_history (product_id, transaction_type, quantity_change, previous_stock, new_stock, reference, warehouse_id)
+                            VALUES (?, ?, ?, ?, ?, ?, ?)
+                        """, (product_id, 'OUT', -qty, old_stock, new_stock, f'Invoice #{invoice_number} Edit', new_wid))
 
             conn.commit()
         except Exception as e:
@@ -3366,7 +3415,7 @@ def sales_update(sale_id: int):
         flash(error, "error")
         return redirect(url_for("sales_edit", sale_id=sale_id))
 
-    if generate_invoice:
+    if generate_invoice or "generate_quote" in request.form:
         return redirect(url_for("sales_invoice_pdf", id=sale_id))
 
     flash("Sale updated successfully.", "success")
@@ -3606,15 +3655,19 @@ def sales_mark_sale(sale_id: int):
         else:
             invoice_number = get_next_invoice_number()
 
-        items = conn.execute("SELECT product_id, qty FROM sale_items WHERE sale_id = ?", (sale_id,)).fetchall()
+        items = conn.execute("SELECT product_id, qty, packing_multiplier FROM sale_items WHERE sale_id = ?", (sale_id,)).fetchall()
+
+        wid = sale["warehouse_id"] or 1
 
         # Check stock first
         qty_total_by_product = defaultdict(float)
         for it in items:
-            qty_total_by_product[it["product_id"]] += it["qty"]
+            packing_multiplier = float(it["packing_multiplier"] or 1.0)
+            qty_total_by_product[it["product_id"]] += float(it["qty"]) * packing_multiplier
             
         for product_id, qty_total in qty_total_by_product.items():
-            row = conn.execute("SELECT stock_quantity, name FROM products WHERE id = ?", (product_id,)).fetchone()
+            cur = conn.execute("SELECT p.name, COALESCE((SELECT stock_quantity FROM warehouse_inventory WHERE product_id = p.id AND warehouse_id = ?), 0) as stock_quantity FROM products p WHERE p.id = ?", (wid, product_id,))
+            row = cur.fetchone()
             if row is None:
                 raise ValueError("Invalid product found in quote.")
             stock_quantity = float(row["stock_quantity"] or 0)
@@ -3623,25 +3676,25 @@ def sales_mark_sale(sale_id: int):
 
         # Update stock and write history
         for product_id, qty_total in qty_total_by_product.items():
-            row = conn.execute("SELECT stock_quantity FROM products WHERE id = ?", (product_id,)).fetchone()
-            old_stock = float(row["stock_quantity"] or 0) if row else 0
+            cur_stock = conn.execute("SELECT stock_quantity FROM warehouse_inventory WHERE product_id = ? AND warehouse_id = ?", (product_id, wid)).fetchone()
+            old_stock = float(cur_stock["stock_quantity"] or 0) if cur_stock else 0
             
             upd = conn.execute(
                 """
-                UPDATE products
+                UPDATE warehouse_inventory
                 SET stock_quantity = stock_quantity - ?
-                WHERE id = ? AND stock_quantity >= ?
+                WHERE product_id = ? AND warehouse_id = ? AND stock_quantity >= ?
                 """,
-                (qty_total, product_id, qty_total)
+                (qty_total, product_id, wid, qty_total)
             )
             if upd.rowcount == 0:
                 raise ValueError("Stock became insufficient during update.")
             
             new_stock = old_stock - qty_total
             conn.execute("""
-                INSERT INTO inventory_history (product_id, transaction_type, quantity_change, previous_stock, new_stock, reference)
-                VALUES (?, ?, ?, ?, ?, ?)
-            """, (product_id, 'OUT', -qty_total, old_stock, new_stock, f'Invoice #{invoice_number}'))
+                INSERT INTO inventory_history (product_id, transaction_type, quantity_change, previous_stock, new_stock, reference, warehouse_id)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+            """, (product_id, 'OUT', -qty_total, old_stock, new_stock, f'Invoice #{invoice_number}', wid))
             
         # Update sale record to unpaid and new invoice number
         conn.execute(
