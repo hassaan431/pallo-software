@@ -1,6 +1,47 @@
 {% extends "base.html" %}
 {% block title %}Sales — AK Distributors{% endblock %}
 {% block page_heading %}Sales{% endblock %}
+{% block extra_head %}
+<link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
+<style>
+  .select2-container .select2-selection--single {
+    height: 39px !important;
+    padding: 0.3rem 0.75rem !important;
+    font-family: var(--font) !important;
+    font-size: 0.9rem !important;
+    border: 1px solid var(--color-border) !important;
+    border-radius: 6px !important;
+    background: #fff !important;
+    display: flex;
+    align-items: center;
+  }
+  .select2-container--default .select2-selection--single .select2-selection__rendered {
+    line-height: normal !important;
+    padding: 0 !important;
+    color: var(--color-text) !important;
+  }
+  .select2-container--default .select2-selection--single .select2-selection__arrow {
+    height: 37px !important;
+    right: 5px !important;
+  }
+  .select2-dropdown {
+    font-family: var(--font) !important;
+    font-size: 0.9rem !important;
+    border: 1px solid var(--color-border) !important;
+    border-radius: 6px !important;
+    box-shadow: var(--shadow-card) !important;
+  }
+  .select2-container--default .select2-results__option--selected {
+    background-color: var(--color-accent) !important;
+    color: white !important;
+  }
+  .select2-container--default .select2-results__option--highlighted.select2-results__option--selectable {
+    background-color: var(--color-accent) !important;
+    color: white !important;
+  }
+</style>
+{% endblock %}
+
 {% block content %}
 <style>
   .sale-grid {
@@ -529,12 +570,21 @@
             <label class="field-label" for="filterSearch" style="margin-bottom: 6px; display: block;">Search</label>
             <input class="form-control" type="text" id="filterSearch" placeholder="Invoice # or Customer..." style="padding: 8px 12px; border-radius: 6px;">
           </div>
-          <div>
+          <div style="min-width: 220px;">
             <label class="field-label" for="filterCustomer" style="margin-bottom: 6px; display: block;">Customer</label>
-            <select class="form-control" id="filterCustomer" style="padding: 8px 12px; border-radius: 6px;">
+            <select class="form-control select2-searchable" id="filterCustomer" style="width: 100%;">
               <option value="all" selected>All Customers</option>
               {% for c in customers %}
               <option value="{{ c.id }}">{{ c.name }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div style="min-width: 220px;">
+            <label class="field-label" for="filterProduct" style="margin-bottom: 6px; display: block;">Product</label>
+            <select class="form-control select2-searchable" id="filterProduct" style="width: 100%;">
+              <option value="all" selected>All Products</option>
+              {% for p in products %}
+              <option value="{{ p.id }}">{{ p.name }}</option>
               {% endfor %}
             </select>
           </div>
@@ -1265,6 +1315,7 @@
   const filterDateFrom = document.getElementById('filterDateFrom');
   const filterDateTo = document.getElementById('filterDateTo');
   const filterCustomer = document.getElementById('filterCustomer');
+  const filterProduct = document.getElementById('filterProduct');
   const filterPaymentType = document.getElementById('filterPaymentType');
   const filterWarehouse = document.getElementById('filterWarehouse');
   const filterBtn = document.getElementById('filterBtn');
@@ -1418,6 +1469,7 @@
     if (filterDateFrom && filterDateFrom.value) params.append('date_from', filterDateFrom.value);
     if (filterDateTo && filterDateTo.value) params.append('date_to', filterDateTo.value);
     if (filterCustomer && filterCustomer.value) params.append('customer_id', filterCustomer.value);
+    if (filterProduct && filterProduct.value && filterProduct.value !== "all") params.append('product_id', filterProduct.value);
     if (filterPaymentType && filterPaymentType.value) params.append('payment_type', filterPaymentType.value);
     if (filterWarehouse && filterWarehouse.value) params.append('warehouse_id', filterWarehouse.value);
     
@@ -2171,5 +2223,11 @@ async function submitRecordPayment() {
         alert('Error: ' + result.error);
     }
 }
+</script>
+<script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
+<script>
+  $(document).ready(function() {
+    $('.select2-searchable').select2();
+  });
 </script>
 {% endblock %}
