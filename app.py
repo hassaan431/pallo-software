@@ -3903,6 +3903,9 @@ def record_payment(sale_id):
         if not sale:
             return jsonify({'success': False, 'error': 'Sale not found'})
 
+        if sale['status'] == 'quote':
+            return jsonify({'success': False, 'error': 'Cannot record payments directly on a quotation. Please convert it to a sale first.'})
+
         if amount <= 0 or amount > float(sale['remaining_amount']):
             return jsonify({'success': False, 'error': 'Invalid amount'})
 
