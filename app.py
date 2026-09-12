@@ -1105,6 +1105,124 @@ def inventory_transfer():
     finally:
         conn.close()
 
+@app.route("/inventory/transfer/edit/<int:transfer_id>", methods=["GET"])
+@admin_required
+def edit_inventory_transfer(transfer_id):
+    conn = get_connection()
+    try:
+        transfer = conn.execute("SELECT * FROM inventory_transfers WHERE id = ?", (transfer_id,)).fetchone()
+        if not transfer:
+            return redirect(url_for("inventory_transfers"))
+            
+        items = conn.execute("SELECT * FROM inventory_transfer_items WHERE transfer_id = ?", (transfer_id,)).fetchall()
+        
+        warehouses = [dict(row) for row in conn.execute("SELECT id, name FROM warehouses ORDER BY name").fetchall()]
+        products = [dict(row) for row in conn.execute("SELECT id, name, unit FROM products ORDER BY name COLLATE NOCASE ASC").fetchall()]
+        
+        return render_template("inventory_transfer_new.html", 
+                               warehouses=warehouses, 
+                               products=products, 
+                               edit_transfer=dict(transfer), 
+                               edit_items=[dict(i) for i in items])
+    finally:
+        conn.close()
+
+@app.route("/inventory/transfer/edit/<int:transfer_id>", methods=["POST"])
+@admin_required
+def process_edit_inventory_transfer(transfer_id):
+    data = request.json
+    if not data:
+        return jsonify({"ok": False, "error": "Invalid JSON payload"}), 400
+        
+    new_source_wid = int(data.get("source_warehouse_id", 0))
+    new_dest_wid = int(data.get("destination_warehouse_id", 0))
+    notes = data.get("notes", "").strip()
+    new_items = data.get("items", [])
+
+    if new_source_wid <= 0 or new_dest_wid <= 0 or not new_items:
+        return jsonify({"ok": False, "error": "Invalid request for stock transfer."}), 400
+        
+    if new_source_wid == new_dest_wid:
+        return jsonify({"ok": False, "error": "Source and destination warehouses must be different."}), 400
+
+    conn = get_connection()
+    try:
+        conn.execute("BEGIN")
+        
+        old_transfer = conn.execute("SELECT * FROM inventory_transfers WHERE id = ?", (transfer_id,)).fetchone()
+        if not old_transfer:
+            conn.execute("ROLLBACK")
+            return jsonify({"ok": False, "error": "Transfer not found."}), 404
+            
+        old_source_wid = old_transfer["source_warehouse_id"]
+        old_dest_wid = old_transfer["destination_warehouse_id"]
+        
+        old_items = conn.execute("SELECT * FROM inventory_transfer_items WHERE transfer_id = ?", (transfer_id,)).fetchall()
+        
+        stock_changes = defaultdict(float)
+        
+        # 1. Reverse the old transfer
+        for item in old_items:
+            pid = item["product_id"]
+            qty = item["quantity"]
+            stock_changes[(old_source_wid, pid)] += qty
+            stock_changes[(old_dest_wid, pid)] -= qty
+            
+        # 2. Apply the new transfer
+        for item in new_items:
+            pid = int(item.get("product_id", 0))
+            qty = float(item.get("quantity", 0))
+            if pid <= 0 or qty <= 0:
+                conn.execute("ROLLBACK")
+                return jsonify({"ok": False, "error": "Invalid product or quantity."}), 400
+            stock_changes[(new_source_wid, pid)] -= qty
+            stock_changes[(new_dest_wid, pid)] += qty
+            
+        # 3. Apply changes and validate
+        for (wid, pid), net_change in stock_changes.items():
+            if net_change == 0:
+                continue
+                
+            cur_stock_row = conn.execute("SELECT stock_quantity, p.name FROM warehouse_inventory wi JOIN products p ON p.id = wi.product_id WHERE wi.product_id = ? AND wi.warehouse_id = ?", (pid, wid)).fetchone()
+            
+            if not cur_stock_row and net_change < 0:
+                conn.execute("ROLLBACK")
+                return jsonify({"ok": False, "error": f"Insufficient stock for product ID {pid} in warehouse {wid}."}), 400
+                
+            cur_stock = cur_stock_row["stock_quantity"] if cur_stock_row else 0.0
+            prod_name = cur_stock_row["name"] if cur_stock_row else f"Product {pid}"
+            
+            new_stock = cur_stock + net_change
+            if new_stock < 0 and abs(new_stock) > 1e-9:
+                conn.execute("ROLLBACK")
+                return jsonify({"ok": False, "error": f"Insufficient stock for {prod_name} in warehouse {wid}. Need {-net_change}, have {cur_stock}."}), 400
+                
+            if cur_stock_row:
+                conn.execute("UPDATE warehouse_inventory SET stock_quantity = ? WHERE product_id = ? AND warehouse_id = ?", (new_stock, pid, wid))
+            else:
+                conn.execute("INSERT INTO warehouse_inventory (product_id, warehouse_id, stock_quantity) VALUES (?, ?, ?)", (pid, wid, new_stock))
+                
+            trans_type = "Transfer Edit In" if net_change > 0 else "Transfer Edit Out"
+            ref = f"Edit Transfer #{transfer_id}"
+            conn.execute("INSERT INTO inventory_history (product_id, transaction_type, quantity_change, previous_stock, new_stock, reference, warehouse_id) VALUES (?, ?, ?, ?, ?, ?, ?)",
+                         (pid, trans_type, net_change, cur_stock, new_stock, ref, wid))
+                         
+        # 4. Update the transfer records
+        conn.execute("UPDATE inventory_transfers SET source_warehouse_id = ?, destination_warehouse_id = ?, notes = ? WHERE id = ?", (new_source_wid, new_dest_wid, notes, transfer_id))
+        
+        conn.execute("DELETE FROM inventory_transfer_items WHERE transfer_id = ?", (transfer_id,))
+        for item in new_items:
+            conn.execute("INSERT INTO inventory_transfer_items (transfer_id, product_id, quantity) VALUES (?, ?, ?)", (transfer_id, int(item["product_id"]), float(item["quantity"])))
+            
+        conn.commit()
+        return jsonify({"ok": True})
+    except Exception as e:
+        conn.execute("ROLLBACK")
+        print(f"Error editing stock transfer: {e}")
+        return jsonify({"ok": False, "error": "Failed to edit stock transfer due to a server error."}), 500
+    finally:
+        conn.close()
+
 @app.route("/inventory/transfers", methods=["GET"])
 @admin_required
 def inventory_transfers():

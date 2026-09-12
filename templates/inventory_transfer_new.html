@@ -3,8 +3,8 @@
 {% block page_heading %}Transfer Inventory{% endblock %}
 {% block content %}
 <div class="page-header" style="margin-bottom: 1.5rem;">
-  <h2 style="margin:0; font-size:1.25rem; font-weight:700;">Transfer Inventory</h2>
-  <p style="color: var(--text-muted); margin-top: 0.25rem;">Move multiple products from one warehouse to another.</p>
+  <h2 style="margin:0; font-size:1.25rem; font-weight:700;">{% if edit_transfer %}Edit Transfer #{{ edit_transfer.id }}{% else %}Transfer Inventory{% endif %}</h2>
+  <p style="color: var(--text-muted); margin-top: 0.25rem;">{% if edit_transfer %}Modify an existing inventory transfer.{% else %}Move multiple products from one warehouse to another.{% endif %}</p>
 </div>
 
 <div class="panel">
@@ -28,9 +28,9 @@
         <div>
           <label class="form-label" for="source_warehouse_id">From Warehouse <span style="color:var(--danger-text)">*</span></label>
           <select id="source_warehouse_id" class="form-control" required onchange="fetchSourceInventory()">
-            <option value="" disabled selected>Select Source...</option>
+            <option value="" disabled {% if not edit_transfer %}selected{% endif %}>Select Source...</option>
             {% for w in warehouses %}
-            <option value="{{ w.id }}">{{ w.name }}</option>
+            <option value="{{ w.id }}" {% if edit_transfer and edit_transfer.source_warehouse_id == w.id %}selected{% endif %}>{{ w.name }}</option>
             {% endfor %}
           </select>
         </div>
@@ -38,16 +38,16 @@
         <div>
           <label class="form-label" for="destination_warehouse_id">To Warehouse <span style="color:var(--danger-text)">*</span></label>
           <select id="destination_warehouse_id" class="form-control" required>
-            <option value="" disabled selected>Select Destination...</option>
+            <option value="" disabled {% if not edit_transfer %}selected{% endif %}>Select Destination...</option>
             {% for w in warehouses %}
-            <option value="{{ w.id }}">{{ w.name }}</option>
+            <option value="{{ w.id }}" {% if edit_transfer and edit_transfer.destination_warehouse_id == w.id %}selected{% endif %}>{{ w.name }}</option>
             {% endfor %}
           </select>
         </div>
 
         <div>
           <label class="form-label" for="notes">Notes / Reference (Optional)</label>
-          <input type="text" id="notes" class="form-control" placeholder="e.g. Shipment #123">
+          <input type="text" id="notes" class="form-control" placeholder="e.g. Shipment #123" value="{{ edit_transfer.notes if edit_transfer else '' }}">
         </div>
       </div>
 
@@ -72,8 +72,8 @@
       </div>
 
       <div style="text-align: right; border-top: 1px solid var(--border-color); padding-top: 1.5rem;">
-        <a href="/inventory" class="btn btn-outline" style="margin-right: 0.75rem;">Cancel</a>
-        <button type="submit" class="btn btn-primary" id="save-transfer-btn">Complete Transfer</button>
+        <a href="{{ url_for('inventory_transfers') }}" class="btn btn-outline" style="margin-right: 0.75rem;">Cancel</a>
+        <button type="submit" class="btn btn-primary" id="save-transfer-btn">{% if edit_transfer %}Update Transfer{% else %}Complete Transfer{% endif %}</button>
       </div>
 
     </form>
@@ -83,6 +83,9 @@
 <script>
   const products = {{ products|tojson }};
   const preselectProductId = "{{ preselect_product }}";
+  const editMode = {{ 'true' if edit_transfer else 'false' }};
+  const editTransferId = {{ edit_transfer.id if edit_transfer else 'null' }};
+  const editItems = {{ edit_items|tojson if edit_items else '[]' }};
   let productStockMap = {}; // Maps product_id -> stock_quantity in source warehouse
 
   // Fetch inventory for the source warehouse when it changes
@@ -98,6 +101,16 @@
       data.forEach(p => {
         productStockMap[p.id] = p.stock_quantity;
       });
+
+      // If in edit mode, add the old quantities back to the source warehouse stock
+      // so the user can re-transfer them without hitting validation limits.
+      if (editMode && editItems) {
+        editItems.forEach(item => {
+          if (productStockMap[item.product_id] !== undefined) {
+            productStockMap[item.product_id] += item.quantity;
+          }
+        });
+      }
 
       // Update all existing rows with new stock data
       document.querySelectorAll('#items-tbody tr').forEach(tr => {
@@ -120,7 +133,7 @@
 
   const tbody = document.getElementById('items-tbody');
 
-  function addTransferRow(initialProductId = null) {
+  function addTransferRow(initialProductId = null, initialQty = 1) {
     const tr = document.createElement('tr');
     
     let productOptions = '<option value="">-- Select Product --</option>';
@@ -139,7 +152,7 @@
         <span class="avail-stock">-</span>
       </td>
       <td style="padding: 1rem;">
-        <input type="number" class="form-control qty-input" min="0.01" step="0.01" value="1" required>
+        <input type="number" class="form-control qty-input" min="0.01" step="0.01" value="${initialQty}" required>
       </td>
       <td style="padding: 1rem; text-align: center;">
         <button type="button" class="btn btn-danger" style="padding: 0.25rem 0.5rem; line-height: 1; border-radius: 4px;" onclick="removeRow(this)">&times;</button>
@@ -170,9 +183,16 @@
     btn.closest('tr').remove();
   }
 
-  // Initial row
-  if (preselectProductId) {
+  // Initial rows
+  if (editMode && editItems && editItems.length > 0) {
+    editItems.forEach(item => {
+      addTransferRow(item.product_id, item.quantity);
+    });
+    // Trigger initial fetch
+    fetchSourceInventory();
+  } else if (preselectProductId) {
     addTransferRow(preselectProductId);
+    fetchSourceInventory();
   } else {
     addTransferRow();
   }
@@ -230,7 +250,11 @@
     btn.textContent = 'Processing...';
 
     try {
-      const res = await fetch('/inventory/transfer', {
+      let url = '/inventory/transfer';
+      if (editMode) {
+        url = '/inventory/transfer/edit/' + editTransferId;
+      }
+      const res = await fetch(url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
@@ -238,7 +262,7 @@
       const data = await res.json();
       
       if (data.ok) {
-        window.location.href = '/inventory';
+        window.location.href = '/inventory/transfers';
       } else {
         alert(data.error || "Failed to process transfer");
         btn.disabled = false;
