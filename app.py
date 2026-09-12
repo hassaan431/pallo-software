@@ -3185,10 +3185,14 @@ def sales_update(sale_id: int):
                 (sale_id,),
             ).fetchall()
 
+            sale_info = conn.execute("SELECT warehouse_id, status FROM sales WHERE id = ?", (sale_id,)).fetchone()
+            was_quote = (sale_info["status"] == "quote") if sale_info else False
+
             # Calculate old stock requirements
             old_qty_by_product = defaultdict(float)
-            for item in old_items:
-                old_qty_by_product[item["product_id"]] += float(item["qty"]) * float(item["packing_multiplier"])
+            if not was_quote:
+                for item in old_items:
+                    old_qty_by_product[item["product_id"]] += float(item["qty"]) * float(item["packing_multiplier"])
 
             # Calculate new stock requirements
             new_qty_by_product = defaultdict(float)
@@ -3223,14 +3227,8 @@ def sales_update(sale_id: int):
             except ValueError:
                 salesman_id = current_user.id
                 
-            sale_info = conn.execute("SELECT warehouse_id, status FROM sales WHERE id = ?", (sale_id,)).fetchone()
             old_wid = int(sale_info["warehouse_id"]) if sale_info and sale_info["warehouse_id"] else (current_user.warehouse_id or 1)
             new_wid = int(warehouse_id_raw) if warehouse_id_raw else old_wid
-            was_quote = (sale_info["status"] == "quote") if sale_info else False
-            
-            # If the original was a quote, it didn't deduct stock yet, so treat old_qty as 0
-            if was_quote:
-                old_qty_by_product = defaultdict(float)
 
             # If converting a quote to a sale, we must assign a new AK- invoice number
             if was_quote and not is_quote:
