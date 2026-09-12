@@ -2054,25 +2054,30 @@ function closeViewSale() {
 }
 
 function markAsSale(saleId) {
-  if (!confirm('Are you sure you want to mark this quotation as a sale? This will deduct inventory and assign a new invoice number.')) return;
-  fetch('/sales/' + saleId + '/mark_sale', { method: 'POST' })
-    .then(r => r.json())
-    .then(res => {
-      if(res.success) {
-        closeViewSale();
-        refreshSalesTable();
-        // Automatically open the payment prompt
-        setTimeout(() => {
-          openRecordPaymentModal(saleId, res.new_invoice_number, res.remaining_amount);
-        }, 300);
-      } else {
-        alert('Error: ' + res.message);
-      }
-    })
-    .catch(err => {
-      console.error(err);
-      alert('Network error while marking as sale.');
-    });
+  const data = allSalesData.find(s => s.id === saleId) || (window.currentQuoteData && window.currentQuoteData.id === saleId ? window.currentQuoteData : null);
+  if (!data) return;
+  
+  closeViewSale();
+  
+  // Set flag for the payment modal to know this is a quote conversion
+  window.isConvertQuote = true;
+  
+  // Update modal UI to reflect the conversion
+  const rpTitle = document.getElementById('recordPaymentModal').querySelector('h3');
+  rpTitle.textContent = 'Confirm Sale & Payment';
+  document.getElementById('rpInvoiceNumber').textContent = data.invoice_number + ' (Will convert to AK-)';
+  
+  currentSaleId = saleId;
+  currentRemaining = data.remaining_amount;
+  document.getElementById('rpRemaining').textContent = '$' + parseFloat(data.remaining_amount).toFixed(2);
+  
+  document.getElementById('rpMethod').value = 'Cash';
+  document.getElementById('rpAmount').value = parseFloat(data.remaining_amount).toFixed(2);
+  document.getElementById('rpAmount').max = data.remaining_amount;
+  document.getElementById('rpNotes').value = '';
+  
+  toggleRpAmount();
+  document.getElementById('recordPaymentModal').style.display = 'flex';
 }
 
 // Close modal when clicking outside
@@ -2189,6 +2194,8 @@ function openRecordPaymentModal(saleId, invoiceNumber, remaining) {
 function closeRecordPaymentModal() {
     document.getElementById('recordPaymentModal').style.display = 'none';
     currentSaleId = null;
+    window.isConvertQuote = false;
+    document.getElementById('recordPaymentModal').querySelector('h3').textContent = 'Record Payment';
 }
 
 async function submitRecordPayment() {
@@ -2209,7 +2216,9 @@ async function submitRecordPayment() {
         return;
     }
 
-    const response = await fetch('/sales/' + currentSaleId + '/record_payment', {
+    const endpoint = window.isConvertQuote ? '/sales/' + currentSaleId + '/mark_sale' : '/sales/' + currentSaleId + '/record_payment';
+
+    const response = await fetch(endpoint, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ amount, payment_method: method, notes })

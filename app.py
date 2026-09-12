@@ -3822,6 +3822,23 @@ def sales_mark_sale(sale_id: int):
             (invoice_number, sale_id)
         )
 
+        data = request.get_json(silent=True) or {}
+        amount = float(data.get('amount', 0))
+        payment_method = data.get('payment_method', 'Cash')
+        notes = data.get('notes', '')
+
+        if amount > 0:
+            if amount > float(sale['remaining_amount']):
+                raise ValueError("Payment amount exceeds remaining balance.")
+            new_amount_paid = float(sale['amount_paid']) + amount
+            new_remaining = float(sale['remaining_amount']) - amount
+            new_status = 'paid' if new_remaining <= 0.01 else 'partial'
+            
+            conn.execute('''UPDATE sales 
+                          SET amount_paid = ?, remaining_amount = ?, status = ?, payment_type = ?
+                          WHERE id = ?''',
+                       (new_amount_paid, new_remaining, new_status, payment_method.lower(), sale_id))
+
         conn.commit()
         return jsonify({"success": True, "new_invoice_number": invoice_number, "remaining_amount": sale["remaining_amount"]})
     except Exception as e:
