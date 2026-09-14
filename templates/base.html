@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>{% block title %}AK Distributors{% endblock %}</title>
+  <title>{% block title %}{{ self.page_heading() }} — AK Distributors{% endblock %}</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -215,6 +215,85 @@
         });
       }
     });
+
+    // Dynamic browser tab title manager for modals
+    (function() {
+      let basePageTitle = document.title;
+
+      function cleanTitleText(el) {
+        if (!el) return '';
+        const clone = el.cloneNode(true);
+        clone.querySelectorAll('button, .modal-close, .close, span.stock-pill, style, script').forEach(node => node.remove());
+        return clone.textContent.replace(/[\u00D7\u2715]/g, '').trim();
+      }
+
+      function getModalTitle(modal) {
+        if (!modal) return null;
+        if (modal.dataset && modal.dataset.tabTitle) return modal.dataset.tabTitle.trim();
+
+        const aria = modal.getAttribute('aria-label') || modal.querySelector('[role="dialog"]')?.getAttribute('aria-label');
+        if (aria && aria.trim()) return aria.trim();
+
+        const heading = modal.querySelector('h1, h2, h3, .modal-title, .panel-title');
+        if (heading) {
+          const text = cleanTitleText(heading);
+          if (text) return text;
+        }
+        return null;
+      }
+
+      function isModalVisible(el) {
+        if (!el) return false;
+        if (el.classList.contains('is-open')) return true;
+        if (el.getAttribute('aria-hidden') === 'false') return true;
+        if (el.style && el.style.display && el.style.display !== 'none') return true;
+        const style = window.getComputedStyle(el);
+        if (style.display === 'none' || style.visibility === 'hidden') return false;
+        const isOverlay = style.position === 'fixed' || style.position === 'absolute' || el.classList.contains('modal-backdrop');
+        return isOverlay;
+      }
+
+      function updateTabTitleForModals() {
+        const potentialModals = Array.from(document.querySelectorAll(
+          '.modal-backdrop, [id*="Modal"], [id*="modal"], [role="dialog"], #viewSaleModal, #recordPaymentModal, #supplierModal, #importCsvModal, #saleDetailsModal'
+        ));
+
+        const openModals = potentialModals.filter(el => {
+          // Avoid matching sub-elements or forms
+          if (el.tagName === 'FORM' || el.tagName === 'INPUT' || el.tagName === 'BUTTON') return false;
+          return isModalVisible(el);
+        });
+
+        if (openModals.length > 0) {
+          const topModal = openModals[openModals.length - 1];
+          const modalTitle = getModalTitle(topModal);
+          if (modalTitle) {
+            document.title = `${modalTitle} — AK Distributors`;
+            return;
+          }
+        }
+
+        if (document.title !== basePageTitle) {
+          document.title = basePageTitle;
+        }
+      }
+
+      window.addEventListener('DOMContentLoaded', () => {
+        basePageTitle = document.title;
+        updateTabTitleForModals();
+
+        const observer = new MutationObserver(() => {
+          updateTabTitleForModals();
+        });
+
+        observer.observe(document.body, {
+          attributes: true,
+          attributeFilter: ['class', 'style', 'aria-hidden'],
+          childList: true,
+          subtree: true
+        });
+      });
+    })();
   </script>
 </body>
 </html>

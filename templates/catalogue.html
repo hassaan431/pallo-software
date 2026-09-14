@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>AK Distributors POS</title>
+  <title>Catalogue POS — AK Distributors</title>
   <link rel="icon" type="image/png" href="/static/logos/AK_Distributors_Logo.png">
   <style>
     :root {
@@ -883,6 +883,22 @@
 
     // Run
     init();
+
+    // Dynamic browser tab title manager for modals
+    (function() {
+      const baseTitle = document.title;
+      const checkoutModal = document.getElementById('checkoutModal');
+      if (checkoutModal) {
+        const obs = new MutationObserver(() => {
+          if (checkoutModal.style.display && checkoutModal.style.display !== 'none') {
+            document.title = 'Checkout — AK Distributors';
+          } else {
+            document.title = baseTitle;
+          }
+        });
+        obs.observe(checkoutModal, { attributes: true, attributeFilter: ['style', 'class'] });
+      }
+    })();
   </script>
 </body>
 </html>
