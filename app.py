@@ -1543,19 +1543,50 @@ def brands_add():
 
     name = (data.get("name") or "").strip()
     if not name:
-        return jsonify({"ok": False, "error": "Brand name is required."}), 400
+        if is_json:
+            return jsonify({"ok": False, "error": "Brand name is required."}), 400
+        else:
+            return "Brand name is required.", 400
+
+    show_on_website = data.get("show_on_website")
+    if show_on_website is None:
+        # Checkboxes are missing when unchecked in form data
+        show_on_website = False if not is_json and request.form else True
+    elif isinstance(show_on_website, str):
+        show_on_website = show_on_website.lower() in ("true", "1", "on")
+    else:
+        show_on_website = bool(show_on_website)
+
+    commission_rate = float(data.get("commission_rate") or 0)
+
+    # Handle file upload
+    logo = request.files.get("logo")
+    if logo and logo.filename:
+        # ensure directories exist
+        import os
+        from werkzeug.utils import secure_filename
+        brands_dir = os.path.join(app.root_path, "static", "logos", "brands")
+        os.makedirs(brands_dir, exist_ok=True)
+        # Use exact brand name with .png extension to match existing convention
+        logo.save(os.path.join(brands_dir, f"{name}.png"))
 
     conn = get_connection()
     try:
-        conn.execute("INSERT OR IGNORE INTO brands (name) VALUES (?)", (name,))
+        conn.execute("INSERT OR IGNORE INTO brands (name, commission_rate, show_on_website) VALUES (?, ?, ?)", (name, commission_rate, 1 if show_on_website else 0))
         conn.commit()
 
         cur = conn.execute("SELECT id, name FROM brands WHERE name = ?", (name,))
         row = cur.fetchone()
         if row is None:
-            return jsonify({"ok": False, "error": "Failed to create brand."}), 500
+            if is_json:
+                return jsonify({"ok": False, "error": "Failed to create brand."}), 500
+            else:
+                return "Failed to create brand.", 500
 
-        return jsonify({"ok": True, "id": int(row["id"]), "name": row["name"]})
+        if is_json:
+            return jsonify({"ok": True, "id": int(row["id"]), "name": row["name"]})
+        else:
+            return redirect(url_for("suppliers_page"))
     finally:
         conn.close()
 
@@ -1679,8 +1710,23 @@ def supplier_history(supplier_id):
 def brands_edit(brand_id):
     name = request.form.get("name", "").strip()
     commission_rate = float(request.form.get("commission_rate") or 0)
+    
+    show_on_website = request.form.get("show_on_website")
+    # if it's missing in a standard form submission, it means the checkbox was unchecked
+    show_on_website = True if show_on_website == "on" else False
+
     if not name:
         return "Brand name is required.", 400
+
+    # Handle file upload
+    logo = request.files.get("logo")
+    if logo and logo.filename:
+        # ensure directories exist
+        import os
+        brands_dir = os.path.join(app.root_path, "static", "logos", "brands")
+        os.makedirs(brands_dir, exist_ok=True)
+        # Use exact brand name with .png extension
+        logo.save(os.path.join(brands_dir, f"{name}.png"))
         
     conn = get_connection()
     try:
@@ -1688,7 +1734,17 @@ def brands_edit(brand_id):
         old_brand_name = conn.execute("SELECT name FROM brands WHERE id = ?", (brand_id,)).fetchone()
         if old_brand_name:
             old_name = old_brand_name["name"]
-            conn.execute("UPDATE brands SET name = ?, commission_rate = ? WHERE id = ?", (name, commission_rate, brand_id))
+            
+            # If name changed, rename existing logo if it exists
+            if old_name != name:
+                import os
+                brands_dir = os.path.join(app.root_path, "static", "logos", "brands")
+                old_logo_path = os.path.join(brands_dir, f"{old_name}.png")
+                new_logo_path = os.path.join(brands_dir, f"{name}.png")
+                if os.path.exists(old_logo_path) and not (logo and logo.filename):
+                    os.rename(old_logo_path, new_logo_path)
+
+            conn.execute("UPDATE brands SET name = ?, commission_rate = ?, show_on_website = ? WHERE id = ?", (name, commission_rate, 1 if show_on_website else 0, brand_id))
             conn.execute("UPDATE products SET brand = ? WHERE brand = ?", (name, old_name))
         conn.commit()
     finally:

@@ -61,7 +61,8 @@ def init_db():
             CREATE TABLE IF NOT EXISTS brands (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 name TEXT UNIQUE NOT NULL,
-                commission_rate REAL DEFAULT 0
+                commission_rate REAL DEFAULT 0,
+                show_on_website BOOLEAN DEFAULT 1
             );
 
             CREATE TABLE IF NOT EXISTS products (
@@ -216,6 +217,12 @@ def init_db():
             
         try:
             conn.execute("ALTER TABLE brands ADD COLUMN commission_rate REAL DEFAULT 0")
+            conn.commit()
+        except sqlite3.OperationalError:
+            pass
+
+        try:
+            conn.execute("ALTER TABLE brands ADD COLUMN show_on_website BOOLEAN DEFAULT 1")
             conn.commit()
         except sqlite3.OperationalError:
             pass
@@ -474,7 +481,8 @@ def get_public_products():
             SELECT p.id, p.name, p.brand, p.image_url, c.name as category_name
             FROM products p
             LEFT JOIN categories c ON p.category_id = c.id
-            WHERE p.is_public = 1
+            LEFT JOIN brands b ON p.brand = b.name
+            WHERE p.is_public = 1 AND (b.show_on_website IS NULL OR b.show_on_website = 1)
             ORDER BY p.name COLLATE NOCASE
             """
         )
