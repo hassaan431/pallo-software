@@ -51,6 +51,63 @@
   </div>
 </section>
 
+<div class="panel-header" style="justify-content: flex-start; gap: 1rem; margin-top: 3rem; background: var(--bg-card); padding: 1rem 1.5rem; border-radius: var(--radius); box-shadow: var(--shadow-sm);">
+  <label for="globalWarehouseFilter" style="font-weight: bold; white-space: nowrap;">Filter By Warehouse:</label>
+  <select id="globalWarehouseFilter" class="form-control" style="max-width: 300px;">
+    <option value="">-- Select a Warehouse --</option>
+    {% for w in warehouses %}
+      <option value="{{ w.id }}">{{ w.name }}</option>
+    {% endfor %}
+  </select>
+</div>
+
+<section class="panel" style="margin-top: 1.5rem;">
+  <div class="panel-header">
+    <h2>Recent Sales (Last 5)</h2>
+  </div>
+  <div class="panel-body">
+    <div class="table-wrap">
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th>Invoice</th>
+            <th>Date</th>
+            <th>Customer</th>
+            <th>Total</th>
+            <th>Status</th>
+          </tr>
+        </thead>
+        <tbody id="recentSalesTbody">
+          <tr><td colspan="5" class="text-center text-muted">Select a warehouse to view recent sales.</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</section>
+
+<section class="panel" style="margin-top: 1.5rem;">
+  <div class="panel-header">
+    <h2>Product Inventory & Value</h2>
+  </div>
+  <div class="panel-body">
+    <div class="table-wrap">
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th>Product</th>
+            <th>Brand</th>
+            <th>Inventory</th>
+            <th>Total Value</th>
+          </tr>
+        </thead>
+        <tbody id="inventoryTbody">
+          <tr><td colspan="4" class="text-center text-muted">Select a warehouse to view inventory.</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</section>
+
 <!-- Add Warehouse Modal -->
 <div id="addWarehouseModal" class="modal-backdrop" aria-hidden="true">
   <div class="modal" role="dialog" aria-modal="true" aria-label="Add Warehouse">
@@ -119,6 +176,35 @@
   </div>
 </div>
 
+<!-- History Modal -->
+<div id="historyModal" class="modal-backdrop" aria-hidden="true">
+  <div class="modal" role="dialog" aria-modal="true" style="max-width: 800px; width: 90%;">
+    <div class="modal-header">
+      <h3 id="historyModalTitle">Product History</h3>
+      <button type="button" class="modal-close" data-close-modal="historyModal" aria-label="Close">&times;</button>
+    </div>
+    <div class="modal-body">
+      <div class="table-wrap" style="max-height: 400px; overflow-y: auto;">
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>Date</th>
+              <th>Type</th>
+              <th>Change</th>
+              <th>Prev</th>
+              <th>New</th>
+              <th>Ref</th>
+              <th>Supplier</th>
+            </tr>
+          </thead>
+          <tbody id="historyTbody">
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+
 <script>
   // Modal Handling
   const modals = document.querySelectorAll('.modal-backdrop');
@@ -164,5 +250,99 @@
     document.getElementById('editCommissionApplies').value = commission_applies;
     openModal('editWarehouseModal');
   }
+
+  // Global Warehouse Filter Logic
+  const warehouseFilter = document.getElementById('globalWarehouseFilter');
+  const recentSalesTbody = document.getElementById('recentSalesTbody');
+  const inventoryTbody = document.getElementById('inventoryTbody');
+  const historyModalTitle = document.getElementById('historyModalTitle');
+  const historyTbody = document.getElementById('historyTbody');
+
+  warehouseFilter.addEventListener('change', (e) => {
+    const wid = e.target.value;
+    if (!wid) {
+      recentSalesTbody.innerHTML = '<tr><td colspan="5" class="text-center text-muted">Select a warehouse to view recent sales.</td></tr>';
+      inventoryTbody.innerHTML = '<tr><td colspan="4" class="text-center text-muted">Select a warehouse to view inventory.</td></tr>';
+      return;
+    }
+
+    // Fetch Recent Sales
+    fetch(`/api/warehouse/recent_sales?warehouse_id=${wid}`)
+      .then(res => res.json())
+      .then(sales => {
+        if (!sales || sales.length === 0) {
+          recentSalesTbody.innerHTML = '<tr><td colspan="5" class="text-center text-muted">No recent sales found for this warehouse.</td></tr>';
+          return;
+        }
+        recentSalesTbody.innerHTML = sales.map(s => `
+          <tr>
+            <td>${s.invoice_number}</td>
+            <td>${s.invoice_date}</td>
+            <td>${s.customer_name || 'N/A'}</td>
+            <td>$${parseFloat(s.grand_total).toFixed(2)}</td>
+            <td><span class="badge" style="background:var(--color-primary); color:white;">${s.status.toUpperCase()}</span></td>
+          </tr>
+        `).join('');
+      });
+
+    // Fetch Inventory
+    fetch(`/api/warehouse/inventory?warehouse_id=${wid}`)
+      .then(res => res.json())
+      .then(inventory => {
+        if (!inventory || inventory.length === 0) {
+          inventoryTbody.innerHTML = '<tr><td colspan="4" class="text-center text-muted">No inventory found for this warehouse.</td></tr>';
+          return;
+        }
+        inventoryTbody.innerHTML = inventory.map(p => `
+          <tr style="cursor: pointer;" onclick="openHistory(${p.product_id}, '${p.name.replace(/'/g, "\\'")}')">
+            <td style="font-weight: 500; color: var(--color-primary);">${p.name}</td>
+            <td>${p.brand || ''}</td>
+            <td>${p.stock_quantity}</td>
+            <td>$${parseFloat(p.total_value).toFixed(2)}</td>
+          </tr>
+        `).join('');
+      });
+  });
+
+  // Open History Modal
+  window.openHistory = function(productId, productName) {
+    const wid = warehouseFilter.value;
+    historyModalTitle.textContent = `History: ${productName}`;
+    historyTbody.innerHTML = '<tr><td colspan="7" class="text-center text-muted">Loading...</td></tr>';
+    openModal('historyModal');
+
+    let url = `/api/inventory_history/${productId}`;
+    if (wid) {
+      url += `?warehouse_id=${wid}`;
+    }
+
+    fetch(url)
+      .then(res => res.json())
+      .then(data => {
+        if (data.ok && data.history.length > 0) {
+          historyTbody.innerHTML = data.history.map(h => {
+            const dateStr = new Date(h.created_at).toLocaleString();
+            let color = h.transaction_type === 'IN' ? 'green' : 'red';
+            let changePrefix = h.quantity_change > 0 ? '+' : '';
+            return `
+              <tr>
+                <td>${dateStr}</td>
+                <td style="font-weight:bold; color:${color}">${h.transaction_type}</td>
+                <td>${changePrefix}${h.quantity_change}</td>
+                <td>${h.previous_stock}</td>
+                <td>${h.new_stock}</td>
+                <td>${h.reference || '-'}</td>
+                <td>${h.supplier_name || '-'}</td>
+              </tr>
+            `;
+          }).join('');
+        } else {
+          historyTbody.innerHTML = '<tr><td colspan="7" class="text-center text-muted">No history found for this product in this warehouse.</td></tr>';
+        }
+      })
+      .catch(err => {
+        historyTbody.innerHTML = '<tr><td colspan="7" class="text-center text-danger">Error loading history.</td></tr>';
+      });
+  };
 </script>
 {% endblock %}

@@ -1369,10 +1369,10 @@ def inventory_delete(product_id: int):
 @app.route("/api/inventory_history/<int:product_id>", methods=["GET"])
 @login_required
 def api_inventory_history(product_id):
+    warehouse_id = request.args.get("warehouse_id")
     conn = get_connection()
     try:
-        cur = conn.execute(
-            """
+        query = """
             SELECT 
                 h.transaction_type, 
                 h.quantity_change, 
@@ -1386,10 +1386,16 @@ def api_inventory_history(product_id):
             LEFT JOIN suppliers s ON h.supplier_id = s.id
             LEFT JOIN warehouses w ON h.warehouse_id = w.id
             WHERE h.product_id = ?
-            ORDER BY h.created_at DESC
-            """,
-            (product_id,)
-        )
+        """
+        params = [product_id]
+        
+        if warehouse_id:
+            query += " AND h.warehouse_id = ?"
+            params.append(warehouse_id)
+            
+        query += " ORDER BY h.created_at DESC"
+        
+        cur = conn.execute(query, tuple(params))
         history = [dict(row) for row in cur.fetchall()]
         return jsonify({"ok": True, "history": history})
     except Exception as e:
@@ -5045,6 +5051,58 @@ def warehouses_list():
     try:
         warehouses = conn.execute("SELECT * FROM warehouses ORDER BY name").fetchall()
         return render_template("warehouses.html", warehouses=[dict(w) for w in warehouses])
+    finally:
+        conn.close()
+
+@app.route("/api/warehouse/recent_sales")
+@admin_required
+def api_warehouse_recent_sales():
+    warehouse_id = request.args.get("warehouse_id")
+    if not warehouse_id:
+        return jsonify([])
+        
+    conn = get_connection()
+    try:
+        cur = conn.execute("""
+            SELECT 
+                s.id, s.invoice_number, s.invoice_date, c.name as customer_name,
+                s.grand_total, s.status, u.username as salesman_name
+            FROM sales s
+            LEFT JOIN customers c ON s.customer_id = c.id
+            LEFT JOIN users u ON s.salesman_id = u.id
+            WHERE s.warehouse_id = ? AND s.status != 'quote'
+            ORDER BY s.invoice_date DESC, s.id DESC
+            LIMIT 5
+        """, (warehouse_id,))
+        sales = [dict(row) for row in cur.fetchall()]
+        return jsonify(sales)
+    finally:
+        conn.close()
+
+@app.route("/api/warehouse/inventory")
+@admin_required
+def api_warehouse_inventory():
+    warehouse_id = request.args.get("warehouse_id")
+    if not warehouse_id:
+        return jsonify([])
+        
+    conn = get_connection()
+    try:
+        cur = conn.execute("""
+            SELECT 
+                p.id as product_id,
+                p.name,
+                p.brand,
+                COALESCE(wi.stock_quantity, 0) as stock_quantity,
+                p.cost_price,
+                (COALESCE(wi.stock_quantity, 0) * COALESCE(p.cost_price, 0)) as total_value
+            FROM products p
+            JOIN warehouse_inventory wi ON p.id = wi.product_id
+            WHERE wi.warehouse_id = ?
+            ORDER BY p.name COLLATE NOCASE
+        """, (warehouse_id,))
+        inventory = [dict(row) for row in cur.fetchall()]
+        return jsonify(inventory)
     finally:
         conn.close()
 
