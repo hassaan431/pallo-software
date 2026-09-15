@@ -242,6 +242,7 @@
             <th>Brand</th>
             <th>Category</th>
             <th>Stock Qty</th>
+            <th>Cost Price</th>
             <th>Selling Price</th>
             <th>MARGIN</th>
             <th>Stock Value</th>
@@ -288,7 +289,8 @@
             <td class="searchable-brand">{{ p.brand or '' }}</td>
             <td>{{ p.category_name or '' }}</td>
             <td>{{ qty_int }}</td>
-
+            
+            <td><span class="sensitive-data">${{ p.cost_price|format_rate }}</span></td>
             <td>${{ p.selling_price|format_rate }}</td>
             <td>
               {% if p.selling_price and p.selling_price > 0 %}
