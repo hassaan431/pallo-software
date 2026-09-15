@@ -86,8 +86,9 @@
 </section>
 
 <section class="panel" style="margin-top: 1.5rem;">
-  <div class="panel-header">
+  <div class="panel-header" style="display: flex; justify-content: space-between; align-items: center;">
     <h2>Product Inventory & Value</h2>
+    <input type="text" id="inventorySearch" class="form-control" placeholder="Search products..." style="max-width: 300px;">
   </div>
   <div class="panel-body">
     <div class="table-wrap">
@@ -344,5 +345,25 @@
         historyTbody.innerHTML = '<tr><td colspan="7" class="text-center text-danger">Error loading history.</td></tr>';
       });
   };
+
+  // Inventory Search Logic
+  const inventorySearch = document.getElementById('inventorySearch');
+  inventorySearch.addEventListener('keyup', (e) => {
+    const term = e.target.value.toLowerCase();
+    const rows = inventoryTbody.querySelectorAll('tr');
+    rows.forEach(row => {
+      // Skip the placeholder row
+      if (row.querySelector('td.text-muted')) return;
+      
+      const productName = row.cells[0]?.textContent.toLowerCase() || '';
+      const brandName = row.cells[1]?.textContent.toLowerCase() || '';
+      
+      if (productName.includes(term) || brandName.includes(term)) {
+        row.style.display = '';
+      } else {
+        row.style.display = 'none';
+      }
+    });
+  });
 </script>
 {% endblock %}
