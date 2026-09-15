@@ -3374,6 +3374,14 @@ def sales_update(sale_id: int):
             sale_info = conn.execute("SELECT warehouse_id, status FROM sales WHERE id = ?", (sale_id,)).fetchone()
             was_quote = (sale_info["status"] == "quote") if sale_info else False
 
+            try:
+                salesman_id = int(salesman_id_raw) if salesman_id_raw else current_user.id
+            except ValueError:
+                salesman_id = current_user.id
+                
+            old_wid = int(sale_info["warehouse_id"]) if sale_info and sale_info["warehouse_id"] else (current_user.warehouse_id or 1)
+            new_wid = int(warehouse_id_raw) if warehouse_id_raw else old_wid
+
             # Calculate old stock requirements
             old_qty_by_product = defaultdict(float)
             if not was_quote:
@@ -3386,7 +3394,6 @@ def sales_update(sale_id: int):
                 new_qty_by_product[li["product_id"]] += li["qty"] * li["packing_multiplier"]
 
             # Compute net changes and check availability
-            # net_deduction = new_qty - old_qty
             net_deductions = {}
             all_products = set(old_qty_by_product.keys()) | set(new_qty_by_product.keys())
             
@@ -3397,24 +3404,28 @@ def sales_update(sale_id: int):
                 
                 if net_deduct != 0:
                     net_deductions[product_id] = net_deduct
-                    if net_deduct > 0:
-                        cur = conn.execute("SELECT stock_quantity, name FROM products WHERE id = ?", (product_id,))
-                        row = cur.fetchone()
-                        if row is None:
-                            raise ValueError("One or more selected products are invalid.")
-                        stock_quantity = float(row["stock_quantity"] or 0)
-                        if stock_quantity + 1e-9 < net_deduct:
-                            product_name = row["name"] or "Unknown Product"
-                            raise ValueError(f"Insufficient stock for {product_name} (requested additional {net_deduct}, available {stock_quantity}).")
+                    
+                cur = conn.execute("SELECT name FROM products WHERE id = ?", (product_id,))
+                row = cur.fetchone()
+                if row is None:
+                    raise ValueError("One or more selected products are invalid.")
+                product_name = row["name"] or "Unknown Product"
 
-            # Update sale record
-            try:
-                salesman_id = int(salesman_id_raw) if salesman_id_raw else current_user.id
-            except ValueError:
-                salesman_id = current_user.id
-                
-            old_wid = int(sale_info["warehouse_id"]) if sale_info and sale_info["warehouse_id"] else (current_user.warehouse_id or 1)
-            new_wid = int(warehouse_id_raw) if warehouse_id_raw else old_wid
+                if not is_quote:
+                    if old_wid == new_wid:
+                        if net_deduct > 0:
+                            cur = conn.execute("SELECT stock_quantity FROM warehouse_inventory WHERE product_id = ? AND warehouse_id = ?", (product_id, new_wid))
+                            wh_row = cur.fetchone()
+                            stock_quantity = float(wh_row["stock_quantity"] or 0) if wh_row else 0.0
+                            if stock_quantity + 1e-9 < net_deduct:
+                                raise ValueError(f"Insufficient stock for {product_name} (requested additional {net_deduct}, available {stock_quantity}).")
+                    else:
+                        if new_qty > 0:
+                            cur = conn.execute("SELECT stock_quantity FROM warehouse_inventory WHERE product_id = ? AND warehouse_id = ?", (product_id, new_wid))
+                            wh_row = cur.fetchone()
+                            stock_quantity = float(wh_row["stock_quantity"] or 0) if wh_row else 0.0
+                            if stock_quantity + 1e-9 < new_qty:
+                                raise ValueError(f"Insufficient stock for {product_name} (requested {new_qty}, available {stock_quantity}).")
 
             # If converting a quote to a sale, we must assign a new AK- invoice number
             if was_quote and not is_quote:
