@@ -474,7 +474,13 @@ def inventory():
         cur = conn.execute(low_stock_query, tuple(low_stock_params))
         low_stock_count = int(cur.fetchone()["low_stock_count"] or 0)
 
-        cur = conn.execute("SELECT id, name FROM categories ORDER BY name COLLATE NOCASE")
+        cur = conn.execute("""
+            SELECT c.id, c.name, COUNT(p.id) AS product_count 
+            FROM categories c 
+            LEFT JOIN products p ON p.category_id = c.id 
+            GROUP BY c.id, c.name 
+            ORDER BY c.name COLLATE NOCASE
+        """)
         categories = [dict(row) for row in cur.fetchall()]
 
         cur = conn.execute("SELECT id, name FROM suppliers ORDER BY name COLLATE NOCASE")
@@ -1430,7 +1436,13 @@ def categories_add():
 def categories_list():
     conn = get_connection()
     try:
-        cur = conn.execute("SELECT id, name FROM categories ORDER BY name COLLATE NOCASE")
+        cur = conn.execute("""
+            SELECT c.id, c.name, COUNT(p.id) AS product_count 
+            FROM categories c 
+            LEFT JOIN products p ON p.category_id = c.id 
+            GROUP BY c.id, c.name 
+            ORDER BY c.name COLLATE NOCASE
+        """)
         categories = [dict(row) for row in cur.fetchall()]
     finally:
         conn.close()

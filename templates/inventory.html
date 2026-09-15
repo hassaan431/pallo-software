@@ -717,6 +717,7 @@
         <thead>
           <tr>
             <th>Category</th>
+            <th>Products</th>
             <th style="width: 220px;">Actions</th>
           </tr>
         </thead>
@@ -724,6 +725,7 @@
           {% for cat in categories %}
           <tr id="category-row-{{ cat.id }}">
             <td class="category-name-cell">{{ cat.name }}</td>
+            <td class="category-count-cell">{{ cat.product_count }}</td>
             <td>
               <button type="button" class="btn btn-edit" data-action="edit-category" data-id="{{ cat.id }}">Edit</button>
               <button type="button" class="btn btn-danger" data-action="delete-category" data-id="{{ cat.id }}" style="margin-left:0.5rem;">Delete</button>
@@ -1024,6 +1026,7 @@
     tr.id = 'category-row-' + cat.id;
     tr.innerHTML =
       '<td class="category-name-cell">' + cat.name + '</td>' +
+      '<td class="category-count-cell">0</td>' +
       '<td>' +
         '<button type="button" class="btn btn-edit" data-action="edit-category" data-id="' + cat.id + '">Edit</button>' +
         '<button type="button" class="btn btn-danger" data-action="delete-category" data-id="' + cat.id + '" style="margin-left:0.5rem;">Delete</button>' +
