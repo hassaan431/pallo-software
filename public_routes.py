@@ -26,7 +26,11 @@ def home():
     # Optional: Just take the first 8 brands for the homepage, or pass all
     featured_brands = unique_brands[:8]
     
-    return render_template('public_home.html', featured_brands=featured_brands)
+    # Get 8 random products for Latest Arrivals
+    import random
+    latest_products = random.sample(products, min(8, len(products)))
+    
+    return render_template('public_home.html', featured_brands=featured_brands, latest_products=latest_products)
 
 @public_bp.route('/products')
 def catalog():
