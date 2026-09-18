@@ -193,6 +193,7 @@ def generate_invoice_pdf(sale_id: int) -> bytes:
                 si.amount,
                 si.print_dual_units,
                 si.packing_multiplier,
+                si.notes,
                 p.name AS product_name,
                 p.brand AS product_brand
             FROM sale_items si
@@ -265,8 +266,11 @@ def generate_pdf_from_data(sale: dict, customer: dict, sale_items: list, is_quot
         description = it["description"] or ""
         product_name = (it["product_name"] or "").strip()
         product_brand = (it["product_brand"] or "").strip()
+        notes = (it["notes"] if "notes" in it.keys() and it["notes"] else "").strip()
 
         item_line = description or product_name
+        if notes:
+            item_line += f" ({notes})"
 
         item_lines = _wrap_text_lines(
             None, item_line, item_font, item_font_size, max_item_width

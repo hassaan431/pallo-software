@@ -2869,6 +2869,7 @@ def sales_new():
                     "amount": amount,
                     "print_dual_units": print_dual_units,
                     "packing_multiplier": packing_multiplier,
+                    "notes": it.get("notes"),
                 }
             )
 
@@ -2999,9 +3000,9 @@ def sales_new():
                 conn.execute(
                     """
                     INSERT INTO sale_items
-                        (sale_id, product_id, description, qty, rate, amount, cost_price, print_dual_units, packing_multiplier, commission_amount)
+                        (sale_id, product_id, description, qty, rate, amount, cost_price, print_dual_units, packing_multiplier, commission_amount, notes)
                     VALUES
-                        (?, ?, ?, ?, ?, ?, COALESCE((SELECT cost_price FROM products WHERE id = ?), 0), ?, ?, ?)
+                        (?, ?, ?, ?, ?, ?, COALESCE((SELECT cost_price FROM products WHERE id = ?), 0), ?, ?, ?, ?)
                     """,
                     (
                         sale_id,
@@ -3014,6 +3015,7 @@ def sales_new():
                         li["print_dual_units"],
                         li["packing_multiplier"],
                         li["commission_amount"],
+                        li.get("notes", None),
                     ),
                 )
 
@@ -3138,6 +3140,7 @@ def sales_edit(sale_id: int):
                 si.amount,
                 si.print_dual_units,
                 COALESCE(si.packing_multiplier, 1.0) as packing_multiplier,
+                si.notes,
                 COALESCE((SELECT stock_quantity FROM warehouse_inventory WHERE product_id = p.id AND warehouse_id = ?), 0) AS stock_quantity,
                 p.is_open,
                 p.unit,
@@ -3318,6 +3321,7 @@ def sales_update(sale_id: int):
                     "amount": amount,
                     "print_dual_units": print_dual_units,
                     "packing_multiplier": packing_multiplier,
+                    "notes": it.get("notes"),
                 }
             )
 
@@ -3497,9 +3501,9 @@ def sales_update(sale_id: int):
                 conn.execute(
                     """
                     INSERT INTO sale_items
-                        (sale_id, product_id, description, qty, rate, amount, cost_price, print_dual_units, packing_multiplier, commission_amount)
+                        (sale_id, product_id, description, qty, rate, amount, cost_price, print_dual_units, packing_multiplier, commission_amount, notes)
                     VALUES
-                        (?, ?, ?, ?, ?, ?, COALESCE((SELECT cost_price FROM products WHERE id = ?), 0), ?, ?, ?)
+                        (?, ?, ?, ?, ?, ?, COALESCE((SELECT cost_price FROM products WHERE id = ?), 0), ?, ?, ?, ?)
                     """,
                     (
                         sale_id,
@@ -3512,6 +3516,7 @@ def sales_update(sale_id: int):
                         li["print_dual_units"],
                         li["packing_multiplier"],
                         li["commission_amount"],
+                        li.get("notes", None),
                     ),
                 )
 
@@ -5344,9 +5349,9 @@ def pos_submit_order():
             conn.execute(
                 """
                 INSERT INTO sale_items
-                    (sale_id, product_id, description, qty, rate, amount, cost_price, packing_multiplier, commission_amount)
+                    (sale_id, product_id, description, qty, rate, amount, cost_price, packing_multiplier, commission_amount, notes)
                 VALUES
-                    (?, ?, ?, ?, ?, ?, COALESCE((SELECT cost_price FROM products WHERE id = ?), 0.0), ?, ?)
+                    (?, ?, ?, ?, ?, ?, COALESCE((SELECT cost_price FROM products WHERE id = ?), 0.0), ?, ?, ?)
                 """,
                 (
                     sale_id, 
@@ -5357,7 +5362,8 @@ def pos_submit_order():
                     li["amount"], 
                     li["product_id"], 
                     li["packing_multiplier"],
-                    li["commission_amount"]
+                    li["commission_amount"],
+                    li.get("notes", None)
                 )
             )
             

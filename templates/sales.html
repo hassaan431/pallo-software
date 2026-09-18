@@ -925,6 +925,7 @@
     : (product ? (product.cost_price || 0) : 0);
   const displayPrintDualUnits = product ? (product.print_dual_units ? 'checked' : '') : '';
   const displayPackingMultiplier = product ? (product.packing_multiplier || 1.0) : 1.0;
+  const displayNotes = product ? (product.notes || '') : '';
   
   const isOpen = product && product.is_open;
   const variantDisplay = isOpen ? 'flex' : 'none';
@@ -951,9 +952,12 @@
           </div>
           <div class="suggestions product-suggestions" style="display:none;"></div>
           ${stockBadge}
-          <label style="font-size: 0.8em; margin-top: 4px; display: flex; align-items: center; gap: 4px; cursor: pointer; color: var(--color-text);">
-             <input type="checkbox" class="dual-unit-toggle" ${displayPrintDualUnits}> Print KG & Oz
-          </label>
+          <div style="display: flex; gap: 10px; align-items: center; margin-top: 4px;">
+            <input type="text" class="form-control item-notes-input" placeholder="Notes (e.g. 2 CT)" value="${displayNotes}" style="width: 120px; padding: 4px; font-size: 12px; height: 28px;">
+            <label style="font-size: 0.8em; display: flex; align-items: center; gap: 4px; cursor: pointer; color: var(--color-text);">
+               <input type="checkbox" class="dual-unit-toggle" ${displayPrintDualUnits}> Print KG & Oz
+            </label>
+          </div>
         </div>
       </td>
       <td><input type="number" class="form-control qty-input" min="0.001" step="any" value="${displayQty}"></td>
@@ -1276,7 +1280,7 @@
       const qtyEl = row.querySelector('.qty-input');
       const searchInput = row.querySelector('.product-search-input');
       
-      if (productId && qtyEl) {
+      if (productId && productId !== '-1' && qtyEl) {
         const requestedQty = Number(qtyEl.value || 0);
         const availableStock = Number(row.dataset.stockQuantity || 0);
         
@@ -1593,7 +1597,9 @@
               finalDesc += ' - ' + displayVal;
           }
       }
-      
+      const notesInput = row.querySelector('.item-notes-input');
+      const notes = notesInput ? notesInput.value.trim() : '';
+
       items.push({
         product_id: productId,
         description: finalDesc,
@@ -1603,6 +1609,7 @@
         amount: Math.round((qty * rate * packingMultiplier) * 100) / 100,
         print_dual_units: dualUnit,
         packing_multiplier: packingMultiplier,
+        notes: notes,
       });
     });
 
