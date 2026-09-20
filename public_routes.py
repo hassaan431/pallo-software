@@ -13,24 +13,18 @@ def fetch_resources(uri, rel):
         return path
     return uri
 
+from flask_login import current_user
+from flask import redirect, url_for
+
 @public_bp.route('/')
 def home():
-    # Fetch unique brands for the homepage
-    products = get_public_products()
-    brands_set = set()
-    for p in products:
-        if p.get('brand'):
-            brands_set.add(p['brand'])
-    unique_brands = sorted(list(brands_set))
+    if current_user.is_authenticated:
+        if current_user.role == 'admin':
+            return redirect(url_for('dashboard'))
+        elif current_user.role == 'salesman':
+            return redirect(url_for('sales'))
     
-    # Optional: Just take the first 8 brands for the homepage, or pass all
-    featured_brands = unique_brands[:8]
-    
-    # Get 8 random products for Latest Arrivals
-    import random
-    latest_products = random.sample(products, min(8, len(products)))
-    
-    return render_template('public_home.html', featured_brands=featured_brands, latest_products=latest_products)
+    return redirect(url_for('login'))
 
 @public_bp.route('/products')
 def catalog():
