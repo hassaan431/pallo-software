@@ -66,8 +66,14 @@ from invoice_generator import generate_invoice_pdf
 app = Flask(__name__)
 app.secret_key = "change-this-secret-key-for-local-use"
 
+from flask_cors import CORS
+CORS(app, resources={r"/api/*": {"origins": "*"}})
+
 from public_routes import public_bp
 app.register_blueprint(public_bp)
+
+from api_routes import api_bp
+app.register_blueprint(api_bp, url_prefix='/api')
 
 login_manager = LoginManager()
 login_manager.init_app(app)
