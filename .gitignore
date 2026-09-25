@@ -12,3 +12,6 @@ __pycache__/
 
 # Logos (business assets)
 # static/logos/
+# Generated Files
+static/downloads/
+static/brochure_cache/
