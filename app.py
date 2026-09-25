@@ -229,18 +229,61 @@ def regenerate_brochure():
     from database import get_brochure_products, get_brand_logo_filename
     from public_routes import fetch_resources
     from xhtml2pdf import pisa
+    from PIL import Image
     import os
     
+    def get_optimized_image(url):
+        if not url or not url.startswith('/static/'):
+            return url
+        rel_path = url[len('/static/'):]
+        abs_path = os.path.join(app.root_path, 'static', rel_path)
+        if not os.path.exists(abs_path):
+            return url
+            
+        cache_dir = os.path.join(app.root_path, 'static', 'brochure_cache')
+        os.makedirs(cache_dir, exist_ok=True)
+        safe_name = rel_path.replace('/', '_').replace('\\', '_')
+        new_name = safe_name.rsplit('.', 1)[0] + '.jpg'
+        cached_path = os.path.join(cache_dir, new_name)
+        cached_url = '/static/brochure_cache/' + new_name
+        
+        if os.path.exists(cached_path):
+            return cached_url
+            
+        try:
+            with Image.open(abs_path) as img:
+                if img.mode in ('RGBA', 'P', 'LA'):
+                    bg = Image.new('RGB', img.size, (255, 255, 255))
+                    if img.mode in ('RGBA', 'LA'):
+                        bg.paste(img, mask=img.split()[-1])
+                    else:
+                        bg.paste(img)
+                    img = bg
+                elif img.mode != 'RGB':
+                    img = img.convert('RGB')
+                img.thumbnail((300, 300), Image.Resampling.LANCZOS)
+                img.save(cached_path, 'JPEG', quality=60, optimize=True)
+                return cached_url
+        except Exception:
+            return url
+
     products = get_brochure_products()
     brands = {}
     brand_logos = {}
     
     for p in products:
+        if p.get('image_url'):
+            p['image_url'] = get_optimized_image(p['image_url'])
+            
         b = p.get('brand') or 'Other'
         if b not in brands:
             brands[b] = []
             logo_name = get_brand_logo_filename(b)
-            brand_logos[b] = logo_name if logo_name else False
+            if logo_name:
+                optimized_logo = get_optimized_image('/static/logos/brands/' + logo_name)
+                brand_logos[b] = optimized_logo
+            else:
+                brand_logos[b] = False
         brands[b].append(p)
         
     html = render_template('brochure.html', brands=brands, brand_logos=brand_logos)
