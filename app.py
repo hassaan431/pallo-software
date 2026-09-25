@@ -186,6 +186,87 @@ def handle_exception(e):
     tb = traceback.format_exc()
     return f"<h1>Internal Server Error</h1><pre>{tb}</pre>", 500
 
+@app.route("/admin/brochure/settings", methods=["GET", "POST"])
+@admin_required
+def brochure_settings():
+    from database import get_connection
+    conn = get_connection()
+    if request.method == "POST":
+        # Reset all to 0
+        conn.execute("UPDATE brands SET show_in_brochure = 0")
+        conn.execute("UPDATE products SET show_in_brochure = 0")
+        
+        # Get selected brands and products
+        selected_brands = request.form.getlist("brands")
+        selected_products = request.form.getlist("products")
+        
+        for b_id in selected_brands:
+            conn.execute("UPDATE brands SET show_in_brochure = 1 WHERE id = ?", (b_id,))
+        for p_id in selected_products:
+            conn.execute("UPDATE products SET show_in_brochure = 1 WHERE id = ?", (p_id,))
+            
+        conn.commit()
+        flash("Brochure settings updated successfully.", "success")
+        return redirect(url_for("brochure_settings"))
+        
+    brands = conn.execute("SELECT id, name, show_in_brochure FROM brands ORDER BY name").fetchall()
+    
+    # We want to group products by brand to make the UI easier
+    products_by_brand = {}
+    
+    products = conn.execute("SELECT id, name, brand, show_in_brochure FROM products ORDER BY name").fetchall()
+    for p in products:
+        b = p['brand'] or 'Uncategorized'
+        if b not in products_by_brand:
+            products_by_brand[b] = []
+        products_by_brand[b].append(p)
+        
+    return render_template("brochure_settings.html", brands=brands, products_by_brand=products_by_brand)
+
+@app.route("/admin/brochure/regenerate", methods=["GET", "POST"])
+@admin_required
+def regenerate_brochure():
+    from database import get_brochure_products, get_brand_logo_filename
+    from public_routes import fetch_resources
+    from xhtml2pdf import pisa
+    import os
+    
+    products = get_brochure_products()
+    brands = {}
+    brand_logos = {}
+    
+    for p in products:
+        b = p.get('brand') or 'Other'
+        if b not in brands:
+            brands[b] = []
+            logo_name = get_brand_logo_filename(b)
+            brand_logos[b] = logo_name if logo_name else False
+        brands[b].append(p)
+        
+    html = render_template('brochure.html', brands=brands, brand_logos=brand_logos)
+    
+    downloads_dir = os.path.join(app.root_path, 'static', 'downloads')
+    os.makedirs(downloads_dir, exist_ok=True)
+    file_path = os.path.join(downloads_dir, 'brochure.pdf')
+    
+    with open(file_path, "w+b") as pdf_file:
+        pisa_status = pisa.CreatePDF(html, dest=pdf_file, link_callback=fetch_resources)
+        
+    if pisa_status.err:
+        flash("Error generating brochure PDF.", "error")
+    else:
+        flash("Brochure successfully regenerated.", "success")
+        
+    return redirect(url_for('dashboard'))
+
+@app.route("/help")
+@login_required
+def help_center():
+    lang = request.args.get('lang', 'en')
+    if lang == 'ur':
+        return render_template("help_ur.html")
+    return render_template("help_en.html")
+
 @app.route("/dashboard")
 @admin_required
 def dashboard():

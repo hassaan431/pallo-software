@@ -48,7 +48,47 @@
     .sidebar-nav a .nav-emoji {
       font-size: 1rem !important;
     }
+
+    /* Settings Dropdown CSS */
+    .settings-dropdown {
+      position: relative;
+      display: inline-block;
+    }
+    .settings-dropdown-content {
+      display: none;
+      position: absolute;
+      right: 0;
+      top: 100%;
+      margin-top: 0.25rem;
+      background-color: #ffffff;
+      min-width: 220px;
+      box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+      border: 1px solid var(--color-border);
+      border-radius: 8px;
+      z-index: 100;
+      padding: 0.5rem 0;
+    }
+    .settings-dropdown-content.show {
+      display: block;
+    }
+    .settings-dropdown-content a {
+      color: var(--color-text);
+      padding: 0.65rem 1rem;
+      text-decoration: none;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      font-size: 0.875rem;
+      font-weight: 500;
+      transition: background 0.15s ease;
+    }
+    .settings-dropdown-content a:hover {
+      background-color: #f8fafc;
+      color: var(--color-primary);
+    }
   </style>
+  <!-- Driver.js CSS -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/driver.js@1.3.1/dist/driver.css"/>
 </head>
 <body>
   <div id="mobileOverlay" class="mobile-overlay"></div>
@@ -133,11 +173,6 @@
             <span class="nav-label">Users</span>
           </a>
           {% endif %}
-          <div class="sidebar-section">Tools</div>
-          <a href="{{ url_for('pos') }}" target="_blank">
-            <span class="nav-emoji" aria-hidden="true">📱</span>
-            <span class="nav-label">POS Catalogue</span>
-          </a>
 
         </nav>
       </div>
@@ -146,10 +181,6 @@
         <a href="{{ url_for('backup_download') }}" style="display:flex; align-items:center; gap:0.5rem; padding:0.5rem 1rem; font-size:0.8rem; font-weight:600; color:var(--color-text-muted); border-left:3px solid transparent; transition:background 0.15s ease, color 0.15s ease, border-color 0.15s ease; border-radius: 6px; margin: 0 1rem; background: rgba(0,0,0,0.03);">
           <span class="nav-emoji" aria-hidden="true" style="font-size:1rem; line-height:1; width:1.25rem; text-align:center;">💾</span>
           <span class="nav-label">Download Backup</span>
-        </a>
-        <a href="{{ url_for('logout') }}" style="display:flex; align-items:center; gap:0.65rem; padding:0.75rem 1.25rem; font-size:0.925rem; font-weight:600; color:var(--color-text-muted); border-left:3px solid transparent; transition:background 0.15s ease, color 0.15s ease, border-color 0.15s ease;">
-          <span class="nav-emoji" aria-hidden="true" style="font-size:1.1rem; line-height:1; width:1.5rem; text-align:center;">🚪</span>
-          <span class="nav-label">Logout</span>
         </a>
       </div>
     </aside>
@@ -162,15 +193,32 @@
           <h1 class="topbar-title">{% block page_heading %}Dashboard{% endblock %}</h1>
         </div>
         <div style="display: flex; align-items: center; gap: 1rem;">
-          <a href="{{ url_for('public_bp.home') }}" target="_blank" style="display: inline-flex; align-items: center; gap: 0.4rem; padding: 0.35rem 0.75rem; border: 1px solid var(--color-border); border-radius: 6px; background: #ffffff; color: var(--color-text-muted); text-decoration: none; font-size: 0.85rem; font-weight: 600; transition: all 0.15s ease;" title="View Public Website">
-            <span>🌐</span>
-            <span>View Website</span>
-          </a>
           <button id="privacyModeToggle" style="background: none; border: none; font-size: 1.5rem; cursor: pointer; padding: 0.25rem;" title="Toggle Privacy Mode">
             👁️
           </button>
+          <div class="settings-dropdown">
+            <button id="settingsDropdownToggle" style="background: none; border: none; font-size: 1.5rem; cursor: pointer; padding: 0.25rem;" title="Settings">
+              ⚙️
+            </button>
+            <div id="settingsDropdownContent" class="settings-dropdown-content">
+              <a href="{{ url_for('pos') }}" target="_blank">
+                <span>📱</span> POS Catalogue
+              </a>
+              {% if current_user.role == 'admin' %}
+              <a href="{{ url_for('brochure_settings') }}">
+                <span>📖</span> Brochure Settings
+              </a>
+              {% endif %}
+              <a href="{{ url_for('help_center') }}">
+                <span>📘</span> Help Center
+              </a>
+              <div style="height: 1px; background-color: var(--color-border); margin: 0.25rem 0;"></div>
+              <a href="{{ url_for('logout') }}" style="color: var(--color-danger);">
+                <span>🚪</span> Logout
+              </a>
+            </div>
+          </div>
           <div class="topbar-user">
-            <span>Signed in as</span>
             <strong>{% if current_user.is_authenticated %}{{ current_user.username }}{% else %}Guest{% endif %}</strong>
           </div>
         </div>
@@ -212,6 +260,20 @@
           const isActive = document.body.classList.toggle('privacy-mode');
           localStorage.setItem('privacyMode', isActive);
           toggleBtn.textContent = isActive ? '🙈' : '👁️';
+        });
+      }
+
+      const settingsToggle = document.getElementById('settingsDropdownToggle');
+      const settingsDropdown = document.getElementById('settingsDropdownContent');
+      if (settingsToggle && settingsDropdown) {
+        settingsToggle.addEventListener('click', (e) => {
+          e.stopPropagation();
+          settingsDropdown.classList.toggle('show');
+        });
+        document.addEventListener('click', (e) => {
+          if (!settingsToggle.contains(e.target) && !settingsDropdown.contains(e.target)) {
+            settingsDropdown.classList.remove('show');
+          }
         });
       }
     });
@@ -295,5 +357,7 @@
       });
     })();
   </script>
+  <!-- Driver.js JS -->
+  <script src="https://cdn.jsdelivr.net/npm/driver.js@1.3.1/dist/driver.js.iife.js"></script>
 </body>
 </html>

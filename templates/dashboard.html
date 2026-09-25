@@ -14,7 +14,10 @@
     </select>
   </form>
   {% endif %}
-  <a href="{{ url_for('sales') }}" class="btn btn-primary" style="font-size: 14px; padding: 8px 20px; font-weight: 600;">Record Sale</a>
+  <div style="display: flex; gap: 10px; align-items: center;">
+    <button id="start-tour-btn" class="btn" style="font-size: 14px; padding: 8px 20px; font-weight: 600; background: #64748b; color: white; border: none; border-radius: 6px; cursor: pointer;">Walkaround Tour</button>
+    <a href="{{ url_for('sales') }}" class="btn btn-primary" style="font-size: 14px; padding: 8px 20px; font-weight: 600;">Record Sale</a>
+  </div>
 </div>
 <div class="card-grid">
   <article class="stat-card">
@@ -259,6 +262,36 @@
         }
       }
     });
+
+    // Driver.js Walkaround Tour setup
+    if (window.driver && window.driver.js && window.driver.js.driver) {
+      const driver = window.driver.js.driver;
+      
+      const driverObj = driver({
+        showProgress: true,
+        steps: [
+          { popover: { title: 'Welcome to AK Distributors', description: 'This is your main dashboard where you can see a quick overview of your business.' } },
+          { element: '.sidebar', popover: { title: 'Navigation Menu', description: 'Use this sidebar to navigate between products, sales, customers, and reports.', side: "right", align: 'start' } },
+          { element: '.card-grid', popover: { title: 'Key Metrics', description: 'At a glance, see your daily and monthly revenue and profit margins.', side: "bottom", align: 'start' } },
+          { element: '#salesChart', popover: { title: 'Sales Trend', description: 'This chart shows your daily sales over the last 30 days to help you spot trends.', side: "top", align: 'start' } },
+          { element: '.data-table', popover: { title: 'Recent Activity', description: 'Here are your most recent sales. You can directly view invoices from here.', side: "top", align: 'start' } },
+          { element: '#start-tour-btn', popover: { title: 'Need help?', description: 'You can restart this tour anytime by clicking this button.', side: "left", align: 'start' } }
+        ]
+      });
+      
+      const startBtn = document.getElementById('start-tour-btn');
+      if (startBtn) {
+        startBtn.addEventListener('click', () => {
+          driverObj.drive();
+        });
+      }
+
+      // Auto-start for first-time users (using localStorage)
+      if (!localStorage.getItem('dashboardTourSeen')) {
+        driverObj.drive();
+        localStorage.setItem('dashboardTourSeen', 'true');
+      }
+    }
   });
 </script>
 {% endblock %}

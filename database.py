@@ -298,6 +298,20 @@ def init_db():
         except sqlite3.OperationalError:
             pass
 
+        # Safely add show_in_brochure column to products table
+        try:
+            conn.execute("ALTER TABLE products ADD COLUMN show_in_brochure INTEGER DEFAULT 1")
+            conn.commit()
+        except sqlite3.OperationalError:
+            pass
+            
+        # Safely add show_in_brochure column to brands table
+        try:
+            conn.execute("ALTER TABLE brands ADD COLUMN show_in_brochure INTEGER DEFAULT 1")
+            conn.commit()
+        except sqlite3.OperationalError:
+            pass
+
         try:
             conn.execute(
                 "ALTER TABLE sales ADD COLUMN "
@@ -483,6 +497,25 @@ def get_public_products():
             LEFT JOIN categories c ON p.category_id = c.id
             LEFT JOIN brands b ON p.brand = b.name
             WHERE p.is_public = 1 AND (b.show_on_website IS NULL OR b.show_on_website = 1)
+            ORDER BY p.name COLLATE NOCASE
+            """
+        )
+        return [dict(row) for row in cur.fetchall()]
+    finally:
+        conn.close()
+
+
+def get_brochure_products():
+    conn = get_connection()
+    try:
+        cur = conn.execute(
+            """
+            SELECT p.id, p.name, p.brand, p.image_url, c.name as category_name
+            FROM products p
+            LEFT JOIN categories c ON p.category_id = c.id
+            LEFT JOIN brands b ON p.brand = b.name
+            WHERE (p.show_in_brochure IS NULL OR p.show_in_brochure = 1) 
+              AND (b.show_in_brochure IS NULL OR b.show_in_brochure = 1)
             ORDER BY p.name COLLATE NOCASE
             """
         )

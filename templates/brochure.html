@@ -5,10 +5,10 @@
 <style>
     @page {
         size: A4;
-        margin: 2cm;
+        margin: 1.5cm;
         @frame footer_frame {
             -pdf-frame-content: footer_content;
-            left: 50pt; width: 512pt; top: 772pt; height: 20pt;
+            left: 50pt; width: 512pt; top: 800pt; height: 20pt;
         }
     }
     body {
@@ -18,52 +18,64 @@
     h1 {
         text-align: center;
         color: #07133B;
-        font-size: 28pt;
+        font-size: 32pt;
         margin-bottom: 20pt;
     }
     h2 {
         color: #1AD079;
-        font-size: 18pt;
+        font-size: 16pt;
         border-bottom: 1px solid #E2E8F0;
         padding-bottom: 5pt;
-        margin-top: 20pt;
-        margin-bottom: 10pt;
+        margin-top: 5pt;
+        margin-bottom: 5pt;
     }
     .brand-section {
-        margin-bottom: 30pt;
+        margin-bottom: 20pt;
     }
     .product-table {
         width: 100%;
         border-collapse: collapse;
     }
     .product-cell {
-        width: 50%;
-        padding: 10pt;
+        width: 33.33%;
+        padding: 5pt;
         vertical-align: top;
     }
     .product-card {
         border: 1px solid #E2E8F0;
-        padding: 10pt;
+        padding: 5pt;
         text-align: center;
-    }
-    .product-image {
-        max-height: 120pt;
-        max-width: 100%;
-        margin-bottom: 10pt;
     }
     .product-name {
         font-weight: bold;
-        font-size: 12pt;
-        margin-bottom: 5pt;
-    }
-    .product-sku {
-        color: #83899D;
         font-size: 10pt;
+        margin-top: 0pt;
+    }
+    .no-image-placeholder {
+        height: 60pt;
+        background-color: #F1F5F9;
+        border: 1px dashed #CBD5E1;
+        color: #64748B;
+        font-size: 12pt;
+        font-weight: bold;
+        text-align: center;
+        padding-top: 30pt;
+        margin-bottom: 0pt;
     }
     #footer_content {
         text-align: center;
         font-size: 9pt;
         color: #83899D;
+    }
+    .cta-box {
+        margin-top: 40pt;
+        padding: 15pt;
+        background-color: #F8FAFC;
+        border: 2px solid #1AD079;
+        border-radius: 8pt;
+        text-align: center;
+        font-size: 14pt;
+        font-weight: bold;
     }
 </style>
 </head>
@@ -73,44 +85,79 @@
     Page <pdf:pagenumber> of <pdf:pagecount> | AK Distributors Product Brochure
 </div>
 
-<div style="text-align: center; margin-top: 150pt; margin-bottom: 20pt;">
-    <img src="/static/logos/AK_Distributors_Logo.png" width="150">
+<div style="text-align: center; margin-top: 100pt; margin-bottom: 20pt;">
+    <img src="/static/logos/AK_Distributors_Logo.png" width="180">
 </div>
-<h1 style="margin-top: 0; font-size: 36pt;">AK Distributors Catalog</h1>
+<h1 style="margin-top: 0;">AK Distributors Catalog</h1>
 
-<div style="text-align: center; margin-top: 150pt;">
+<div style="text-align: center; margin-top: 60pt;">
     <h3 style="color: #83899D; margin-bottom: 20pt; font-size: 14pt;">Our Partner Brands</h3>
-    <div>
-    {% for b, logo_name in brand_logos.items() %}
-        {% if logo_name %}
-            <img src="/static/logos/brands/{{ logo_name }}" width="80" style="margin: 10pt;">
-        {% endif %}
-    {% endfor %}
-    </div>
+    <table style="width: 100%; border: none; text-align: center;">
+        {% set valid_logos = [] %}
+        {% for b, logo_name in brand_logos.items() %}
+            {% if logo_name %}
+                {% set _ = valid_logos.append(logo_name) %}
+            {% endif %}
+        {% endfor %}
+        
+        {% for row in valid_logos|batch(4, '&nbsp;') %}
+        <tr>
+            {% for logo in row %}
+                <td style="padding: 15pt; text-align: center; width: 25%;">
+                    {% if logo != '&nbsp;' %}
+                    <img src="/static/logos/brands/{{ logo }}" style="max-width: 100pt; max-height: 80pt;">
+                    {% endif %}
+                </td>
+            {% endfor %}
+        </tr>
+        {% endfor %}
+    </table>
+</div>
+
+<div class="cta-box">
+    To place an order, please contact us:<br>
+    <span style="color: #1AD079;">Phone: 9163545678</span> | <span style="color: #1AD079;">Email: akdistributorsusa@gmail.com</span>
 </div>
 
 {% for brand, brand_products in brands.items() %}
     <pdf:nextpage />
     <div class="brand-section">
-        <h2>
-            {% if brand_logos.get(brand) %}
-                <img src="/static/logos/brands/{{ brand_logos.get(brand) }}" width="60" style="vertical-align: middle; margin-right: 10pt;">
-            {% endif %}
-            {{ brand }}
-        </h2>
-        <table class="product-table">
-            {% for row in brand_products|batch(2, '&nbsp;') %}
+        <table class="product-table" repeat="1">
+            <thead>
+                <tr>
+                    <th colspan="3" style="text-align: left; padding-bottom: 10pt; padding-top: 10pt; border-bottom: 1px solid #E2E8F0; margin-bottom: 10pt;">
+                        <div style="font-size: 16pt; color: #1AD079; font-weight: bold;">
+                            {% if brand_logos.get(brand) %}
+                                <img src="/static/logos/brands/{{ brand_logos.get(brand) }}" width="60" style="vertical-align: middle; margin-right: 10pt;">
+                            {% endif %}
+                            {{ brand }}
+                        </div>
+                    </th>
+                </tr>
+            </thead>
+            <tbody>
+            {% for row in brand_products|batch(3, '&nbsp;') %}
             <tr>
                 {% for product in row %}
                     {% if product != '&nbsp;' %}
                     <td class="product-cell">
                         <div class="product-card">
-                            {% if product.image_url %}
-                                <img src="{{ product.image_url }}" width="120" style="margin-bottom: 10pt;">
-                            {% else %}
-                                <div style="height: 120pt;"></div>
-                            {% endif %}
-                            <div class="product-name">{{ product.name }}</div>
+                            <table style="width: 100%; border: none;">
+                                <tr>
+                                    <td style="height: 100pt; vertical-align: middle; text-align: center;">
+                                        {% if product.image_url %}
+                                            <img src="{{ product.image_url }}" style="max-height: 90pt; max-width: 100%;">
+                                        {% else %}
+                                            <div class="no-image-placeholder">{{ product.name }}</div>
+                                        {% endif %}
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <td style="vertical-align: top; text-align: center; padding-top: 5pt;">
+                                        <div class="product-name">{{ product.name }}</div>
+                                    </td>
+                                </tr>
+                            </table>
                         </div>
                     </td>
                     {% else %}
@@ -119,9 +166,22 @@
                 {% endfor %}
             </tr>
             {% endfor %}
+            </tbody>
         </table>
     </div>
 {% endfor %}
+
+<pdf:nextpage />
+<div style="text-align: center; margin-top: 250pt;">
+    <img src="/static/logos/AK_Distributors_Logo.png" width="150" style="margin-bottom: 20pt;">
+    <h2 style="border: none; font-size: 24pt; margin-bottom: 10pt;">Thank You!</h2>
+    <p style="font-size: 14pt; color: #83899D; margin-bottom: 30pt;">We look forward to doing business with you.</p>
+    
+    <div class="cta-box" style="margin-top: 0;">
+        To place an order, please contact us:<br>
+        <span style="color: #1AD079;">Phone: 9163545678</span> | <span style="color: #1AD079;">Email: akdistributorsusa@gmail.com</span>
+    </div>
+</div>
 
 </body>
 </html>

@@ -1,0 +1,98 @@
+{% extends "base.html" %}
+{% block title %}Help Center — AK Distributors{% endblock %}
+{% block page_heading %}Help Center & Software Manual{% endblock %}
+{% block content %}
+<style>
+    .help-content h1, .help-content h2, .help-content h3 { color: #1e293b; margin-top: 1.5em; margin-bottom: 0.5em; }
+    .help-content h1 { font-size: 1.75rem; border-bottom: 1px solid #e2e8f0; padding-bottom: 0.3em; }
+    .help-content h2 { font-size: 1.4rem; border-bottom: 1px solid #e2e8f0; padding-bottom: 0.3em; }
+    .help-content h3 { font-size: 1.15rem; }
+    .help-content p { margin-bottom: 1em; }
+    .help-content ul, .help-content ol { margin-bottom: 1em; padding-left: 1.5em; }
+    .help-content li { margin-bottom: 0.25em; }
+    .help-content a { color: #2563eb; text-decoration: none; font-weight: 500; }
+    .help-content a:hover { text-decoration: underline; }
+    .help-content strong { color: #0f172a; }
+</style>
+
+<div class="panel" style="padding: 2.5rem; max-width: 900px; margin: 0 auto; background: white; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
+    <div style="display: flex; justify-content: flex-end; margin-bottom: 2rem;">
+        <a href="{{ url_for('help_center', lang='ur') }}" class="btn" style="font-size: 0.9rem; padding: 6px 14px; border: 1px solid #cbd5e1; border-radius: 6px; color: #475569; text-decoration: none; background: #f8fafc; font-weight: 600;">اردو میں پڑھیں (Urdu Version)</a>
+    </div>
+    
+    <div class="help-content" style="line-height: 1.7; color: #334155; font-size: 1rem;">
+        <h1>📘 AK Distributors — Help Center</h1>
+        <p>Welcome to the <strong>AK Distributors Inventory and Invoice Management System</strong>. This comprehensive guide is designed to help you and your team navigate the software, manage your daily operations, and streamline your business workflows.</p>
+
+        <h2>📑 Table of Contents</h2>
+        <ol>
+            <li><a href="#workflows">General Workflows (Step-by-Step)</a></li>
+            <li><a href="#modules">Module Guide (Navigation)</a></li>
+        </ol>
+
+        <h2 id="workflows">General Workflows</h2>
+
+        <h3>1. Introducing a New Product or Brand 📦</h3>
+        <p>Before a new product can be added to your catalogue or received in a shipment, the system needs to recognize the <strong>Supplier/Brand</strong>.</p>
+        <p><strong>Step 1: Register the Supplier/Brand</strong><br>
+        <em>Navigate to:</em> <a href="{{ url_for('suppliers_page') }}">Suppliers & Brands</a></p>
+        <ol>
+            <li>Click the <strong>Add Supplier/Brand</strong> button.</li>
+            <li>Fill in the required details: Supplier Name, Primary Contact Information, and the Brand Name they provide.</li>
+            <li><strong>Save</strong> the entry. This links the brand to your supplier permanently.</li>
+        </ol>
+
+        <p><strong>Step 2: Add the Product to the Catalogue</strong><br>
+        <em>Navigate to:</em> <a href="{{ url_for('inventory') }}">Inventory</a></p>
+        <ol>
+            <li>Click the <strong>Add New Product</strong> button.</li>
+            <li>Complete the product profile (Name, Description, Pricing, and the Brand you created in Step 1).</li>
+            <li><strong>Save</strong> the product. <em>(Note: It will have 0 stock until you record a purchase shipment.)</em></li>
+        </ol>
+
+        <h3>2. Receiving New Inventory (Purchases) 📥</h3>
+        <p>When a physical shipment of goods arrives at your warehouse, you must record it as a <strong>Purchase</strong>.</p>
+        <p><strong>Step 1: Log the Incoming Shipment</strong><br>
+        <em>Navigate to:</em> <a href="/purchases">Purchases</a></p>
+        <ol>
+            <li>Click <strong>New Purchase</strong>.</li>
+            <li>Select the <strong>Supplier</strong> and the <strong>Destination Warehouse</strong>.</li>
+            <li>Search for the products received, and input the exact quantities and unit costs.</li>
+            <li>Add any freight, tax, or shipping fees.</li>
+            <li><strong>Submit</strong> the purchase to instantly increase your stock levels.</li>
+        </ol>
+
+        <h3>3. Recording a Sale & Invoicing 🧾</h3>
+        <p>Recording a sale deducts from your active inventory, calculates your profit margins, and generates a professional invoice.</p>
+        <p><strong>Step 1: Process the Sale</strong><br>
+        <em>Navigate to:</em> <a href="{{ url_for('sales') }}">Sales</a></p>
+        <ol>
+            <li>Click <strong>Record Sale</strong>.</li>
+            <li>Select the <strong>Customer</strong> and the <strong>Dispatching Warehouse</strong>.</li>
+            <li>Add products, adjust quantities, and set the final selling price (you can offer line-item discounts here).</li>
+            <li>Add applicable Taxes/Delivery Fees, and mark the Payment Status (Paid, Partial, Unpaid).</li>
+            <li><strong>Submit</strong> the sale and click <strong>Generate PDF Invoice</strong>.</li>
+        </ol>
+
+        <h3>4. Transferring Stock Between Warehouses 🚚</h3>
+        <p>If you operate multiple storage locations, you will frequently need to move inventory between them.</p>
+        <p><em>Navigate to:</em> <a href="{{ url_for('inventory_transfers') }}">Transfers</a></p>
+        <ol>
+            <li>Click <strong>New Transfer</strong>.</li>
+            <li>Select the <strong>Source Warehouse</strong> and <strong>Destination Warehouse</strong>.</li>
+            <li>Add the specific products and quantities, then <strong>Confirm</strong>.</li>
+        </ol>
+
+        <h2 id="modules">Module Guide</h2>
+        <ul>
+            <li><strong><a href="{{ url_for('dashboard') }}">Dashboard & Reports</a>:</strong> Financial command center. View live snapshots of Sales, Gross Profit, Net Profit, and generate custom financial reports.</li>
+            <li><strong><a href="{{ url_for('inventory') }}">Products (Inventory & Purchases)</a>:</strong> Master list of all products, historical shipments, and internal stock movements.</li>
+            <li><strong><a href="{{ url_for('suppliers_page') }}">Suppliers & Brands</a>:</strong> CRM for your vendors and physical storage network manager (Warehouses).</li>
+            <li><strong><a href="{{ url_for('sales') }}">Sales & Customers</a>:</strong> Master ledger of all transactions, invoices, and your client directory.</li>
+            <li><strong><a href="/expenses">Administration (Expenses & Users)</a>:</strong> Log business expenses (crucial for accurate Net Profit) and manage staff access.</li>
+            <li><strong><a href="{{ url_for('brochure_settings') }}">Brochure Settings</a>:</strong> Control the content of your public-facing product catalogue website.</li>
+            <li><strong><a href="{{ url_for('pos') }}">POS Catalogue</a>:</strong> Streamlined Point-of-Sale interface for rapid transactions.</li>
+        </ul>
+    </div>
+</div>
+{% endblock %}

@@ -1,0 +1,98 @@
+{% extends "base.html" %}
+{% block title %}Help Center — AK Distributors{% endblock %}
+{% block page_heading %}ہیلپ سینٹر (Help Center){% endblock %}
+{% block content %}
+<style>
+    .help-content h1, .help-content h2, .help-content h3 { color: #1e293b; margin-top: 1.5em; margin-bottom: 0.5em; }
+    .help-content h1 { font-size: 1.75rem; border-bottom: 1px solid #e2e8f0; padding-bottom: 0.3em; }
+    .help-content h2 { font-size: 1.4rem; border-bottom: 1px solid #e2e8f0; padding-bottom: 0.3em; }
+    .help-content h3 { font-size: 1.15rem; }
+    .help-content p { margin-bottom: 1em; }
+    .help-content ul, .help-content ol { margin-bottom: 1em; padding-right: 1.5em; }
+    .help-content li { margin-bottom: 0.5em; }
+    .help-content a { color: #2563eb; text-decoration: none; font-weight: 500; }
+    .help-content a:hover { text-decoration: underline; }
+    .help-content strong { color: #0f172a; font-weight: 700; }
+</style>
+
+<div class="panel" style="padding: 2.5rem; max-width: 900px; margin: 0 auto; background: white; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.1);" dir="rtl">
+    <div style="display: flex; justify-content: flex-end; margin-bottom: 2rem;" dir="ltr">
+        <a href="{{ url_for('help_center', lang='en') }}" class="btn" style="font-size: 0.9rem; padding: 6px 14px; border: 1px solid #cbd5e1; border-radius: 6px; color: #475569; text-decoration: none; background: #f8fafc; font-weight: 600;">Read in English</a>
+    </div>
+    
+    <div class="help-content" style="line-height: 1.8; color: #334155; font-size: 1.15rem; font-family: 'Jameel Noori Nastaleeq', 'Noto Nastaliq Urdu', Tahoma, Arial, sans-serif;">
+        <h1>📘 اے کے ڈسٹری بیوٹرز — ہیلپ سینٹر</h1>
+        <p><strong>اے کے ڈسٹری بیوٹرز سافٹ ویئر</strong> میں خوش آمدید! یہ گائیڈ خاص طور پر اس لیے بنائی گئی ہے تاکہ آپ اور آپ کی ٹیم کو سافٹ ویئر چلانے اور روزمرہ کے کام کرنے میں کوئی مشکل نہ ہو۔</p>
+
+        <h2>📑 فہرست</h2>
+        <ol>
+            <li><a href="#workflows">کام کرنے کا طریقہ (Workflows)</a></li>
+            <li><a href="#modules">سافٹ ویئر کے حصے (Modules)</a></li>
+        </ol>
+
+        <h2 id="workflows">عام کام کرنے کا طریقہ</h2>
+
+        <h3>1. نیا پروڈکٹ یا برانڈ کیسے ایڈ کریں 📦</h3>
+        <p>کسی بھی نئے پروڈکٹ کو سافٹ ویئر میں ڈالنے یا خریدنے سے پہلے، سافٹ ویئر میں اس کے <strong>سپلائر اور برانڈ</strong> کا ہونا ضروری ہے۔</p>
+        <p><strong>سٹیپ 1: سپلائر یا برانڈ ایڈ کریں</strong><br>
+        <em>یہاں جائیں:</em> <a href="{{ url_for('suppliers_page') }}">Suppliers & Brands</a></p>
+        <ol>
+            <li><strong>Add Supplier/Brand</strong> والے بٹن پر کلک کریں۔</li>
+            <li>ضروری معلومات لکھیں جیسے: سپلائر کا نام، نمبر اور برانڈ کا نام۔</li>
+            <li><strong>Save</strong> کر دیں۔ اس سے برانڈ آپ کے سپلائر کے ساتھ پکا جڑ جائے گا۔</li>
+        </ol>
+
+        <p><strong>سٹیپ 2: پروڈکٹ کو کیٹلاگ میں ڈالیں</strong><br>
+        <em>یہاں جائیں:</em> <a href="{{ url_for('inventory') }}">Inventory</a></p>
+        <ol>
+            <li><strong>Add New Product</strong> کے بٹن پر کلک کریں۔</li>
+            <li>پروڈکٹ کی تفصیل لکھیں (جیسے نام، قیمت اور وہ برانڈ جو آپ نے سٹیپ 1 میں بنایا تھا)۔</li>
+            <li>پروڈکٹ کو <strong>Save</strong> کر دیں۔ <em>(نوٹ: ابھی اس کا اسٹاک 0 ہوگا، جب تک آپ نئی پرچیز نہیں ڈالتے۔)</em></li>
+        </ol>
+
+        <h3>2. نیا سامان وصول کرنا (Purchases) 📥</h3>
+        <p>جب آپ کے گودام (Warehouse) میں نیا سامان آئے، تو آپ کو اسے <strong>Purchase</strong> کے طور پر ڈالنا ہوگا۔</p>
+        <p><strong>سٹیپ 1: آنے والے سامان کی انٹری کریں</strong><br>
+        <em>یہاں جائیں:</em> <a href="/purchases">Purchases</a></p>
+        <ol>
+            <li><strong>New Purchase</strong> پر کلک کریں۔</li>
+            <li>اپنا <strong>Supplier</strong> اور وہ <strong>Warehouse</strong> سلیکٹ کریں جہاں سامان اتر رہا ہے۔</li>
+            <li>جو سامان آیا ہے اسے سرچ کریں، اور اس کی صحیح مقدار (quantity) اور قیمت لکھیں۔</li>
+            <li>اگر کوئی کرایہ یا ٹیکس وغیرہ ہے تو وہ بھی ڈال دیں۔</li>
+            <li>پرچیز کو <strong>Submit</strong> کریں تاکہ آپ کا اسٹاک فوراً اپ ڈیٹ ہو جائے۔</li>
+        </ol>
+
+        <h3>3. سیل (Sale) کرنا اور بل بنانا 🧾</h3>
+        <p>سیل ڈالنے سے آپ کا اسٹاک کم ہوتا ہے، منافع کیلکولیٹ ہوتا ہے اور کسٹمر کے لیے ایک پروفیشنل بل بن جاتا ہے۔</p>
+        <p><strong>سٹیپ 1: سیل ڈالیں</strong><br>
+        <em>یہاں جائیں:</em> <a href="{{ url_for('sales') }}">Sales</a></p>
+        <ol>
+            <li><strong>Record Sale</strong> پر کلک کریں۔</li>
+            <li>اپنا <strong>Customer</strong> اور وہ <strong>Warehouse</strong> سلیکٹ کریں جہاں سے سامان جا رہا ہے۔</li>
+            <li>پروڈکٹس ایڈ کریں، مقدار سیٹ کریں، اور فائنل قیمت لکھیں (آپ یہاں ڈسکاؤنٹ بھی دے سکتے ہیں)۔</li>
+            <li>ٹیکس یا ڈیلیوری فیس ڈالیں اور بتائیں کہ پیمنٹ ہو گئی ہے یا نہیں (Paid, Partial, Unpaid)۔</li>
+            <li>سیل کو <strong>Submit</strong> کریں اور پھر <strong>Generate PDF Invoice</strong> پر کلک کر کے بل پرنٹ کر لیں۔</li>
+        </ol>
+
+        <h3>4. گوداموں کے درمیان اسٹاک ٹرانسفر کرنا 🚚</h3>
+        <p>اگر آپ کے پاس ایک سے زیادہ گودام یا دکانیں ہیں، تو آپ کو ان کے درمیان سامان بھیجنے کی ضرورت پڑ سکتی ہے۔</p>
+        <p><em>یہاں جائیں:</em> <a href="{{ url_for('inventory_transfers') }}">Transfers</a></p>
+        <ol>
+            <li><strong>New Transfer</strong> پر کلک کریں۔</li>
+            <li><strong>Source Warehouse</strong> (جہاں سے سامان جا رہا ہے) اور <strong>Destination Warehouse</strong> (جہاں سامان جا رہا ہے) سلیکٹ کریں۔</li>
+            <li>پروڈکٹس اور ان کی مقدار بتائیں، اور پھر <strong>Confirm</strong> کر دیں۔</li>
+        </ol>
+
+        <h2 id="modules">سافٹ ویئر کے حصے (Modules Guide)</h2>
+        <ul>
+            <li><strong><a href="{{ url_for('dashboard') }}">Dashboard & Reports</a>:</strong> یہ آپ کا مین پیج ہے۔ یہاں آپ روزانہ کی سیلز، منافع (Profit) دیکھ سکتے ہیں اور رپورٹس نکال سکتے ہیں۔</li>
+            <li><strong><a href="{{ url_for('inventory') }}">Products (Inventory & Purchases)</a>:</strong> آپ کے تمام پروڈکٹس کی لسٹ، پرانی خریداریاں، اور اسٹاک کی ہسٹری یہاں ملے گی۔</li>
+            <li><strong><a href="{{ url_for('suppliers_page') }}">Suppliers & Brands</a>:</strong> آپ کے تمام سپلائرز اور گوداموں (Warehouses) کا ریکارڈ۔</li>
+            <li><strong><a href="{{ url_for('sales') }}">Sales & Customers</a>:</strong> آپ کی تمام سیلز، پرانے بل اور کسٹمرز کا کھاتہ۔</li>
+            <li><strong><a href="/expenses">Administration (Expenses & Users)</a>:</strong> اپنے کاروباری خرچے (Expenses) یہاں ڈالیں تاکہ صحیح منافع نکل سکے۔ اس کے علاوہ اسٹاف کی آئی ڈیز بھی یہیں بنتی ہیں۔</li>
+            <li><strong><a href="{{ url_for('brochure_settings') }}">Brochure Settings</a>:</strong> پبلک کیٹلاگ ویب سائٹ کو یہاں سے کنٹرول کریں۔</li>
+            <li><strong><a href="{{ url_for('pos') }}">POS Catalogue</a>:</strong> کاؤنٹر پر جلدی بل بنانے کے لیے یہ انٹرفیس استعمال کریں۔</li>
+        </ul>
+    </div>
+</div>
+{% endblock %}

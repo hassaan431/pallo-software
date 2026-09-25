@@ -56,38 +56,15 @@ def brands():
     unique_brands = sorted(list(brands_set))
     return render_template('public_brands.html', brands=unique_brands)
 
+from flask import send_from_directory
+
 @public_bp.route('/brochure/download')
 def download_brochure():
-    products = get_public_products()
+    downloads_dir = os.path.join(current_app.root_path, 'static', 'downloads')
+    filename = 'brochure.pdf'
+    file_path = os.path.join(downloads_dir, filename)
     
-    # Group by brand
-    brands = {}
-    brand_logos = {}
-    from database import get_brand_logo_filename
-    for p in products:
-        b = p.get('brand') or 'Other'
-        if b not in brands:
-            brands[b] = []
-            logo_name = get_brand_logo_filename(b)
-            brand_logos[b] = logo_name if logo_name else False
-        brands[b].append(p)
+    if not os.path.exists(file_path):
+        return "Brochure is not currently available. Please check back later.", 404
         
-    # Render HTML template
-    html = render_template('brochure.html', brands=brands, brand_logos=brand_logos)
-    
-    # Create PDF
-    pdf_file = BytesIO()
-    pisa_status = pisa.CreatePDF(
-        html, 
-        dest=pdf_file, 
-        link_callback=fetch_resources
-    )
-    
-    if pisa_status.err:
-        return "Error generating PDF", 500
-        
-    response = make_response(pdf_file.getvalue())
-    response.headers['Content-Type'] = 'application/pdf'
-    response.headers['Content-Disposition'] = 'attachment; filename="AK_Distributors_Brochure.pdf"'
-    
-    return response
+    return send_from_directory(downloads_dir, filename, as_attachment=True, download_name="AK_Distributors_Brochure.pdf")

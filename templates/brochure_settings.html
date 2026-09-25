@@ -1,0 +1,98 @@
+{% extends "base.html" %}
+{% block title %}Brochure Settings — AK Distributors{% endblock %}
+{% block page_heading %}Brochure Settings{% endblock %}
+
+{% block content %}
+<style>
+  .settings-section {
+    background-color: white;
+    padding: 20px;
+    border-radius: 8px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+    margin-bottom: 20px;
+  }
+  .brand-group {
+    margin-bottom: 30px;
+  }
+  .brand-header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 15px;
+    padding-bottom: 10px;
+    border-bottom: 2px solid var(--color-bg);
+  }
+  .brand-header h3 {
+    margin: 0;
+    color: var(--color-primary);
+  }
+  .product-list {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+    gap: 10px;
+  }
+  .checkbox-wrapper {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  input[type="checkbox"] {
+    width: 18px;
+    height: 18px;
+    cursor: pointer;
+  }
+  .btn-submit {
+    position: sticky;
+    bottom: 20px;
+    z-index: 100;
+    box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+  }
+</style>
+
+<div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 20px; gap: 20px;">
+  <p style="color: var(--color-text-light); max-width: 600px; margin: 0;">
+    Select which brands and products should be included when generating the static brochure. 
+    If a brand is unchecked, its products will still appear in this list, but the brand section itself may be omitted if no products are selected.
+  </p>
+  <a href="{{ url_for('regenerate_brochure') }}" class="btn btn-secondary" style="font-size: 14px; padding: 10px 20px; font-weight: 600; text-decoration: none; display: inline-flex; align-items: center; gap: 8px; flex-shrink: 0;">
+    <span>🔄</span> Regenerate Brochure
+  </a>
+</div>
+
+<form method="POST" action="{{ url_for('brochure_settings') }}">
+  <div class="settings-section">
+    <h2 style="margin-top: 0;">Brands</h2>
+    <div class="product-list">
+      {% for b in brands %}
+      <label class="checkbox-wrapper">
+        <input type="checkbox" name="brands" value="{{ b.id }}" {% if b.show_in_brochure %}checked{% endif %}>
+        <span style="font-weight: 600;">{{ b.name }}</span>
+      </label>
+      {% endfor %}
+    </div>
+  </div>
+
+  <div class="settings-section">
+    <h2 style="margin-top: 0;">Products by Brand</h2>
+    {% for brand_name, brand_products in products_by_brand.items() %}
+    <div class="brand-group">
+      <div class="brand-header">
+        <h3>{{ brand_name }}</h3>
+      </div>
+      <div class="product-list">
+        {% for p in brand_products %}
+        <label class="checkbox-wrapper">
+          <input type="checkbox" name="products" value="{{ p.id }}" {% if p.show_in_brochure %}checked{% endif %}>
+          <span>{{ p.name }}</span>
+        </label>
+        {% endfor %}
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+  
+  <div style="text-align: right; margin-bottom: 40px;">
+    <button type="submit" class="btn btn-primary btn-submit" style="font-size: 16px; padding: 12px 30px;">Save Brochure Settings</button>
+  </div>
+</form>
+{% endblock %}
