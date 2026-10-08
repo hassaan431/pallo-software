@@ -3072,7 +3072,8 @@ def sales_new():
                     stock_quantity = float(row["stock_quantity"] or 0)
                     product_name = row["name"] or "Unknown Product"
                     if stock_quantity + 1e-9 < qty_total:
-                        raise ValueError(f"Insufficient stock for {product_name} (requested {qty_total}, available {stock_quantity}).")
+                        if getattr(current_user, 'role', '') != 'admin':
+                            raise ValueError(f"Insufficient stock for {product_name} (requested {qty_total}, available {stock_quantity}).")
 
             try:
                 salesman_id = int(salesman_id_raw) if salesman_id_raw else current_user.id
@@ -3157,28 +3158,39 @@ def sales_new():
                     cur_stock = conn.execute("SELECT stock_quantity FROM warehouse_inventory WHERE product_id = ? AND warehouse_id = ?", (product_id, wid)).fetchone()
                     old_stock = float(cur_stock["stock_quantity"] or 0) if cur_stock else 0
                     
-                    upd = conn.execute(
-                        """
-                        UPDATE warehouse_inventory
-                        SET stock_quantity = stock_quantity - ?
-                        WHERE product_id = ? AND warehouse_id = ? AND stock_quantity >= ?
-                        """,
-                        (qty_total, product_id, wid, qty_total),
-                    )
-                    if upd.rowcount == 0:
-                        cur = conn.execute(
-                            "SELECT name FROM products WHERE id = ?",
-                            (product_id,),
+                    is_admin = getattr(current_user, 'role', '') == 'admin'
+                    if is_admin:
+                        conn.execute(
+                            """
+                            INSERT INTO warehouse_inventory (product_id, warehouse_id, stock_quantity)
+                            VALUES (?, ?, ?)
+                            ON CONFLICT(warehouse_id, product_id) DO UPDATE SET stock_quantity = stock_quantity - ?
+                            """,
+                            (product_id, wid, -qty_total, qty_total),
                         )
-                        row = cur.fetchone()
-                        product_name = row["name"] if row else "Unknown Product"
-                        raise ValueError(f"Insufficient stock for {product_name}.")
                     else:
-                        new_stock = old_stock - qty_total
-                        conn.execute("""
-                            INSERT INTO inventory_history (product_id, transaction_type, quantity_change, previous_stock, new_stock, reference, warehouse_id)
-                            VALUES (?, ?, ?, ?, ?, ?, ?)
-                        """, (product_id, 'OUT', -qty_total, old_stock, new_stock, f'Invoice #{invoice_number}', wid))
+                        upd = conn.execute(
+                            """
+                            UPDATE warehouse_inventory
+                            SET stock_quantity = stock_quantity - ?
+                            WHERE product_id = ? AND warehouse_id = ? AND stock_quantity >= ?
+                            """,
+                            (qty_total, product_id, wid, qty_total),
+                        )
+                        if upd.rowcount == 0:
+                            cur = conn.execute(
+                                "SELECT name FROM products WHERE id = ?",
+                                (product_id,),
+                            )
+                            row = cur.fetchone()
+                            product_name = row["name"] if row else "Unknown Product"
+                            raise ValueError(f"Insufficient stock for {product_name}.")
+                    
+                    new_stock = old_stock - qty_total
+                    conn.execute("""
+                        INSERT INTO inventory_history (product_id, transaction_type, quantity_change, previous_stock, new_stock, reference, warehouse_id)
+                        VALUES (?, ?, ?, ?, ?, ?, ?)
+                    """, (product_id, 'OUT', -qty_total, old_stock, new_stock, f'Invoice #{invoice_number}', wid))
 
             conn.commit()
         except Exception as e:
@@ -3665,16 +3677,27 @@ def sales_update(sale_id: int):
                         old_stock = float(row["stock_quantity"] or 0) if row else 0
 
                         if net_deduct > 0:
-                            upd = conn.execute(
-                                """
-                                UPDATE warehouse_inventory
-                                SET stock_quantity = stock_quantity - ?
-                                WHERE product_id = ? AND warehouse_id = ? AND stock_quantity >= ?
-                                """,
-                                (net_deduct, product_id, new_wid, net_deduct - 1e-9),
-                            )
-                            if upd.rowcount == 0:
-                                raise ValueError("Insufficient stock during update.")
+                            is_admin = getattr(current_user, 'role', '') == 'admin'
+                            if is_admin:
+                                conn.execute(
+                                    """
+                                    INSERT INTO warehouse_inventory (product_id, warehouse_id, stock_quantity)
+                                    VALUES (?, ?, ?)
+                                    ON CONFLICT(warehouse_id, product_id) DO UPDATE SET stock_quantity = stock_quantity - ?
+                                    """,
+                                    (product_id, new_wid, -net_deduct, net_deduct),
+                                )
+                            else:
+                                upd = conn.execute(
+                                    """
+                                    UPDATE warehouse_inventory
+                                    SET stock_quantity = stock_quantity - ?
+                                    WHERE product_id = ? AND warehouse_id = ? AND stock_quantity >= ?
+                                    """,
+                                    (net_deduct, product_id, new_wid, net_deduct - 1e-9),
+                                )
+                                if upd.rowcount == 0:
+                                    raise ValueError("Insufficient stock during update.")
                         else:
                             conn.execute(
                                 """
@@ -3723,16 +3746,27 @@ def sales_update(sale_id: int):
                         row = cur.fetchone()
                         old_stock = float(row["stock_quantity"] or 0) if row else 0
                         
-                        upd = conn.execute(
-                            """
-                            UPDATE warehouse_inventory
-                            SET stock_quantity = stock_quantity - ?
-                            WHERE product_id = ? AND warehouse_id = ? AND stock_quantity >= ?
-                            """,
-                            (qty, product_id, new_wid, qty - 1e-9),
-                        )
-                        if upd.rowcount == 0:
-                            raise ValueError("Insufficient stock in new warehouse.")
+                        is_admin = getattr(current_user, 'role', '') == 'admin'
+                        if is_admin:
+                            conn.execute(
+                                """
+                                INSERT INTO warehouse_inventory (product_id, warehouse_id, stock_quantity)
+                                VALUES (?, ?, ?)
+                                ON CONFLICT(warehouse_id, product_id) DO UPDATE SET stock_quantity = stock_quantity - ?
+                                """,
+                                (product_id, new_wid, -qty, qty),
+                            )
+                        else:
+                            upd = conn.execute(
+                                """
+                                UPDATE warehouse_inventory
+                                SET stock_quantity = stock_quantity - ?
+                                WHERE product_id = ? AND warehouse_id = ? AND stock_quantity >= ?
+                                """,
+                                (qty, product_id, new_wid, qty - 1e-9),
+                            )
+                            if upd.rowcount == 0:
+                                raise ValueError("Insufficient stock in new warehouse.")
                             
                         new_stock = old_stock - qty
                         conn.execute("""
@@ -4008,23 +4042,35 @@ def sales_mark_sale(sale_id: int):
                 raise ValueError("Invalid product found in quote.")
             stock_quantity = float(row["stock_quantity"] or 0)
             if stock_quantity + 1e-9 < qty_total:
-                raise ValueError(f"Insufficient stock for {row['name']}.")
+                if getattr(current_user, 'role', '') != 'admin':
+                    raise ValueError(f"Insufficient stock for {row['name']}.")
 
         # Update stock and write history
         for product_id, qty_total in qty_total_by_product.items():
             cur_stock = conn.execute("SELECT stock_quantity FROM warehouse_inventory WHERE product_id = ? AND warehouse_id = ?", (product_id, wid)).fetchone()
             old_stock = float(cur_stock["stock_quantity"] or 0) if cur_stock else 0
             
-            upd = conn.execute(
-                """
-                UPDATE warehouse_inventory
-                SET stock_quantity = stock_quantity - ?
-                WHERE product_id = ? AND warehouse_id = ? AND stock_quantity >= ?
-                """,
-                (qty_total, product_id, wid, qty_total)
-            )
-            if upd.rowcount == 0:
-                raise ValueError("Stock became insufficient during update.")
+            is_admin = getattr(current_user, 'role', '') == 'admin'
+            if is_admin:
+                conn.execute(
+                    """
+                    INSERT INTO warehouse_inventory (product_id, warehouse_id, stock_quantity)
+                    VALUES (?, ?, ?)
+                    ON CONFLICT(warehouse_id, product_id) DO UPDATE SET stock_quantity = stock_quantity - ?
+                    """,
+                    (product_id, wid, -qty_total, qty_total),
+                )
+            else:
+                upd = conn.execute(
+                    """
+                    UPDATE warehouse_inventory
+                    SET stock_quantity = stock_quantity - ?
+                    WHERE product_id = ? AND warehouse_id = ? AND stock_quantity >= ?
+                    """,
+                    (qty_total, product_id, wid, qty_total)
+                )
+                if upd.rowcount == 0:
+                    raise ValueError("Stock became insufficient during update.")
             
             new_stock = old_stock - qty_total
             conn.execute("""

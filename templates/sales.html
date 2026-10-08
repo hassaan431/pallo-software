@@ -685,6 +685,7 @@
   const recentSales = {{ recent_sales | tojson }};
   const editMode = {{ 'true' if edit_mode else 'false' }};
   const editSaleData = {{ edit_sale | tojson if edit_mode else 'null' }};
+  const currentUserRole = "{{ current_user.role if current_user.is_authenticated else '' }}";
 
   function money(n) {
     const v = Number(n || 0);
@@ -880,13 +881,15 @@
     const multiplier = parseFloat(row.dataset.packingMultiplier) || 1.0;
 
     if (!editMode && availableStock !== null && (qty * multiplier) > availableStock) {
-      alert(`Cannot exceed available stock (${availableStock}). Note: Packing multiplier is ${multiplier}.`);
-      if (multiplier > 0) {
-        qty = Math.floor(availableStock / multiplier);
-      } else {
-        qty = 0;
+      if (currentUserRole !== 'admin') {
+        alert(`Cannot exceed available stock (${availableStock}). Note: Packing multiplier is ${multiplier}.`);
+        if (multiplier > 0) {
+          qty = Math.floor(availableStock / multiplier);
+        } else {
+          qty = 0;
+        }
+        qtyEl.value = qty;
       }
-      qtyEl.value = qty;
     }
 
     const rate = Number(rateEl.value || 0);
@@ -1285,11 +1288,13 @@
         const availableStock = Number(row.dataset.stockQuantity || 0);
         
         if (requestedQty > availableStock) {
-          insufficientItems.push({
-            name: searchInput.value,
-            requested: requestedQty,
-            available: availableStock
-          });
+          if (currentUserRole !== 'admin') {
+            insufficientItems.push({
+              name: searchInput.value,
+              requested: requestedQty,
+              available: availableStock
+            });
+          }
         }
       }
     });
