@@ -4,4 +4,3 @@ werkzeug
 reportlab
 pillow
 flask-cors
-flask-cors

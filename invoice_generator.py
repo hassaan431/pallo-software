@@ -275,6 +275,8 @@ def generate_pdf_from_data(sale: dict, customer: dict, sale_items: list, is_quot
         item_lines = _wrap_text_lines(
             None, item_line, item_font, item_font_size, max_item_width
         )
+        if len(item_lines) > 25:
+            item_lines = item_lines[:24] + [item_lines[24] + " ..."]
         brand_lines = []
 
         line_count = len(item_lines) + len(brand_lines)
@@ -535,7 +537,7 @@ def generate_pdf_from_data(sale: dict, customer: dict, sale_items: list, is_quot
     table_bottom_floor_last = margin + totals_block_height + footer_height + 26
 
     totals_drawn = False
-    while idx < sale_rows_total or not totals_drawn:
+    while (idx < sale_rows_total or not totals_drawn) and page_num <= 50:
         # Determine if this page is last by checking remaining height vs available height
         remaining = sale_rows_total - idx
         remaining_height = sum(row_models[j]["row_height"] for j in range(idx, sale_rows_total)) if idx < sale_rows_total else 0
@@ -555,12 +557,13 @@ def generate_pdf_from_data(sale: dict, customer: dict, sale_items: list, is_quot
             table_bottom_floor = table_bottom_floor_last if remaining_height <= (y_cursor - table_bottom_floor_last) else table_bottom_floor_regular
             page_is_last = table_bottom_floor == table_bottom_floor_last
 
+        start_idx_for_page = idx
         # Draw item rows until floor reached
         while idx < sale_rows_total:
             row = row_models[idx]
             rh = row["row_height"]
 
-            if y_cursor - rh < table_bottom_floor:
+            if y_cursor - rh < table_bottom_floor and idx > start_idx_for_page:
                 break
 
             row_bottom = y_cursor - rh

@@ -11,50 +11,6 @@ from collections import defaultdict
 
 from database import get_connection, get_next_invoice_number, get_user_by_id, get_user_by_username, init_db, DB_PATH
 
-init_db()
-
-def fix_existing_sales_data():
-    db = get_connection()
-    try:
-        # Fix ALL cash sales regardless 
-        # of current amount_paid value
-        db.execute("""
-            UPDATE sales 
-            SET amount_paid = grand_total,
-                remaining_amount = 0,
-                status = 'paid'
-            WHERE payment_type = 'cash'
-        """)
-        # Fix ALL cheque sales
-        db.execute("""
-            UPDATE sales 
-            SET amount_paid = grand_total,
-                remaining_amount = 0,
-                status = 'paid'
-            WHERE payment_type = 'cheque'
-        """)
-        # Fix credit sales where BOTH 
-        # amount_paid AND remaining_amount are 0
-        # meaning they were never properly set
-        db.execute("""
-            UPDATE sales 
-            SET amount_paid = 0,
-                remaining_amount = grand_total,
-                status = 'unpaid'
-            WHERE payment_type = 'credit'
-            AND amount_paid = 0
-            AND remaining_amount = 0
-        """)
-        db.commit()
-        print("Sales data fix applied successfully")
-    except Exception as e:
-        print(f"Data fix error: {e}")
-        db.rollback()
-    finally:
-        db.close()
-
-fix_existing_sales_data()
-
 from flask import Flask, Response, flash, jsonify, redirect, render_template, request, url_for
 from flask_login import LoginManager, UserMixin, current_user, login_required, login_user, logout_user
 from werkzeug.security import check_password_hash, generate_password_hash
@@ -64,7 +20,8 @@ from functools import wraps
 from invoice_generator import generate_invoice_pdf
 
 app = Flask(__name__)
-app.secret_key = "change-this-secret-key-for-local-use"
+app.secret_key = os.environ.get("SECRET_KEY", "change-this-secret-key-for-local-use")
+init_db()
 
 from flask_cors import CORS
 CORS(app, resources={r"/api/*": {"origins": "*"}})
@@ -191,37 +148,40 @@ def handle_exception(e):
 def brochure_settings():
     from database import get_connection
     conn = get_connection()
-    if request.method == "POST":
-        # Reset all to 0
-        conn.execute("UPDATE brands SET show_in_brochure = 0")
-        conn.execute("UPDATE products SET show_in_brochure = 0")
-        
-        # Get selected brands and products
-        selected_brands = request.form.getlist("brands")
-        selected_products = request.form.getlist("products")
-        
-        for b_id in selected_brands:
-            conn.execute("UPDATE brands SET show_in_brochure = 1 WHERE id = ?", (b_id,))
-        for p_id in selected_products:
-            conn.execute("UPDATE products SET show_in_brochure = 1 WHERE id = ?", (p_id,))
+    try:
+        if request.method == "POST":
+            # Reset all to 0
+            conn.execute("UPDATE brands SET show_in_brochure = 0")
+            conn.execute("UPDATE products SET show_in_brochure = 0")
             
-        conn.commit()
-        flash("Brochure settings updated successfully.", "success")
-        return redirect(url_for("brochure_settings"))
+            # Get selected brands and products
+            selected_brands = request.form.getlist("brands")
+            selected_products = request.form.getlist("products")
+            
+            for b_id in selected_brands:
+                conn.execute("UPDATE brands SET show_in_brochure = 1 WHERE id = ?", (b_id,))
+            for p_id in selected_products:
+                conn.execute("UPDATE products SET show_in_brochure = 1 WHERE id = ?", (p_id,))
+                
+            conn.commit()
+            flash("Brochure settings updated successfully.", "success")
+            return redirect(url_for("brochure_settings"))
+            
+        brands = conn.execute("SELECT id, name, show_in_brochure FROM brands ORDER BY name").fetchall()
         
-    brands = conn.execute("SELECT id, name, show_in_brochure FROM brands ORDER BY name").fetchall()
-    
-    # We want to group products by brand to make the UI easier
-    products_by_brand = {}
-    
-    products = conn.execute("SELECT id, name, brand, show_in_brochure FROM products ORDER BY name").fetchall()
-    for p in products:
-        b = p['brand'] or 'Uncategorized'
-        if b not in products_by_brand:
-            products_by_brand[b] = []
-        products_by_brand[b].append(p)
+        # We want to group products by brand to make the UI easier
+        products_by_brand = {}
         
-    return render_template("brochure_settings.html", brands=brands, products_by_brand=products_by_brand)
+        products = conn.execute("SELECT id, name, brand, show_in_brochure FROM products ORDER BY name").fetchall()
+        for p in products:
+            b = p['brand'] or 'Uncategorized'
+            if b not in products_by_brand:
+                products_by_brand[b] = []
+            products_by_brand[b].append(p)
+            
+        return render_template("brochure_settings.html", brands=brands, products_by_brand=products_by_brand)
+    finally:
+        conn.close()
 
 @app.route("/admin/brochure/regenerate", methods=["GET", "POST"])
 @admin_required
@@ -1406,6 +1366,7 @@ def delete_transfer(transfer_id):
         conn.execute("BEGIN")
         transfer = conn.execute("SELECT * FROM inventory_transfers WHERE id = ?", (transfer_id,)).fetchone()
         if not transfer:
+            conn.execute("ROLLBACK")
             return jsonify({"ok": False, "error": "Transfer not found"}), 404
             
         items = conn.execute("SELECT product_id, quantity FROM inventory_transfer_items WHERE transfer_id = ?", (transfer_id,)).fetchall()
@@ -2927,28 +2888,25 @@ def sales_new():
         if payment_type not in ("cash", "cheque", "credit"):
             raise ValueError("Invalid payment type.")
         
-        # Check if invoice number already exists (for manual invoice numbers)
-        if invoice_number:
+        # Validate invoice number and customer in a single connection
+        if invoice_number or customer_id is not None:
             conn_check = get_connection()
             try:
-                row = conn_check.execute(
-                    "SELECT id FROM sales WHERE invoice_number = ?",
-                    (invoice_number,),
-                ).fetchone()
-                if row is not None:
-                    raise ValueError(f"Invoice number {invoice_number} already exists.")
-            finally:
-                conn_check.close()
+                if invoice_number:
+                    row = conn_check.execute(
+                        "SELECT id FROM sales WHERE invoice_number = ?",
+                        (invoice_number,),
+                    ).fetchone()
+                    if row is not None:
+                        raise ValueError(f"Invoice number {invoice_number} already exists.")
 
-        if customer_id is not None:
-            conn_check = get_connection()
-            try:
-                row = conn_check.execute(
-                    "SELECT id FROM customers WHERE id = ?",
-                    (customer_id,),
-                ).fetchone()
-                if row is None:
-                    raise ValueError("Customer not found.")
+                if customer_id is not None:
+                    row = conn_check.execute(
+                        "SELECT id FROM customers WHERE id = ?",
+                        (customer_id,),
+                    ).fetchone()
+                    if row is None:
+                        raise ValueError("Customer not found.")
             finally:
                 conn_check.close()
     except ValueError as e:
@@ -3390,28 +3348,25 @@ def sales_update(sale_id: int):
         if payment_type not in ("cash", "cheque", "credit"):
             raise ValueError("Invalid payment type.")
         
-        # Check if invoice number already exists (excluding current sale)
-        if invoice_number:
+        # Validate invoice number and customer in a single connection
+        if invoice_number or customer_id is not None:
             conn_check = get_connection()
             try:
-                row = conn_check.execute(
-                    "SELECT id FROM sales WHERE invoice_number = ? AND id != ?",
-                    (invoice_number, sale_id),
-                ).fetchone()
-                if row is not None:
-                    raise ValueError(f"Invoice number {invoice_number} already exists.")
-            finally:
-                conn_check.close()
+                if invoice_number:
+                    row = conn_check.execute(
+                        "SELECT id FROM sales WHERE invoice_number = ? AND id != ?",
+                        (invoice_number, sale_id),
+                    ).fetchone()
+                    if row is not None:
+                        raise ValueError(f"Invoice number {invoice_number} already exists.")
 
-        if customer_id is not None:
-            conn_check = get_connection()
-            try:
-                row = conn_check.execute(
-                    "SELECT id FROM customers WHERE id = ?",
-                    (customer_id,),
-                ).fetchone()
-                if row is None:
-                    raise ValueError("Customer not found.")
+                if customer_id is not None:
+                    row = conn_check.execute(
+                        "SELECT id FROM customers WHERE id = ?",
+                        (customer_id,),
+                    ).fetchone()
+                    if row is None:
+                        raise ValueError("Customer not found.")
             finally:
                 conn_check.close()
     except ValueError as e:
@@ -4002,15 +3957,18 @@ def sales_invoice_pdf(id: int):
 
 
 @app.route("/sales/<int:sale_id>/mark_sale", methods=["POST"])
+@login_required
 def sales_mark_sale(sale_id: int):
     conn = get_connection()
     try:
         conn.execute("BEGIN")
         sale = conn.execute("SELECT * FROM sales WHERE id = ?", (sale_id,)).fetchone()
         if not sale:
+            conn.rollback()
             return jsonify({"success": False, "message": "Sale not found"})
         
         if sale["status"] != "quote":
+            conn.rollback()
             return jsonify({"success": False, "message": "Only quotes can be marked as sales."})
 
         # Generate actual invoice number
@@ -4174,13 +4132,13 @@ def sales_delete(id: int):
 @app.route('/sales/<int:sale_id>/record_payment', methods=['POST'])
 @admin_required
 def record_payment(sale_id):
+    conn = get_connection()
     try:
-        data = request.get_json()
+        data = request.get_json(silent=True) or {}
         amount = float(data.get('amount', 0))
         payment_method = data.get('payment_method', 'Cash')
         notes = data.get('notes', '')
 
-        conn = get_connection()
         sale = conn.execute('SELECT * FROM sales WHERE id = ?', (sale_id,)).fetchone()
 
         if not sale:
@@ -4203,9 +4161,11 @@ def record_payment(sale_id):
 
         conn.commit()
         return jsonify({'success': True})
-
     except Exception as e:
+        conn.rollback()
         return jsonify({'success': False, 'error': str(e)})
+    finally:
+        conn.close()
 
 
 @app.route("/reports/stock-distribution/data", methods=["GET"])
@@ -6039,6 +5999,7 @@ def delete_purchase(purchase_id):
         
         purchase = conn.execute("SELECT supplier_id, warehouse_id FROM purchases WHERE id = ?", (purchase_id,)).fetchone()
         if not purchase:
+            conn.execute("ROLLBACK")
             return jsonify({"ok": False, "error": "Purchase not found"}), 404
         supplier_id = purchase["supplier_id"]
         wid = purchase["warehouse_id"] or 1
