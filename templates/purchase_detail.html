@@ -41,7 +41,7 @@
           {% for item in items %}
           <tr>
             <td style="font-weight: 500;">{{ loop.index }}. {{ item.product_name }}</td>
-            <td style="text-align: center;">{{ item.qty }}</td>
+            <td style="text-align: center;">{{ item.qty|format_qty }}</td>
             <td style="text-align: right;">${{ "%.2f"|format(item.cost_price) }}</td>
             <td style="text-align: right;">${{ "%.2f"|format(item.amount) }}</td>
           </tr>

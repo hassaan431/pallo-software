@@ -147,7 +147,7 @@
                   {% for item in p.purchase_items %}
                   <li style="background: var(--bg-color); padding: 0.5rem; border-radius: 4px; border: 1px solid var(--border-color);">
                     <span style="font-weight: 500;">{{ item.product_name }}</span> 
-                    <span style="color: var(--text-muted); float: right;">x {{ item.qty }}</span>
+                    <span style="color: var(--text-muted); float: right;">x {{ item.qty|format_qty }}</span>
                   </li>
                   {% endfor %}
                 </ul>

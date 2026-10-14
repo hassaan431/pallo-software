@@ -5833,10 +5833,10 @@ def create_purchase():
             ''', (supplier_id, purchase_id, amount_paid, purchase_date, payment_method))
 
         for item in items:
-            qty = float(item["qty"])
+            qty = round(float(item["qty"]), 4)
             cost = float(item["cost_price"])
             pid = int(item["product_id"])
-            amount = qty * cost
+            amount = round(qty * cost, 2)
             
             conn.execute('''
                 INSERT INTO purchase_items (purchase_id, product_id, qty, cost_price, amount)
@@ -5847,7 +5847,7 @@ def create_purchase():
             cur = conn.execute("SELECT stock_quantity FROM warehouse_inventory WHERE product_id = ? AND warehouse_id = ?", (pid, wid))
             row = cur.fetchone()
             old_stock = float(row["stock_quantity"] or 0) if row else 0
-            new_stock = old_stock + qty
+            new_stock = round(old_stock + qty, 4)
             
             conn.execute('''
                 INSERT INTO warehouse_inventory (product_id, warehouse_id, stock_quantity)
@@ -5900,25 +5900,25 @@ def update_purchase(purchase_id):
         old_items = {}
         for row in old_items_db:
             pid = str(row["product_id"])
-            old_items[pid] = old_items.get(pid, 0) + float(row["qty"] or 0)
+            old_items[pid] = round(old_items.get(pid, 0) + float(row["qty"] or 0), 4)
             
         new_items = {}
         for item in items:
             pid = str(item["product_id"])
-            new_items[pid] = new_items.get(pid, 0) + float(item.get("qty", 0))
+            new_items[pid] = round(new_items.get(pid, 0) + float(item.get("qty", 0)), 4)
             
         # 2. Check for negative inventory
         warnings = []
         for pid in set(old_items.keys()).union(new_items.keys()):
             old_qty = old_items.get(pid, 0)
             new_qty = new_items.get(pid, 0)
-            diff = new_qty - old_qty
+            diff = round(new_qty - old_qty, 4)
             
-            if diff < 0:
+            if diff < -1e-5:
                 cur_stock = conn.execute("SELECT stock_quantity FROM warehouse_inventory WHERE product_id = ? AND warehouse_id = ?", (pid, wid)).fetchone()
                 current_stock = float(cur_stock["stock_quantity"] or 0) if cur_stock else 0
-                projected_stock = current_stock + diff
-                if projected_stock < 0:
+                projected_stock = round(current_stock + diff, 4)
+                if projected_stock < -1e-5:
                     p_name = conn.execute("SELECT name FROM products WHERE id = ?", (pid,)).fetchone()["name"]
                     warnings.append(f"{p_name} will drop to {projected_stock} stock.")
                         
@@ -5934,12 +5934,12 @@ def update_purchase(purchase_id):
         for pid in set(old_items.keys()).union(new_items.keys()):
             old_qty = old_items.get(pid, 0)
             new_qty = new_items.get(pid, 0)
-            diff = new_qty - old_qty
+            diff = round(new_qty - old_qty, 4)
             
-            if diff != 0:
+            if abs(diff) > 1e-5:
                 cur_stock = conn.execute("SELECT stock_quantity FROM warehouse_inventory WHERE product_id = ? AND warehouse_id = ?", (pid, wid)).fetchone()
                 current_stock = float(cur_stock["stock_quantity"] or 0) if cur_stock else 0
-                new_stock = current_stock + diff
+                new_stock = round(current_stock + diff, 4)
                 
                 conn.execute('''
                     INSERT INTO warehouse_inventory (product_id, warehouse_id, stock_quantity)
@@ -5959,10 +5959,10 @@ def update_purchase(purchase_id):
         
         subtotal = 0
         for item in items:
-            qty = float(item["qty"])
+            qty = round(float(item["qty"]), 4)
             cost = float(item["cost_price"])
             pid = int(item["product_id"])
-            amount = qty * cost
+            amount = round(qty * cost, 2)
             subtotal += amount
             
             conn.execute('''
@@ -6020,12 +6020,12 @@ def delete_purchase(purchase_id):
         warnings = []
         for item in items:
             pid = item["product_id"]
-            qty = float(item["qty"])
+            qty = round(float(item["qty"]), 4)
             
             cur_stock = conn.execute("SELECT stock_quantity FROM warehouse_inventory WHERE product_id = ? AND warehouse_id = ?", (pid, wid)).fetchone()
             current_stock = float(cur_stock["stock_quantity"] or 0) if cur_stock else 0
-            projected_stock = current_stock - qty
-            if projected_stock < 0:
+            projected_stock = round(current_stock - qty, 4)
+            if projected_stock < -1e-5:
                 p_name = conn.execute("SELECT name FROM products WHERE id = ?", (pid,)).fetchone()["name"]
                 warnings.append(f"{p_name} will drop to {projected_stock} stock.")
                     
@@ -6040,11 +6040,11 @@ def delete_purchase(purchase_id):
         # 2. Revert inventory
         for item in items:
             pid = item["product_id"]
-            qty = float(item["qty"])
+            qty = round(float(item["qty"]), 4)
             
             cur_stock = conn.execute("SELECT stock_quantity FROM warehouse_inventory WHERE product_id = ? AND warehouse_id = ?", (pid, wid)).fetchone()
             current_stock = float(cur_stock["stock_quantity"] or 0) if cur_stock else 0
-            new_stock = current_stock - qty
+            new_stock = round(current_stock - qty, 4)
             
             conn.execute('''
                 INSERT INTO warehouse_inventory (product_id, warehouse_id, stock_quantity)
