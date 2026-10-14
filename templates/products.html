@@ -269,11 +269,11 @@
           </tr>
           {% else %}
           {% for p in products %}
-          {% set qty_int = (p.stock_quantity|default(0)|int) %}
+          {% set qty_float = (p.stock_quantity|default(0)|float) %}
           {% set row_class = '' %}
-          {% if qty_int == 0 %}
+          {% if qty_float <= 0 %}
             {% set row_class = 'row-out-of-stock' %}
-          {% elif qty_int > 0 and qty_int < 5 %}
+          {% elif qty_float > 0 and qty_float < 5 %}
             {% set row_class = 'row-low-stock' %}
           {% endif %}
 
@@ -306,7 +306,7 @@
                 <span style="color: #6b7280;">-</span>
               {% endif %}
             </td>
-            <td>{{ qty_int }}</td>
+            <td>{{ p.stock_quantity|format_qty }}</td>
             <td>
 
               <button type="button" class="btn btn-edit" data-action="edit-product"
@@ -318,7 +318,7 @@
                 data-unit-quantity="{{ p.unit_quantity|default(0)|float }}"
                 data-cost-price="{{ p.cost_price|default(0)|float }}"
                 data-selling-price="{{ p.selling_price|default(0)|float }}"
-                data-stock-quantity="{{ qty_int }}"
+                data-stock-quantity="{{ p.stock_quantity|format_qty }}"
                 data-created-at="{{ (p.created_at or '')[:10] }}"
                 style="padding: 3px 8px; font-size: 11px; border-radius: 4px; margin: 0 1px;"
               >

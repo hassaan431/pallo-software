@@ -56,10 +56,11 @@
         <table class="data-table" id="transfer-items-table" style="margin: 0; width: 100%;">
           <thead style="background-color: #f8fafc;">
             <tr>
-              <th style="width: 50%; padding: 1rem;">Product</th>
-              <th style="width: 20%; padding: 1rem;">Available Stock</th>
-              <th style="width: 20%; padding: 1rem;">Transfer Qty</th>
-              <th style="width: 10%; padding: 1rem; text-align: center;">Action</th>
+              <th style="width: 45%; padding: 1rem;">Product</th>
+              <th style="width: 15%; padding: 1rem;">Price</th>
+              <th style="width: 18%; padding: 1rem;">Available Stock</th>
+              <th style="width: 15%; padding: 1rem;">Transfer Qty</th>
+              <th style="width: 7%; padding: 1rem; text-align: center;">Action</th>
             </tr>
           </thead>
           <tbody id="items-tbody">
@@ -87,6 +88,10 @@
   const editTransferId = {{ edit_transfer.id if edit_transfer else 'null' }};
   const editItems = {{ edit_items|tojson if edit_items else '[]' }};
   let productStockMap = {}; // Maps product_id -> stock_quantity in source warehouse
+  const productPriceMap = {};
+  products.forEach(p => {
+    productPriceMap[p.id] = parseFloat(p.selling_price || p.cost_price || 0);
+  });
 
   // Fetch inventory for the source warehouse when it changes
   async function fetchSourceInventory() {
@@ -99,7 +104,7 @@
       
       productStockMap = {};
       data.forEach(p => {
-        productStockMap[p.id] = p.stock_quantity;
+        productStockMap[p.id] = parseFloat(p.stock_quantity || 0);
       });
 
       // If in edit mode, add the old quantities back to the source warehouse stock
@@ -107,7 +112,7 @@
       if (editMode && editItems) {
         editItems.forEach(item => {
           if (productStockMap[item.product_id] !== undefined) {
-            productStockMap[item.product_id] += item.quantity;
+            productStockMap[item.product_id] += parseFloat(item.quantity || 0);
           }
         });
       }
@@ -124,10 +129,17 @@
 
   function updateRowStock(tr, productId) {
     const stockSpan = tr.querySelector('.avail-stock');
+    const priceSpan = tr.querySelector('.prod-price');
     if (productId && productStockMap[productId] !== undefined) {
-      stockSpan.textContent = productStockMap[productId];
+      const val = productStockMap[productId];
+      stockSpan.textContent = Number.isInteger(val) ? val : parseFloat(val.toFixed(3));
     } else {
       stockSpan.textContent = '-';
+    }
+    if (productId && productPriceMap[productId] !== undefined) {
+      priceSpan.textContent = '$' + productPriceMap[productId].toFixed(2);
+    } else {
+      priceSpan.textContent = '-';
     }
   }
 
@@ -139,7 +151,8 @@
     let productOptions = '<option value="">-- Select Product --</option>';
     products.forEach(p => {
       const isSelected = initialProductId && initialProductId == p.id ? 'selected' : '';
-      productOptions += `<option value="${p.id}" ${isSelected}>${p.name} ${p.unit ? '(' + p.unit + ')' : ''}</option>`;
+      const priceVal = (parseFloat(p.selling_price || p.cost_price || 0)).toFixed(2);
+      productOptions += `<option value="${p.id}" ${isSelected}>${p.name} ${p.unit ? '(' + p.unit + ')' : ''} - $${priceVal}</option>`;
     });
 
     tr.innerHTML = `
@@ -148,11 +161,14 @@
           ${productOptions}
         </select>
       </td>
+      <td style="padding: 1rem; vertical-align: middle; color: #475569; font-weight: 500;">
+        <span class="prod-price">-</span>
+      </td>
       <td style="padding: 1rem; vertical-align: middle; font-weight: 500;">
         <span class="avail-stock">-</span>
       </td>
       <td style="padding: 1rem;">
-        <input type="number" class="form-control qty-input" min="0.01" step="0.01" value="${initialQty}" required>
+        <input type="number" class="form-control qty-input" min="0.001" step="any" value="${initialQty}" required placeholder="0.00">
       </td>
       <td style="padding: 1rem; text-align: center;">
         <button type="button" class="btn btn-danger" style="padding: 0.25rem 0.5rem; line-height: 1; border-radius: 4px;" onclick="removeRow(this)">&times;</button>
@@ -222,9 +238,10 @@
       }
       
       const availStock = productStockMap[pid] || 0;
-      if (qty > availStock) {
+      if (qty > (availStock + 0.0001)) {
         const prodName = tr.querySelector('.ts-control .item') ? tr.querySelector('.ts-control .item').textContent : 'Product';
-        alert(`Cannot transfer more than available stock for ${prodName}. Available: ${availStock}`);
+        const displayAvail = Number.isInteger(availStock) ? availStock : parseFloat(availStock.toFixed(3));
+        alert(`Cannot transfer more than available stock for ${prodName}. Available: ${displayAvail}`);
         valid = false;
         return;
       }

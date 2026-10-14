@@ -84,6 +84,16 @@ def format_rate_filter(val):
     except Exception:
         return "0.00"
 
+@app.template_filter("format_qty")
+def format_qty_filter(val):
+    try:
+        v = float(val or 0)
+        if abs(v - round(v)) < 1e-5:
+            return f"{int(round(v))}"
+        return f"{v:.3f}".rstrip('0').rstrip('.')
+    except Exception:
+        return "0"
+
 @app.template_filter("brand_logo_filename")
 def brand_logo_filename_filter(val):
     from database import get_brand_logo_filename
@@ -1113,7 +1123,7 @@ def new_inventory_transfer():
     conn = get_connection()
     try:
         warehouses = [dict(row) for row in conn.execute("SELECT id, name FROM warehouses ORDER BY name").fetchall()]
-        products = [dict(row) for row in conn.execute("SELECT id, name, unit FROM products ORDER BY name COLLATE NOCASE ASC").fetchall()]
+        products = [dict(row) for row in conn.execute("SELECT id, name, unit, cost_price, selling_price FROM products ORDER BY name COLLATE NOCASE ASC").fetchall()]
     finally:
         conn.close()
     
@@ -1154,25 +1164,25 @@ def inventory_transfer():
 
             # Check source stock
             source_stock_row = conn.execute("SELECT stock_quantity FROM warehouse_inventory WHERE product_id = ? AND warehouse_id = ?", (product_id, source_wid)).fetchone()
-            source_stock = source_stock_row["stock_quantity"] if source_stock_row else 0.0
+            source_stock = float(source_stock_row["stock_quantity"]) if source_stock_row else 0.0
             
-            if source_stock < quantity:
+            if (source_stock - quantity) < -1e-5:
                 conn.execute("ROLLBACK")
                 return jsonify({"ok": False, "error": f"Insufficient stock for product ID {product_id} in source warehouse. Available: {source_stock}"}), 400
 
             # Check destination stock
             dest_stock_row = conn.execute("SELECT stock_quantity FROM warehouse_inventory WHERE product_id = ? AND warehouse_id = ?", (product_id, dest_wid)).fetchone()
-            dest_stock = dest_stock_row["stock_quantity"] if dest_stock_row else 0.0
+            dest_stock = float(dest_stock_row["stock_quantity"]) if dest_stock_row else 0.0
 
             # Execute transfer
-            new_source_stock = source_stock - quantity
-            new_dest_stock = dest_stock + quantity
+            new_source_stock = round(source_stock - quantity, 4)
+            new_dest_stock = round(dest_stock + quantity, 4)
 
             conn.execute("UPDATE warehouse_inventory SET stock_quantity = ? WHERE product_id = ? AND warehouse_id = ?", (new_source_stock, product_id, source_wid))
             conn.execute("INSERT INTO warehouse_inventory (product_id, warehouse_id, stock_quantity) VALUES (?, ?, ?) ON CONFLICT(warehouse_id, product_id) DO UPDATE SET stock_quantity = ?", (product_id, dest_wid, new_dest_stock, new_dest_stock))
 
             # Insert into transfer items
-            conn.execute("INSERT INTO inventory_transfer_items (transfer_id, product_id, quantity) VALUES (?, ?, ?)", (transfer_id, product_id, quantity))
+            conn.execute("INSERT INTO inventory_transfer_items (transfer_id, product_id, quantity) VALUES (?, ?, ?)", (transfer_id, product_id, round(quantity, 4)))
 
             # Log history
             ref_note = f"Transfer to Warehouse {dest_wid}"
@@ -1213,7 +1223,7 @@ def edit_inventory_transfer(transfer_id):
         items = conn.execute("SELECT * FROM inventory_transfer_items WHERE transfer_id = ?", (transfer_id,)).fetchall()
         
         warehouses = [dict(row) for row in conn.execute("SELECT id, name FROM warehouses ORDER BY name").fetchall()]
-        products = [dict(row) for row in conn.execute("SELECT id, name, unit FROM products ORDER BY name COLLATE NOCASE ASC").fetchall()]
+        products = [dict(row) for row in conn.execute("SELECT id, name, unit, cost_price, selling_price FROM products ORDER BY name COLLATE NOCASE ASC").fetchall()]
         
         return render_template("inventory_transfer_new.html", 
                                warehouses=warehouses, 
@@ -1923,7 +1933,7 @@ def products_list():
                     "unit": r["unit"] or "Each",
                     "cost_price": float(r["cost_price"] or 0),
                     "selling_price": float(r["selling_price"] or 0),
-                    "stock_quantity": int(r["stock_quantity"] or 0),
+                    "stock_quantity": round(float(r["stock_quantity"] or 0), 4),
                     "image_url": r["image_url"],
                     "is_open": int(r["is_open"] or 0),
                 }

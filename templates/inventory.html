@@ -256,11 +256,11 @@
           </tr>
           {% else %}
           {% for p in products %}
-          {% set qty_int = (p.stock_quantity|default(0)|int) %}
+          {% set qty_float = (p.stock_quantity|default(0)|float) %}
           {% set row_class = '' %}
-          {% if qty_int == 0 %}
+          {% if qty_float <= 0 %}
             {% set row_class = 'row-out-of-stock' %}
-          {% elif qty_int > 0 and qty_int < 5 %}
+          {% elif qty_float > 0 and qty_float < 5 %}
             {% set row_class = 'row-low-stock' %}
           {% endif %}
 
@@ -288,7 +288,7 @@
             </td>
             <td class="searchable-brand">{{ p.brand or '' }}</td>
             <td>{{ p.category_name or '' }}</td>
-            <td>{{ qty_int }}</td>
+            <td>{{ p.stock_quantity|format_qty }}</td>
             
             <td><span class="sensitive-data">${{ p.cost_price|format_rate }}</span></td>
             <td>${{ p.selling_price|format_rate }}</td>
@@ -319,7 +319,7 @@
                 data-unit-quantity="{{ p.unit_quantity|default(0)|float }}"
                 data-cost-price="{{ p.cost_price|default(0)|float }}"
                 data-selling-price="{{ p.selling_price|default(0)|float }}"
-                data-stock-quantity="{{ qty_int }}"
+                data-stock-quantity="{{ p.stock_quantity|format_qty }}"
                 data-created-at="{{ (p.created_at or '')[:10] }}"
                 data-is-public="{{ 1 if p.is_public else 0 }}"
                 data-is-open="{{ 1 if p.is_open else 0 }}"
@@ -356,17 +356,17 @@
           {% endif %}
         </tbody>
         <tfoot>
-          {% set total_qty = namespace(value=0) %}
+          {% set total_qty = namespace(value=0.0) %}
           {% set total_val = namespace(value=0.0) %}
           {% for p in products %}
-              {% set qty = p.stock_quantity|default(0)|int %}
+              {% set qty = p.stock_quantity|default(0)|float %}
               {% set val = qty * (p.cost_price|default(0)|float) %}
               {% set total_qty.value = total_qty.value + qty %}
               {% set total_val.value = total_val.value + val %}
           {% endfor %}
           <tr style="background-color: #f1f5f9; font-weight: 700;">
             <td colspan="7" style="text-align: right; padding-right: 1rem;">TOTALS</td>
-            <td>{{ total_qty.value }}</td>
+            <td>{{ total_qty.value|format_qty }}</td>
             <td style="color: #1e293b;">${{ '%.2f' % total_val.value }}</td>
             <td></td>
           </tr>
@@ -519,7 +519,7 @@
           <input type="hidden" id="adjustStockProductId" name="product_id">
           <div class="modal-field">
             <label>Current Stock</label>
-            <input type="number" class="form-control" id="adjustStockCurrent" readonly style="background: #f3f4f6;">
+            <input type="number" step="any" class="form-control" id="adjustStockCurrent" readonly style="background: #f3f4f6;">
           </div>
           <div class="modal-field">
             <label for="adjustStockNew">New Stock Quantity</label>
