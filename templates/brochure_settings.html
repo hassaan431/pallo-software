@@ -49,14 +49,19 @@
   }
 </style>
 
-<div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 20px; gap: 20px;">
+<div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 20px; gap: 20px; flex-wrap: wrap;">
   <p style="color: var(--color-text-light); max-width: 600px; margin: 0;">
     Select which brands and products should be included when generating the static brochure. 
     If a brand is unchecked, its products will still appear in this list, but the brand section itself may be omitted if no products are selected.
   </p>
-  <a href="{{ url_for('regenerate_brochure') }}" class="btn btn-secondary" style="font-size: 14px; padding: 10px 20px; font-weight: 600; text-decoration: none; display: inline-flex; align-items: center; gap: 8px; flex-shrink: 0;">
-    <span>🔄</span> Regenerate Brochure
-  </a>
+  <div style="display: flex; gap: 10px; flex-shrink: 0; align-items: center; flex-wrap: wrap;">
+    <a href="{{ url_for('regenerate_brochure') }}" class="btn btn-secondary" style="font-size: 14px; padding: 10px 18px; font-weight: 600; text-decoration: none; display: inline-flex; align-items: center; gap: 8px;">
+      <span>🔄</span> Regenerate Brochure
+    </a>
+    <a href="{{ url_for('public_bp.download_brochure') }}" class="btn btn-primary" style="font-size: 14px; padding: 10px 18px; font-weight: 600; text-decoration: none; display: inline-flex; align-items: center; gap: 8px;" target="_blank">
+      <span>📥</span> Download Brochure
+    </a>
+  </div>
 </div>
 
 <form method="POST" action="{{ url_for('brochure_settings') }}">

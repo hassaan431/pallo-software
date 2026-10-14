@@ -340,7 +340,7 @@ def regenerate_brochure():
     else:
         flash("Brochure successfully regenerated.", "success")
         
-    return redirect(url_for('dashboard'))
+    return redirect(url_for('brochure_settings'))
 
 @app.route("/help")
 @login_required
