@@ -193,6 +193,11 @@ def brochure_settings():
     finally:
         conn.close()
 
+@app.route("/favicon.ico")
+def favicon():
+    from flask import send_from_directory
+    return send_from_directory(os.path.join(app.root_path, "static"), "favicon.ico", mimetype="image/vnd.microsoft.icon")
+
 @app.route("/admin/brochure/regenerate", methods=["GET", "POST"])
 @admin_required
 def regenerate_brochure():
@@ -200,50 +205,115 @@ def regenerate_brochure():
     from public_routes import fetch_resources
     from xhtml2pdf import pisa
     from PIL import Image
-    import os
+    from io import BytesIO
+    import os, urllib.parse, hashlib, requests
     
+    cache_dir = os.path.join(app.root_path, 'static', 'brochure_cache')
+    os.makedirs(cache_dir, exist_ok=True)
+    products_dir = os.path.join(app.root_path, 'static', 'uploads', 'products')
+
     def get_optimized_image(url):
-        if not url or not url.startswith('/static/'):
-            return url
-        rel_path = url[len('/static/'):]
-        abs_path = os.path.join(app.root_path, 'static', rel_path)
-        if not os.path.exists(abs_path):
-            return url
+        if not url:
+            return None
             
-        cache_dir = os.path.join(app.root_path, 'static', 'brochure_cache')
-        os.makedirs(cache_dir, exist_ok=True)
-        safe_name = rel_path.replace('/', '_').replace('\\', '_')
-        new_name = safe_name.rsplit('.', 1)[0] + '.jpg'
-        cached_path = os.path.join(cache_dir, new_name)
-        cached_url = '/static/brochure_cache/' + new_name
+        clean_url = urllib.parse.unquote(str(url).strip())
+        if '?' in clean_url:
+            clean_url = clean_url.split('?')[0]
+            
+        # External URL support
+        if clean_url.startswith(('http://', 'https://')):
+            try:
+                cache_key = hashlib.md5(clean_url.encode('utf-8')).hexdigest() + '.jpg'
+                cached_path = os.path.join(cache_dir, cache_key)
+                cached_url = '/static/brochure_cache/' + cache_key
+                if os.path.exists(cached_path) and os.path.getsize(cached_path) > 0:
+                    return cached_url
+                r = requests.get(clean_url, timeout=5)
+                if r.status_code == 200:
+                    img = Image.open(BytesIO(r.content))
+                    if hasattr(img, 'is_animated') and img.is_animated:
+                        img.seek(0)
+                    if img.mode in ('RGBA', 'LA') or ('transparency' in img.info):
+                        rgba = img.convert('RGBA')
+                        bg = Image.new('RGB', rgba.size, (255, 255, 255))
+                        bg.paste(rgba, mask=rgba.split()[-1])
+                        img = bg
+                    elif img.mode != 'RGB':
+                        img = img.convert('RGB')
+                    img.thumbnail((300, 300), Image.Resampling.LANCZOS)
+                    img.save(cached_path, 'JPEG', quality=65, optimize=True)
+                    return cached_url
+            except Exception as e:
+                print(f"[!] External image fetch failed for {clean_url}: {e}")
+                return None
+
+        # Local path resolution
+        if clean_url.startswith('/static/'):
+            rel = clean_url[8:]
+        elif clean_url.startswith('static/'):
+            rel = clean_url[7:]
+        elif clean_url.startswith('/'):
+            rel = clean_url[1:]
+        else:
+            rel = clean_url
+
+        candidates = [
+            os.path.join(app.root_path, 'static', rel),
+            os.path.join(app.root_path, rel),
+            os.path.join(products_dir, os.path.basename(rel))
+        ]
         
-        if os.path.exists(cached_path):
-            return cached_url
-            
+        abs_path = None
+        for c in candidates:
+            if os.path.exists(c) and os.path.isfile(c):
+                abs_path = c
+                break
+                
+        # Fallback: case-insensitive match or alternative extension in products_dir
+        if not abs_path and os.path.exists(products_dir):
+            base_name = os.path.basename(rel)
+            stem, _ = os.path.splitext(base_name)
+            for f in os.listdir(products_dir):
+                f_stem, _ = os.path.splitext(f)
+                if f.lower() == base_name.lower() or f_stem.lower() == stem.lower():
+                    abs_path = os.path.join(products_dir, f)
+                    break
+
+        if not abs_path or not os.path.exists(abs_path):
+            return None
+
         try:
+            mtime = os.path.getmtime(abs_path)
+            cache_key = hashlib.md5((abs_path + str(mtime)).encode('utf-8')).hexdigest() + '.jpg'
+            cached_path = os.path.join(cache_dir, cache_key)
+            cached_url = '/static/brochure_cache/' + cache_key
+            
+            if os.path.exists(cached_path) and os.path.getsize(cached_path) > 0:
+                return cached_url
+                
             with Image.open(abs_path) as img:
-                if img.mode in ('RGBA', 'P', 'LA'):
-                    bg = Image.new('RGB', img.size, (255, 255, 255))
-                    if img.mode in ('RGBA', 'LA'):
-                        bg.paste(img, mask=img.split()[-1])
-                    else:
-                        bg.paste(img)
+                if hasattr(img, 'is_animated') and img.is_animated:
+                    img.seek(0)
+                if img.mode in ('RGBA', 'LA') or ('transparency' in img.info):
+                    rgba = img.convert('RGBA')
+                    bg = Image.new('RGB', rgba.size, (255, 255, 255))
+                    bg.paste(rgba, mask=rgba.split()[-1])
                     img = bg
                 elif img.mode != 'RGB':
                     img = img.convert('RGB')
                 img.thumbnail((300, 300), Image.Resampling.LANCZOS)
-                img.save(cached_path, 'JPEG', quality=60, optimize=True)
+                img.save(cached_path, 'JPEG', quality=65, optimize=True)
                 return cached_url
-        except Exception:
-            return url
+        except Exception as e:
+            print(f"[!] Error optimizing image {abs_path}: {e}")
+            return None
 
     products = get_brochure_products()
     brands = {}
     brand_logos = {}
     
     for p in products:
-        if p.get('image_url'):
-            p['image_url'] = get_optimized_image(p['image_url'])
+        p['image_url'] = get_optimized_image(p.get('image_url'))
             
         b = p.get('brand') or 'Other'
         if b not in brands:
@@ -251,7 +321,7 @@ def regenerate_brochure():
             logo_name = get_brand_logo_filename(b)
             if logo_name:
                 optimized_logo = get_optimized_image('/static/logos/brands/' + logo_name)
-                brand_logos[b] = optimized_logo
+                brand_logos[b] = optimized_logo if optimized_logo else False
             else:
                 brand_logos[b] = False
         brands[b].append(p)

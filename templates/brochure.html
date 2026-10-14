@@ -2,6 +2,9 @@
 <html>
 <head>
 <meta charset="utf-8">
+<title>AK Distributors Product Brochure</title>
+<link rel="icon" type="image/x-icon" href="/static/favicon.ico">
+<link rel="shortcut icon" type="image/x-icon" href="/static/favicon.ico">
 <style>
     @page {
         size: A4;
@@ -90,28 +93,26 @@
 </div>
 <h1 style="margin-top: 0;">AK Distributors Catalog</h1>
 
-<div style="text-align: center; margin-top: 60pt;">
+<div style="text-align: center; margin-top: 50pt; margin-bottom: 25pt;">
     <h3 style="color: #83899D; margin-bottom: 20pt; font-size: 14pt;">Our Partner Brands</h3>
-    <table style="width: 100%; border: none; text-align: center;">
-        {% set valid_logos = [] %}
-        {% for b, logo_name in brand_logos.items() %}
-            {% if logo_name %}
-                {% set _ = valid_logos.append(logo_name) %}
-            {% endif %}
-        {% endfor %}
-        
-        {% for row in valid_logos|batch(4, '&nbsp;') %}
+    {% set valid_logos = [] %}
+    {% for b, logo_name in brand_logos.items() %}
+        {% if logo_name %}
+            {% set _ = valid_logos.append(logo_name) %}
+        {% endif %}
+    {% endfor %}
+    
+    {% for row in valid_logos|batch(3) %}
+    <table align="center" style="margin: 0 auto 15pt auto; border-collapse: collapse;">
         <tr>
             {% for logo in row %}
-                <td style="padding: 15pt; text-align: center; width: 25%;">
-                    {% if logo != '&nbsp;' %}
-                    <img src="{{ logo }}" style="max-width: 100pt; max-height: 80pt;">
-                    {% endif %}
+                <td style="padding: 10pt 20pt; text-align: center; vertical-align: middle;">
+                    <img src="{{ logo }}" style="max-width: 110pt; max-height: 75pt;">
                 </td>
             {% endfor %}
         </tr>
-        {% endfor %}
     </table>
+    {% endfor %}
 </div>
 
 <div class="cta-box">

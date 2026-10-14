@@ -6,12 +6,18 @@ import os
 
 public_bp = Blueprint('public_bp', __name__)
 
+import urllib.parse
+
 def fetch_resources(uri, rel):
     """Callback to resolve local paths for xhtml2pdf"""
-    if uri.startswith('/static/'):
-        path = os.path.join(current_app.root_path, uri.lstrip('/'))
-        return path
-    return uri
+    clean_uri = urllib.parse.unquote(str(uri).strip())
+    if '?' in clean_uri:
+        clean_uri = clean_uri.split('?')[0]
+    if clean_uri.startswith('/static/'):
+        return os.path.join(current_app.root_path, 'static', clean_uri[len('/static/'):])
+    elif clean_uri.startswith('static/'):
+        return os.path.join(current_app.root_path, 'static', clean_uri[len('static/'):])
+    return clean_uri
 
 from flask_login import current_user
 from flask import redirect, url_for
@@ -68,3 +74,15 @@ def download_brochure():
         return "Brochure is not currently available. Please check back later.", 404
         
     return send_from_directory(downloads_dir, filename, as_attachment=True, download_name="AK_Distributors_Brochure.pdf")
+
+@public_bp.route('/brochure')
+@public_bp.route('/brochure/view')
+def view_brochure():
+    downloads_dir = os.path.join(current_app.root_path, 'static', 'downloads')
+    filename = 'brochure.pdf'
+    file_path = os.path.join(downloads_dir, filename)
+    
+    if not os.path.exists(file_path):
+        return "Brochure is not currently available. Please check back later.", 404
+        
+    return send_from_directory(downloads_dir, filename, as_attachment=False, mimetype='application/pdf')
