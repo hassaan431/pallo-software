@@ -4,281 +4,509 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>{% block title %}{{ self.page_heading() }} — AK Distributors{% endblock %}</title>
+
+  <!-- Typography: Inter & Plus Jakarta Sans -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@500;600;700;800&display=swap" rel="stylesheet">
+
+  <!-- Favicons -->
   <link rel="icon" type="image/x-icon" href="{{ url_for('static', filename='favicon.ico') }}">
   <link rel="shortcut icon" type="image/x-icon" href="{{ url_for('static', filename='favicon.ico') }}">
-  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
-  <style>
-    .sidebar-logout a:hover {
-      color: var(--color-danger) !important;
-      border-left-color: var(--color-danger) !important;
-      background: rgba(239, 68, 68, 0.08) !important;
-    }
-    
-    body.privacy-mode .sensitive-data {
-      filter: blur(6px) !important;
-      opacity: 0.8 !important;
-      user-select: none !important;
-      pointer-events: none !important;
-      transition: filter 0.2s ease, opacity 0.2s ease;
-    }
-    
-    #privacyModeToggle {
-      transition: transform 0.2s ease;
-    }
-    #privacyModeToggle:hover {
-      transform: scale(1.1);
-    }
-    
-    .sidebar-section {
-      font-size: 0.7rem;
-      font-weight: 700;
-      color: var(--color-text-muted);
-      text-transform: uppercase;
-      letter-spacing: 0.05em;
-      margin: 1.25rem 1rem 0.25rem 1.25rem;
-    }
-    
-    .sidebar-nav a {
-      font-size: 0.85rem !important;
-      padding: 0.5rem 1.25rem !important;
-    }
-    .sidebar-nav a .nav-emoji {
-      font-size: 1rem !important;
-    }
 
-    /* Settings Dropdown CSS */
-    .settings-dropdown {
-      position: relative;
-      display: inline-block;
-    }
-    .settings-dropdown-content {
-      display: none;
-      position: absolute;
-      right: 0;
-      top: 100%;
-      margin-top: 0.25rem;
-      background-color: #ffffff;
-      min-width: 220px;
-      box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
-      border: 1px solid var(--color-border);
-      border-radius: 8px;
-      z-index: 100;
-      padding: 0.5rem 0;
-    }
-    .settings-dropdown-content.show {
-      display: block;
-    }
-    .settings-dropdown-content a {
-      color: var(--color-text);
-      padding: 0.65rem 1rem;
-      text-decoration: none;
-      display: flex;
-      align-items: center;
-      gap: 0.5rem;
-      font-size: 0.875rem;
-      font-weight: 500;
-      transition: background 0.15s ease;
-    }
-    .settings-dropdown-content a:hover {
-      background-color: #f8fafc;
-      color: var(--color-primary);
-    }
-  </style>
-  <!-- Driver.js CSS -->
+  <!-- Core App Styles -->
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+
+  <!-- Driver.js CSS (Tour guide) -->
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/driver.js@1.3.1/dist/driver.css"/>
+
+  <!-- Tailwind CSS CDN (Scoped with preflight disabled to avoid breaking legacy styles) -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      corePlugins: {
+        preflight: false,
+      },
+      theme: {
+        extend: {
+          colors: {
+            brand: {
+              50: '#ecfdf5',
+              100: '#d1fae5',
+              500: '#10b981',
+              600: '#059669',
+              700: '#047857',
+            }
+          }
+        }
+      }
+    }
+  </script>
+
+  <!-- Lucide Icons -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+
+  <!-- Alpine.js for lightweight client interactivity -->
+  <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
 </head>
 <body>
+  <!-- Mobile Drawer Overlay -->
   <div id="mobileOverlay" class="mobile-overlay"></div>
+
   <div class="app-layout">
-    <aside class="sidebar" style="display:flex; flex-direction:column; height:100vh;">
-      <div
-        class="sidebar-brand"
-        style="padding:1.5rem 1.25rem 0.5rem; border-bottom:none; display:flex; flex-direction:column; align-items:center;"
-      >
-        <div
-          style="
-            display:flex;
-            align-items:center;
-            justify-content:center;
-          "
-        >
+    <!-- Modern Collapsible Sidebar -->
+    <aside class="sidebar" id="appSidebar" aria-label="Sidebar navigation">
+      <!-- Brand Header -->
+      <div class="sidebar-brand-wrapper">
+        <a href="{{ url_for('dashboard') if current_user.role == 'admin' else url_for('pos') }}" class="sidebar-brand-inner">
           <img
             src="{{ url_for('static', filename='logos/AK_Distributors_Logo.png') }}"
             alt="AK Distributors Logo"
-            style="max-height:36px; width:auto; display:block;"
+            class="sidebar-logo-img"
           >
-        </div>
-        <div style="margin-top:12px; font-size:0.85rem; font-weight:700; color:var(--color-text); text-align:center;">
-          AK Distributors
-        </div>
+          <div class="sidebar-brand-text">
+            <span class="sidebar-brand-title">AK Distributors</span>
+            <span class="sidebar-brand-badge">PORTAL</span>
+          </div>
+        </a>
+        <button id="sidebarCollapseBtn" class="sidebar-collapse-btn" type="button" title="Collapse sidebar">
+          <i data-lucide="panel-left-close"></i>
+        </button>
       </div>
 
-      <div style="flex:1; min-height:0; overflow-y: auto; overflow-x: hidden;">
-        <nav class="sidebar-nav" aria-label="Main navigation" style="padding:0 0 1rem 0;">
-          {% if current_user.role == 'admin' %}
-          <div class="sidebar-section">Dashboards</div>
-          <a href="{{ url_for('dashboard') }}" class="{{ 'is-active' if request.endpoint == 'dashboard' else '' }}">
-            <span class="nav-emoji" aria-hidden="true">📊</span>
-            <span class="nav-label">Dashboard</span>
-          </a>
-          <a href="{{ url_for('reports') }}" class="{{ 'is-active' if request.endpoint == 'reports' else '' }}">
-            <span class="nav-emoji" aria-hidden="true">📈</span>
-            <span class="nav-label">Reports</span>
-          </a>
+      <!-- Navigation Links Container - Strictly Left Aligned -->
+      <nav class="sidebar-nav" aria-label="Main navigation">
+        {% if current_user.role == 'admin' %}
+        <div class="sidebar-section">Dashboards</div>
+        <a href="{{ url_for('dashboard') }}" class="{{ 'is-active' if request.endpoint == 'dashboard' else '' }}" title="Dashboard">
+          <div class="sidebar-nav-icon"><i data-lucide="layout-dashboard"></i></div>
+          <span class="nav-label">Dashboard</span>
+        </a>
+        <a href="{{ url_for('reports') }}" class="{{ 'is-active' if request.endpoint == 'reports' else '' }}" title="Reports">
+          <div class="sidebar-nav-icon"><i data-lucide="line-chart"></i></div>
+          <span class="nav-label">Reports</span>
+        </a>
 
-          <div class="sidebar-section">Products</div>
-          <a href="{{ url_for('inventory') }}" class="{{ 'is-active' if request.endpoint == 'inventory' else '' }}">
-            <span class="nav-emoji" aria-hidden="true">📦</span>
-            <span class="nav-label">Inventory</span>
-          </a>
-          <a href="/purchases" class="{{ 'is-active' if request.path.startswith('/purchases') else '' }}">
-            <span class="nav-emoji" aria-hidden="true">📥</span>
-            <span class="nav-label">Purchases (Shipments)</span>
-          </a>
-          <a href="{{ url_for('inventory_transfers') }}" class="{{ 'is-active' if request.endpoint == 'inventory_transfers' else '' }}" title="Transfers">
-            <span class="nav-emoji" aria-hidden="true">🚚</span>
-            <span class="nav-label">Transfers</span>
-          </a>
+        <div class="sidebar-section">Products</div>
+        <a href="{{ url_for('inventory') }}" class="{{ 'is-active' if request.endpoint == 'inventory' else '' }}" title="Inventory">
+          <div class="sidebar-nav-icon"><i data-lucide="boxes"></i></div>
+          <span class="nav-label">Inventory</span>
+        </a>
+        <a href="/purchases" class="{{ 'is-active' if request.path.startswith('/purchases') else '' }}" title="Purchases (Shipments)">
+          <div class="sidebar-nav-icon"><i data-lucide="truck"></i></div>
+          <span class="nav-label">Purchases (Shipments)</span>
+        </a>
+        <a href="{{ url_for('inventory_transfers') }}" class="{{ 'is-active' if request.endpoint == 'inventory_transfers' else '' }}" title="Transfers">
+          <div class="sidebar-nav-icon"><i data-lucide="arrow-left-right"></i></div>
+          <span class="nav-label">Transfers</span>
+        </a>
 
-          <div class="sidebar-section">Suppliers & Brands</div>
-          <a href="{{ url_for('suppliers_page') }}" class="{{ 'is-active' if request.endpoint == 'suppliers_page' else '' }}">
-            <span class="nav-emoji" aria-hidden="true">🏢</span>
-            <span class="nav-label">Suppliers & Brands</span>
-          </a>
-          <a href="{{ url_for('warehouses_list') }}" class="{% if request.endpoint == 'warehouses_list' %}is-active{% endif %}" title="Warehouses">
-            <span class="nav-emoji" aria-hidden="true">🏭</span>
-            <span class="nav-label">Warehouses</span>
-          </a>
+        <div class="sidebar-section">Suppliers & Brands</div>
+        <a href="{{ url_for('suppliers_page') }}" class="{{ 'is-active' if request.endpoint == 'suppliers_page' else '' }}" title="Suppliers & Brands">
+          <div class="sidebar-nav-icon"><i data-lucide="building-2"></i></div>
+          <span class="nav-label">Suppliers & Brands</span>
+        </a>
+        <a href="{{ url_for('warehouses_list') }}" class="{{ 'is-active' if request.endpoint == 'warehouses_list' else '' }}" title="Warehouses">
+          <div class="sidebar-nav-icon"><i data-lucide="warehouse"></i></div>
+          <span class="nav-label">Warehouses</span>
+        </a>
 
-          <div class="sidebar-section">Sales & Customers</div>
-          <a href="{{ url_for('sales') }}" class="{{ 'is-active' if request.endpoint == 'sales' else '' }}">
-            <span class="nav-emoji" aria-hidden="true">🧾</span>
-            <span class="nav-label">Sales</span>
-          </a>
-          <a href="{{ url_for('customers') }}" class="{{ 'is-active' if request.endpoint == 'customers' else '' }}">
-            <span class="nav-emoji" aria-hidden="true">👥</span>
-            <span class="nav-label">Customers</span>
-          </a>
+        <div class="sidebar-section">Sales & Customers</div>
+        <a href="{{ url_for('sales') }}" class="{{ 'is-active' if request.endpoint == 'sales' else '' }}" title="Sales">
+          <div class="sidebar-nav-icon"><i data-lucide="receipt"></i></div>
+          <span class="nav-label">Sales</span>
+        </a>
+        <a href="{{ url_for('customers') }}" class="{{ 'is-active' if request.endpoint == 'customers' else '' }}" title="Customers">
+          <div class="sidebar-nav-icon"><i data-lucide="users"></i></div>
+          <span class="nav-label">Customers</span>
+        </a>
 
-          <div class="sidebar-section">Administration</div>
-          <a href="/expenses" class="{{ 'is-active' if request.path.startswith('/expenses') else '' }}">
-            <span class="nav-emoji" aria-hidden="true">💸</span>
-            <span class="nav-label">Expenses</span>
-          </a>
-          <a href="{{ url_for('users_list') }}" class="{% if request.endpoint == 'users_list' %}is-active{% endif %}" title="Users">
-            <span class="nav-emoji" aria-hidden="true">👤</span>
-            <span class="nav-label">Users</span>
-          </a>
-          {% endif %}
+        <div class="sidebar-section">Administration</div>
+        <a href="/expenses" class="{{ 'is-active' if request.path.startswith('/expenses') else '' }}" title="Expenses">
+          <div class="sidebar-nav-icon"><i data-lucide="wallet"></i></div>
+          <span class="nav-label">Expenses</span>
+        </a>
+        <a href="{{ url_for('users_list') }}" class="{{ 'is-active' if request.endpoint == 'users_list' else '' }}" title="Users">
+          <div class="sidebar-nav-icon"><i data-lucide="shield-check"></i></div>
+          <span class="nav-label">Users</span>
+        </a>
+        {% endif %}
+      </nav>
 
-        </nav>
-      </div>
-
-      <div class="sidebar-logout" style="margin-top:auto; padding:20px; border-top:1px solid var(--color-border); display: flex; flex-direction: column; gap: 0.5rem;">
-        <a href="{{ url_for('backup_download') }}" style="display:flex; align-items:center; gap:0.5rem; padding:0.5rem 1rem; font-size:0.8rem; font-weight:600; color:var(--color-text-muted); border-left:3px solid transparent; transition:background 0.15s ease, color 0.15s ease, border-color 0.15s ease; border-radius: 6px; margin: 0 1rem; background: rgba(0,0,0,0.03);">
-          <span class="nav-emoji" aria-hidden="true" style="font-size:1rem; line-height:1; width:1.25rem; text-align:center;">💾</span>
+      <!-- Sidebar Footer -->
+      <div class="sidebar-footer">
+        <a href="{{ url_for('backup_download') }}" class="sidebar-footer-link" title="Download Backup">
+          <div class="sidebar-nav-icon"><i data-lucide="hard-drive-download"></i></div>
           <span class="nav-label">Download Backup</span>
         </a>
+        <button id="sidebarFooterToggleBtn" class="sidebar-footer-toggle-btn" type="button" title="Toggle Sidebar">
+          <div class="sidebar-nav-icon"><i data-lucide="panel-left"></i></div>
+          <span class="nav-label">Collapse Menu</span>
+        </button>
       </div>
     </aside>
+
+    <!-- Main Content Area -->
     <div class="main-wrap">
+      <!-- Modern Topbar -->
       <header class="topbar">
-        <div style="display: flex; align-items: center; gap: 0.5rem;">
-          <button id="mobileMenuBtn" class="mobile-menu-btn" title="Menu">
-            ☰
+        <!-- Topbar Left: Mobile trigger & Breadcrumbs -->
+        <div class="topbar-left">
+          <button id="mobileMenuBtn" class="mobile-menu-btn" type="button" aria-label="Toggle Navigation">
+            <i data-lucide="menu"></i>
           </button>
-          <h1 class="topbar-title">{% block page_heading %}Dashboard{% endblock %}</h1>
+
+          <!-- Breadcrumbs Trail -->
+          <nav class="topbar-breadcrumbs" aria-label="Breadcrumb">
+            <ol class="breadcrumbs-list">
+              <li class="breadcrumb-item">
+                <a href="{{ url_for('dashboard') if current_user.role == 'admin' else url_for('pos') }}" class="breadcrumb-link" title="Home">
+                  <i data-lucide="home" class="breadcrumb-icon"></i>
+                </a>
+              </li>
+              <li class="breadcrumb-separator" aria-hidden="true">
+                <i data-lucide="chevron-right"></i>
+              </li>
+              {% block breadcrumbs %}
+              <li class="breadcrumb-item active" aria-current="page">
+                <span class="breadcrumb-current">{% block page_heading %}Dashboard{% endblock %}</span>
+              </li>
+              {% endblock %}
+            </ol>
+          </nav>
         </div>
-        <div style="display: flex; align-items: center; gap: 1rem;">
-          <button id="privacyModeToggle" style="background: none; border: none; font-size: 1.5rem; cursor: pointer; padding: 0.25rem;" title="Toggle Privacy Mode">
-            👁️
+
+        <!-- Topbar Right: Record Sale Button, Quick Search, Privacy Mode, User Profile -->
+        <div class="topbar-right">
+          <!-- Record Sale Button (Prominent Action on left of Quick Actions box) -->
+          <a href="{{ url_for('sales') }}" class="btn-topbar-record-sale" title="Record New Sale">
+            <i data-lucide="plus"></i>
+            <span>Sale</span>
+          </a>
+
+          <!-- Quick Search (Cmd+K) Trigger -->
+          <button id="cmdKTrigger" class="quick-search-trigger" type="button" title="Quick Actions (⌘K)">
+            <i data-lucide="search" class="quick-search-icon"></i>
+            <span class="quick-search-label">Quick actions...</span>
+            <kbd class="quick-search-kbd">⌘K</kbd>
           </button>
-          <div class="settings-dropdown">
-            <button id="settingsDropdownToggle" style="background: none; border: none; font-size: 1.5rem; cursor: pointer; padding: 0.25rem;" title="Settings">
-              ⚙️
+
+          <!-- Privacy Mode Toggle -->
+          <button id="privacyModeToggle" class="topbar-action-btn" type="button" title="Toggle Privacy Mode (Hide sensitive amounts)">
+            <i id="privacyIcon" data-lucide="eye"></i>
+          </button>
+
+          <!-- User Menu Dropdown -->
+          <div class="user-menu-dropdown" id="userMenuDropdown">
+            <button id="userMenuBtn" class="user-menu-trigger" type="button" aria-expanded="false" aria-haspopup="true">
+              <div class="user-avatar">
+                {% if current_user.is_authenticated and current_user.username %}
+                  {{ current_user.username[:2]|upper }}
+                {% else %}
+                  AK
+                {% endif %}
+              </div>
+              <div class="user-info-text">
+                <span class="user-name">{% if current_user.is_authenticated %}{{ current_user.username }}{% else %}Guest{% endif %}</span>
+                <span class="user-role-badge">{% if current_user.is_authenticated %}{{ current_user.role|capitalize }}{% else %}Guest{% endif %}</span>
+              </div>
+              <i data-lucide="chevron-down" class="user-menu-chevron"></i>
             </button>
-            <div id="settingsDropdownContent" class="settings-dropdown-content">
-              <a href="{{ url_for('pos') }}" target="_blank">
-                <span>📱</span> POS Catalogue
+
+            <!-- Backwards-compatibility alias for settings dropdown trigger -->
+            <button id="settingsDropdownToggle" style="display:none;" aria-hidden="true"></button>
+
+            <div id="userMenuContent" class="user-menu-panel">
+              <div class="user-menu-header">
+                <div class="user-avatar-lg">
+                  {% if current_user.is_authenticated and current_user.username %}
+                    {{ current_user.username[:2]|upper }}
+                  {% else %}
+                    AK
+                  {% endif %}
+                </div>
+                <div class="user-menu-meta">
+                  <strong>{% if current_user.is_authenticated %}{{ current_user.username }}{% else %}Guest{% endif %}</strong>
+                  <span class="role-pill">{% if current_user.is_authenticated %}{{ current_user.role|capitalize }}{% else %}Guest{% endif %}</span>
+                </div>
+              </div>
+              <div class="user-menu-divider"></div>
+
+              <!-- Product Tour / Walk Around in Settings Menu -->
+              <a href="javascript:void(0)" id="menuWalkaroundBtn" class="user-menu-item">
+                <i data-lucide="compass"></i>
+                <span>Product Tour (Walk Around)</span>
               </a>
+
+              <a href="{{ url_for('pos') }}" target="_blank" class="user-menu-item">
+                <i data-lucide="shopping-bag"></i>
+                <span>POS Catalogue</span>
+                <span class="menu-ext-badge"><i data-lucide="external-link"></i></span>
+              </a>
+
               {% if current_user.role == 'admin' %}
-              <a href="{{ url_for('brochure_settings') }}">
-                <span>📖</span> Brochure Settings
+              <a href="{{ url_for('brochure_settings') }}" class="user-menu-item">
+                <i data-lucide="book-open"></i>
+                <span>Brochure Settings</span>
               </a>
               {% endif %}
-              <a href="{{ url_for('help_center') }}">
-                <span>📘</span> Help Center
+
+              <a href="{{ url_for('help_center') }}" class="user-menu-item">
+                <i data-lucide="help-circle"></i>
+                <span>Help Center</span>
               </a>
-              <div style="height: 1px; background-color: var(--color-border); margin: 0.25rem 0;"></div>
-              <a href="{{ url_for('logout') }}" style="color: var(--color-danger);">
-                <span>🚪</span> Logout
+
+              <div class="user-menu-divider"></div>
+
+              <a href="{{ url_for('logout') }}" class="user-menu-item item-logout">
+                <i data-lucide="log-out"></i>
+                <span>Log Out</span>
               </a>
             </div>
-          </div>
-          <div class="topbar-user">
-            <strong>{% if current_user.is_authenticated %}{{ current_user.username }}{% else %}Guest{% endif %}</strong>
+
+            <!-- Backwards-compatibility alias for settings dropdown content -->
+            <div id="settingsDropdownContent" style="display:none;" aria-hidden="true"></div>
           </div>
         </div>
       </header>
+
+      <!-- Main Page Content Body -->
       <main class="content-area">
         {% block content %}{% endblock %}
       </main>
     </div>
   </div>
-  
+
+  <!-- Global Toast Notification Rack -->
+  <div id="toastRack" class="toast-rack" aria-live="polite" aria-atomic="true"></div>
+
+  <!-- Ingest Server-Side Flash Messages into Toast System -->
+  {% with messages = get_flashed_messages(with_categories=true) %}
+    {% if messages %}
+      <div id="flashData" style="display:none;" data-flashes='{{ messages | tojson | safe }}'></div>
+    {% endif %}
+  {% endwith %}
+
+  <!-- Driver.js Tour Script -->
+  <script src="https://cdn.jsdelivr.net/npm/driver.js@1.3.1/dist/driver.js.iife.js"></script>
+
+  <!-- Core App Shell JavaScript -->
   <script>
+    // Global Toast Notification Helper
+    window.showToast = function(message, type = 'info', title = '') {
+      const rack = document.getElementById('toastRack');
+      if (!rack) return;
+
+      const toast = document.createElement('div');
+      let iconName = 'info';
+      let defaultTitle = 'Notification';
+
+      if (type === 'success') {
+        iconName = 'check-circle';
+        defaultTitle = 'Success';
+      } else if (type === 'danger' || type === 'error') {
+        iconName = 'alert-circle';
+        defaultTitle = 'Error';
+        type = 'danger';
+      } else if (type === 'warning') {
+        iconName = 'alert-triangle';
+        defaultTitle = 'Warning';
+      }
+
+      toast.className = `toast-item toast-${type}`;
+      toast.innerHTML = `
+        <div class="toast-icon">
+          <i data-lucide="${iconName}"></i>
+        </div>
+        <div class="toast-content">
+          <div class="toast-title">${title || defaultTitle}</div>
+          <div class="toast-message">${message}</div>
+        </div>
+        <button type="button" class="toast-close" aria-label="Close">
+          <i data-lucide="x"></i>
+        </button>
+      `;
+
+      rack.appendChild(toast);
+      if (window.lucide && typeof window.lucide.createIcons === 'function') {
+        window.lucide.createIcons({ root: toast });
+      }
+
+      // Smooth slide-in
+      requestAnimationFrame(() => {
+        toast.classList.add('is-visible');
+      });
+
+      const removeToast = () => {
+        toast.classList.remove('is-visible');
+        toast.classList.add('is-leaving');
+        setTimeout(() => {
+          toast.remove();
+        }, 280);
+      };
+
+      toast.querySelector('.toast-close').addEventListener('click', removeToast);
+      setTimeout(removeToast, 4500);
+    };
+
     document.addEventListener('DOMContentLoaded', () => {
+      // 1. Mobile Drawer Toggle
       const mobileBtn = document.getElementById('mobileMenuBtn');
-      const sidebar = document.querySelector('.sidebar');
+      const sidebar = document.getElementById('appSidebar');
       const overlay = document.getElementById('mobileOverlay');
 
       if (mobileBtn && sidebar && overlay) {
-        function toggleMenu() {
+        function toggleMobileMenu() {
           sidebar.classList.toggle('is-open');
           overlay.classList.toggle('is-active');
         }
-        mobileBtn.addEventListener('click', toggleMenu);
-        overlay.addEventListener('click', toggleMenu);
+        mobileBtn.addEventListener('click', toggleMobileMenu);
+        overlay.addEventListener('click', toggleMobileMenu);
       }
 
-      const toggleBtn = document.getElementById('privacyModeToggle');
-      if (toggleBtn) {
-        // Load preference
+      // 2. Desktop Collapsible Sidebar (With 2-way expand & persistent button)
+      const collapseBtn = document.getElementById('sidebarCollapseBtn');
+      const footerToggleBtn = document.getElementById('sidebarFooterToggleBtn');
+
+      function setSidebarCollapsed(collapsed) {
+        document.body.classList.toggle('sidebar-collapsed', collapsed);
+        localStorage.setItem('sidebar_collapsed', collapsed ? 'true' : 'false');
+        
+        if (collapseBtn) {
+          collapseBtn.title = collapsed ? "Expand sidebar" : "Collapse sidebar";
+          collapseBtn.innerHTML = collapsed 
+            ? '<i data-lucide="panel-left-open"></i>' 
+            : '<i data-lucide="panel-left-close"></i>';
+        }
+        if (footerToggleBtn) {
+          footerToggleBtn.title = collapsed ? "Expand sidebar" : "Collapse sidebar";
+          const label = footerToggleBtn.querySelector('.nav-label');
+          if (label) label.textContent = collapsed ? "Expand" : "Collapse Menu";
+        }
+        if (window.lucide && typeof window.lucide.createIcons === 'function') {
+          window.lucide.createIcons();
+        }
+      }
+
+      // Restore collapsed state (defaults to false)
+      const storedCollapsed = localStorage.getItem('sidebar_collapsed') === 'true';
+      if (storedCollapsed) {
+        setSidebarCollapsed(true);
+      }
+
+      if (collapseBtn) {
+        collapseBtn.addEventListener('click', () => {
+          const isNowCollapsed = !document.body.classList.contains('sidebar-collapsed');
+          setSidebarCollapsed(isNowCollapsed);
+        });
+      }
+
+      if (footerToggleBtn) {
+        footerToggleBtn.addEventListener('click', () => {
+          const isNowCollapsed = !document.body.classList.contains('sidebar-collapsed');
+          setSidebarCollapsed(isNowCollapsed);
+        });
+      }
+
+      // 3. Privacy Mode Toggle
+      const privacyBtn = document.getElementById('privacyModeToggle');
+      if (privacyBtn) {
+        function updatePrivacyIcon(isActive) {
+          privacyBtn.classList.toggle('active', isActive);
+          privacyBtn.innerHTML = isActive 
+            ? '<i data-lucide="eye-off"></i>' 
+            : '<i data-lucide="eye"></i>';
+          if (window.lucide) {
+            window.lucide.createIcons({ root: privacyBtn });
+          }
+        }
+
         const isPrivacyMode = localStorage.getItem('privacyMode') === 'true';
         if (isPrivacyMode) {
           document.body.classList.add('privacy-mode');
-          toggleBtn.textContent = '🙈';
+          updatePrivacyIcon(true);
         } else {
-          toggleBtn.textContent = '👁️';
+          updatePrivacyIcon(false);
         }
 
-        // Toggle action
-        toggleBtn.addEventListener('click', () => {
+        privacyBtn.addEventListener('click', () => {
           const isActive = document.body.classList.toggle('privacy-mode');
           localStorage.setItem('privacyMode', isActive);
-          toggleBtn.textContent = isActive ? '🙈' : '👁️';
+          updatePrivacyIcon(isActive);
         });
       }
 
-      const settingsToggle = document.getElementById('settingsDropdownToggle');
-      const settingsDropdown = document.getElementById('settingsDropdownContent');
-      if (settingsToggle && settingsDropdown) {
-        settingsToggle.addEventListener('click', (e) => {
+      // 4. User Menu Dropdown & Tour Trigger
+      const userMenuBtn = document.getElementById('userMenuBtn');
+      const userMenuContent = document.getElementById('userMenuContent');
+      if (userMenuBtn && userMenuContent) {
+        userMenuBtn.addEventListener('click', (e) => {
           e.stopPropagation();
-          settingsDropdown.classList.toggle('show');
+          const isOpen = userMenuContent.classList.toggle('show');
+          userMenuBtn.setAttribute('aria-expanded', isOpen);
         });
+
         document.addEventListener('click', (e) => {
-          if (!settingsToggle.contains(e.target) && !settingsDropdown.contains(e.target)) {
-            settingsDropdown.classList.remove('show');
+          if (!userMenuBtn.contains(e.target) && !userMenuContent.contains(e.target)) {
+            userMenuContent.classList.remove('show');
+            userMenuBtn.setAttribute('aria-expanded', 'false');
           }
         });
       }
+
+      // Walkaround tour from settings menu
+      const walkaroundBtn = document.getElementById('menuWalkaroundBtn');
+      if (walkaroundBtn) {
+        walkaroundBtn.addEventListener('click', (e) => {
+          e.preventDefault();
+          if (userMenuContent) userMenuContent.classList.remove('show');
+          if (window.startDashboardTour) {
+            window.startDashboardTour();
+          } else {
+            window.location.href = "{{ url_for('dashboard') }}?tour=1";
+          }
+        });
+      }
+
+      // 5. Cmd+K Quick Search Trigger & Shortcut
+      const cmdKBtn = document.getElementById('cmdKTrigger');
+      function triggerCmdK() {
+        window.dispatchEvent(new CustomEvent('open-cmdk'));
+      }
+      if (cmdKBtn) {
+        cmdKBtn.addEventListener('click', triggerCmdK);
+      }
+      document.addEventListener('keydown', (e) => {
+        if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
+          e.preventDefault();
+          triggerCmdK();
+        }
+      });
+
+      // 6. Ingest Server-Side Flash Messages into Toast System
+      const flashData = document.getElementById('flashData');
+      if (flashData) {
+        try {
+          const messages = JSON.parse(flashData.dataset.flashes || '[]');
+          messages.forEach(([category, text]) => {
+            let toastType = 'info';
+            if (category === 'success') toastType = 'success';
+            else if (category === 'danger' || category === 'error') toastType = 'danger';
+            else if (category === 'warning') toastType = 'warning';
+            window.showToast(text, toastType);
+          });
+        } catch (err) {
+          console.error('Error parsing flash data:', err);
+        }
+      }
+
+      // Initialize all Lucide Icons on DOM ready
+      if (window.lucide && typeof window.lucide.createIcons === 'function') {
+        window.lucide.createIcons();
+      }
     });
 
-    // Dynamic browser tab title manager for modals
+    // Dynamic browser tab title manager for modals (Preserved)
     (function() {
       let basePageTitle = document.title;
 
@@ -321,7 +549,6 @@
         ));
 
         const openModals = potentialModals.filter(el => {
-          // Avoid matching sub-elements or forms
           if (el.tagName === 'FORM' || el.tagName === 'INPUT' || el.tagName === 'BUTTON') return false;
           return isModalVisible(el);
         });
@@ -357,7 +584,5 @@
       });
     })();
   </script>
-  <!-- Driver.js JS -->
-  <script src="https://cdn.jsdelivr.net/npm/driver.js@1.3.1/dist/driver.js.iife.js"></script>
 </body>
 </html>

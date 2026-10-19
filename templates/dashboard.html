@@ -2,8 +2,8 @@
 {% block title %}Dashboard — AK Distributors{% endblock %}
 {% block page_heading %}Dashboard{% endblock %}
 {% block content %}
-<div style="display: flex; justify-content: {% if current_user.role == 'admin' %}space-between{% else %}flex-end{% endif %}; margin-bottom: 20px;">
-  {% if current_user.role == 'admin' %}
+{% if current_user.role == 'admin' %}
+<div style="display: flex; justify-content: flex-start; margin-bottom: 20px;">
   <form method="get" action="{{ url_for('dashboard') }}" style="display: flex; gap: 10px; align-items: center;">
     <label for="warehouse_id" style="font-weight: 600; font-size: 14px; margin-bottom: 0;">Warehouse:</label>
     <select name="warehouse_id" id="warehouse_id" class="form-control" style="width: auto; padding: 4px 10px;" onchange="this.form.submit()">
@@ -13,12 +13,8 @@
       {% endfor %}
     </select>
   </form>
-  {% endif %}
-  <div style="display: flex; gap: 10px; align-items: center;">
-    <button id="start-tour-btn" class="btn" style="font-size: 14px; padding: 8px 20px; font-weight: 600; background: #64748b; color: white; border: none; border-radius: 6px; cursor: pointer;">Walkaround Tour</button>
-    <a href="{{ url_for('sales') }}" class="btn btn-primary" style="font-size: 14px; padding: 8px 20px; font-weight: 600;">Record Sale</a>
-  </div>
 </div>
+{% endif %}
 <div class="card-grid">
   <article class="stat-card">
     <h3>Daily Sale Amount</h3>
@@ -275,10 +271,14 @@
           { element: '.card-grid', popover: { title: 'Key Metrics', description: 'At a glance, see your daily and monthly revenue and profit margins.', side: "bottom", align: 'start' } },
           { element: '#salesChart', popover: { title: 'Sales Trend', description: 'This chart shows your daily sales over the last 30 days to help you spot trends.', side: "top", align: 'start' } },
           { element: '.data-table', popover: { title: 'Recent Activity', description: 'Here are your most recent sales. You can directly view invoices from here.', side: "top", align: 'start' } },
-          { element: '#start-tour-btn', popover: { title: 'Need help?', description: 'You can restart this tour anytime by clicking this button.', side: "left", align: 'start' } }
+          { element: '#userMenuBtn', popover: { title: 'Need help?', description: 'You can restart this tour anytime from your user profile menu in the top right.', side: "bottom", align: 'end' } }
         ]
       });
       
+      window.startDashboardTour = function() {
+        if (driverObj) driverObj.drive();
+      };
+
       const startBtn = document.getElementById('start-tour-btn');
       if (startBtn) {
         startBtn.addEventListener('click', () => {
@@ -286,8 +286,12 @@
         });
       }
 
-      // Auto-start for first-time users (using localStorage)
-      if (!localStorage.getItem('dashboardTourSeen')) {
+      // Check URL query parameter for tour
+      const urlParams = new URLSearchParams(window.location.search);
+      if (urlParams.get('tour') === '1') {
+        setTimeout(() => driverObj.drive(), 300);
+      } else if (!localStorage.getItem('dashboardTourSeen')) {
+        // Auto-start for first-time users
         driverObj.drive();
         localStorage.setItem('dashboardTourSeen', 'true');
       }
