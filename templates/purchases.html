@@ -5,10 +5,10 @@
 <link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
 <style>
   .select2-container .select2-selection--single {
-    height: 39px !important;
-    padding: 0.3rem 0.75rem !important;
+    height: 38px !important;
+    padding: 0.35rem 0.75rem !important;
     font-family: var(--font) !important;
-    font-size: 0.9rem !important;
+    font-size: 0.85rem !important;
     border: 1px solid var(--color-border) !important;
     border-radius: 8px !important;
     background: #fff !important;
@@ -18,168 +18,320 @@
   .select2-container--default .select2-selection--single .select2-selection__rendered {
     line-height: normal !important;
     padding: 0 !important;
-    color: var(--color-text) !important;
+    color: var(--color-slate-800) !important;
+    font-weight: 500 !important;
   }
   .select2-container--default .select2-selection--single .select2-selection__arrow {
-    height: 37px !important;
-    right: 5px !important;
+    height: 36px !important;
+    right: 6px !important;
   }
   .select2-dropdown {
     font-family: var(--font) !important;
-    font-size: 0.9rem !important;
+    font-size: 0.85rem !important;
     border: 1px solid var(--color-border) !important;
     border-radius: 8px !important;
-    box-shadow: var(--shadow-card) !important;
+    box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1) !important;
   }
   .select2-container--default .select2-results__option--selected {
-    background-color: var(--color-accent) !important;
+    background-color: var(--color-primary) !important;
     color: white !important;
   }
   .select2-container--default .select2-results__option--highlighted.select2-results__option--selectable {
-    background-color: var(--color-accent) !important;
+    background-color: var(--color-primary-hover) !important;
     color: white !important;
   }
+
+  .purchases-table-wrap tbody tr.purchase-row {
+    cursor: pointer;
+    transition: background-color 0.12s ease;
+  }
+  .purchases-table-wrap tbody tr.purchase-row:hover td {
+    background-color: rgba(241, 245, 249, 0.8) !important;
+  }
+  .chevron-indicator {
+    transition: transform 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    display: inline-block;
+  }
+  .chevron-indicator.expanded {
+    transform: rotate(90deg);
+  }
 </style>
-<div class="page-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem;">
-  <h2 style="margin:0; font-size:1.25rem; font-weight:700;">Purchase History</h2>
-  <div style="display: flex; gap: 0.5rem;">
+
+<!-- Workstation Command Bar -->
+<div class="purchases-header-bar">
+  <div class="purchases-title-group">
+    <div style="width: 36px; height: 36px; border-radius: 10px; background: #eff6ff; color: #2563eb; display: flex; align-items: center; justify-content: center; box-shadow: 0 1px 3px rgba(37, 99, 235, 0.2);">
+      <i data-lucide="truck" style="width: 20px; height: 20px;"></i>
+    </div>
+    <div>
+      <h2 style="margin:0; font-size:1.25rem; font-weight:700; color:var(--color-slate-900);">Purchases & Inbound Shipments</h2>
+      <p style="margin:0; font-size:0.775rem; color:var(--color-slate-500);">Supplier receipts, warehouse stocking & accounts payable</p>
+    </div>
+  </div>
+  <div style="display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap;">
     {% if current_user.role == 'admin' %}
-    <a href="/inventory/transfer/new" class="btn btn-outline">Transfer Stock</a>
+    <a href="/inventory/transfer/new" class="btn btn-secondary" style="display: inline-flex; align-items: center; gap: 0.4rem; font-size: 0.825rem; font-weight: 600;">
+      <i data-lucide="arrow-right-left" style="width: 14px; height: 14px;"></i>
+      <span>Transfer Stock</span>
+    </a>
     {% endif %}
-    <a href="/purchases/new" class="btn btn-primary">Receive Shipment</a>
+    <a href="/purchases/new" class="btn btn-primary" style="display: inline-flex; align-items: center; gap: 0.4rem; font-size: 0.825rem; font-weight: 600;">
+      <i data-lucide="plus" style="width: 14px; height: 14px;"></i>
+      <span>Receive Shipment</span>
+    </a>
   </div>
 </div>
 
-<section class="panel" style="margin-bottom: 1.5rem;">
-  <div class="panel-body" style="padding: 1rem 1.5rem;">
-    <form method="GET" action="/purchases" style="display: flex; gap: 1rem; flex-wrap: wrap; align-items: flex-end;">
-      <div style="flex: 1; min-width: 200px;">
-        <label class="form-label">Search Invoice / ID</label>
-        <input type="text" name="search" class="form-control" placeholder="Partial or full match..." value="{{ filters.search }}">
-      </div>
-      <div style="flex: 1; min-width: 200px;">
-        <label class="form-label">Supplier</label>
-        <select name="supplier_id" class="form-control">
-          <option value="">All Suppliers</option>
-          {% for s in suppliers %}
-          <option value="{{ s.id }}" {% if filters.supplier_id == s.id|string %}selected{% endif %}>{{ s.name }}</option>
-          {% endfor %}
-        </select>
-      </div>
-      <div style="flex: 1; min-width: 200px;">
-        <label class="form-label">Product</label>
-        <select name="product_id" class="form-control select2-searchable">
-          <option value="">All Products</option>
-          {% for p in products %}
-          <option value="{{ p.id }}" {% if filters.product_id == p.id|string %}selected{% endif %}>{{ p.name }}</option>
-          {% endfor %}
-        </select>
-      </div>
-      <div style="flex: 1; min-width: 150px;">
-        <label class="form-label">Start Date</label>
-        <input type="date" name="start_date" class="form-control" value="{{ filters.start_date }}">
-      </div>
-      <div style="flex: 1; min-width: 150px;">
-        <label class="form-label">End Date</label>
-        <input type="date" name="end_date" class="form-control" value="{{ filters.end_date }}">
-      </div>
-      <div>
-        <button type="submit" class="btn btn-primary">Filter</button>
-        <a href="/purchases" class="btn btn-outline" style="margin-left: 0.5rem;">Clear</a>
-      </div>
-    </form>
-  </div>
-</section>
+<!-- Financial & Operations Metric Overview (3 Cards) -->
+{% set total_grand = namespace(value=0.0) %}
+{% set total_paid = namespace(value=0.0) %}
+{% set total_rem = namespace(value=0.0) %}
+{% set pending_count = namespace(value=0) %}
+{% for p in purchases %}
+  {% set total_grand.value = total_grand.value + (p.grand_total|default(0)|float) %}
+  {% set total_paid.value = total_paid.value + (p.amount_paid|default(0)|float) %}
+  {% set total_rem.value = total_rem.value + (p.remaining_amount|default(0)|float) %}
+  {% if p.status != 'paid' %}
+    {% set pending_count.value = pending_count.value + 1 %}
+  {% endif %}
+{% endfor %}
 
-<section class="panel">
-  <div class="panel-body">
-    <div class="table-wrap">
-      <table class="data-table">
-        <thead>
-          <tr>
-            <th>ID</th>
-            <th>Date</th>
-            <th>Supplier</th>
-            <th>Reference #</th>
-            <th>Warehouse</th>
-            <th style="text-align: right;">Total</th>
-            <th style="text-align: right;">Paid</th>
-            <th style="text-align: right;">Balance</th>
-            <th style="text-align: center;">Status</th>
-            <th style="text-align: right;">Actions</th>
-          </tr>
-        </thead>
-        <tbody>
-          {% for p in purchases %}
-          <tr style="cursor: pointer;" onclick="toggleDetails({{ p.id }})">
-            <td>
-              <svg id="icon-{{ p.id }}" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: middle; margin-right: 4px; transition: transform 0.2s;"><polyline points="9 18 15 12 9 6"></polyline></svg>
-              {{ p.id }}
-            </td>
-            <td>{{ p.purchase_date }}</td>
-            <td style="font-weight: 500;">{{ p.supplier_name or 'Unknown' }}</td>
-            <td>{{ p.reference_number }}</td>
-            <td style="color: #6b7280; font-size: 0.9em;">{{ p.warehouse_name or "Main Warehouse" }}</td>
-            <td style="text-align: right;">${{ "%.2f"|format(p.grand_total) }}</td>
-            <td style="text-align: right; color: var(--success-text);">${{ "%.2f"|format(p.amount_paid) }}</td>
-            <td style="text-align: right; color: var(--danger-text); font-weight: 500;">${{ "%.2f"|format(p.remaining_amount) }}</td>
-            <td style="text-align: center;">
-              {% if p.status == 'paid' %}
-                <span class="badge badge-success">Paid</span>
-              {% elif p.status == 'partial' %}
-                <span class="badge badge-warning">Partial</span>
-              {% else %}
-                <span class="badge badge-danger">Unpaid</span>
-              {% endif %}
-            </td>
-            <td style="text-align: right; white-space: nowrap;" onclick="event.stopPropagation();">
-              <a href="/purchases/{{ p.id }}" class="btn btn-sm btn-outline" title="View Details">View</a>
-              <a href="/purchases/edit/{{ p.id }}" class="btn btn-sm btn-outline" title="Edit Purchase">Edit</a>
-              <button type="button" class="btn btn-sm btn-danger" title="Delete Purchase" onclick="deletePurchase({{ p.id }})">Delete</button>
-            </td>
-          </tr>
-          <tr id="details-{{ p.id }}" style="display: none; background-color: var(--surface-bg);">
-            <td colspan="9" style="padding: 1rem 2rem;">
-              <div style="font-size: 0.9rem;">
-                <strong style="display: block; margin-bottom: 0.5rem; color: var(--text-muted);">Shipment Items:</strong>
-                {% if p.purchase_items %}
-                <ul style="list-style: none; padding: 0; margin: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 0.5rem;">
-                  {% for item in p.purchase_items %}
-                  <li style="background: var(--bg-color); padding: 0.5rem; border-radius: 4px; border: 1px solid var(--border-color);">
-                    <span style="font-weight: 500;">{{ item.product_name }}</span> 
-                    <span style="color: var(--text-muted); float: right;">x {{ item.qty|format_qty }}</span>
-                  </li>
-                  {% endfor %}
-                </ul>
-                {% else %}
-                <span style="color: var(--text-muted);">No items recorded.</span>
-                {% endif %}
-              </div>
-            </td>
-          </tr>
-          {% else %}
-          <tr>
-            <td colspan="9" style="text-align: center; padding: 2rem; color: var(--text-muted);">
-              No purchases found. Receive a shipment to add inventory.
-            </td>
-          </tr>
-          {% endfor %}
-        </tbody>
-      </table>
+<div class="purchases-stats-grid">
+  <article class="purchases-stat-card">
+    <div class="purchases-stat-content">
+      <h3>Total Shipments</h3>
+      <p class="purchases-stat-value">{{ purchases|length }}</p>
+      <p class="purchases-stat-note">Filtered purchase records</p>
     </div>
-  </div>
-</section>
+    <div class="purchases-stat-icon blue">
+      <i data-lucide="package-check"></i>
+    </div>
+  </article>
+
+  <article class="purchases-stat-card">
+    <div class="purchases-stat-content">
+      <h3>Total Received Value</h3>
+      <p class="purchases-stat-value sensitive-data">${{ '%.2f' % total_grand.value }}</p>
+      <p class="purchases-stat-note">Paid: <span class="sensitive-data">${{ '%.2f' % total_paid.value }}</span></p>
+    </div>
+    <div class="purchases-stat-icon emerald">
+      <i data-lucide="dollar-sign"></i>
+    </div>
+  </article>
+
+  <article class="purchases-stat-card">
+    <div class="purchases-stat-content">
+      <h3>Outstanding Payables</h3>
+      <p class="purchases-stat-value sensitive-data" style="color: {% if total_rem.value > 0 %}#dc2626{% else %}#059669{% endif %};">${{ '%.2f' % total_rem.value }}</p>
+      <p class="purchases-stat-note">{{ pending_count.value }} shipments awaiting payment</p>
+    </div>
+    <div class="purchases-stat-icon amber">
+      <i data-lucide="clock"></i>
+    </div>
+  </article>
+</div>
+
+<!-- Multi-Field PC Filter Toolbar -->
+<div class="purchases-filter-panel">
+  <form method="GET" action="/purchases" class="purchases-filter-grid">
+    <div>
+      <label class="field-label" for="searchInvoiceInput">Search Shipment</label>
+      <div style="position: relative;">
+        <i data-lucide="search" style="position: absolute; left: 10px; top: 50%; transform: translateY(-50%); width: 14px; height: 14px; color: var(--color-slate-400);"></i>
+        <input type="text" name="search" id="searchInvoiceInput" class="form-control" placeholder="Search ref or ID..." value="{{ filters.search }}" style="padding-left: 32px;">
+      </div>
+    </div>
+
+    <div>
+      <label class="field-label" for="filterSupplier">Supplier</label>
+      <select name="supplier_id" id="filterSupplier" class="form-control" onchange="this.form.submit()">
+        <option value="">All Suppliers</option>
+        {% for s in suppliers %}
+        <option value="{{ s.id }}" {% if filters.supplier_id == s.id|string %}selected{% endif %}>{{ s.name }}</option>
+        {% endfor %}
+      </select>
+    </div>
+
+    <div>
+      <label class="field-label" for="filterProduct">Product In Shipment</label>
+      <select name="product_id" id="filterProduct" class="form-control select2-searchable" onchange="this.form.submit()">
+        <option value="">All Products</option>
+        {% for p in products %}
+        <option value="{{ p.id }}" {% if filters.product_id == p.id|string %}selected{% endif %}>{{ p.name }}</option>
+        {% endfor %}
+      </select>
+    </div>
+
+    <div>
+      <label class="field-label" for="filterStartDate">Start Date</label>
+      <input type="date" name="start_date" id="filterStartDate" class="form-control" value="{{ filters.start_date }}" onclick="if(this.showPicker) this.showPicker()" onchange="this.form.submit()">
+    </div>
+
+    <div>
+      <label class="field-label" for="filterEndDate">End Date</label>
+      <input type="date" name="end_date" id="filterEndDate" class="form-control" value="{{ filters.end_date }}" onclick="if(this.showPicker) this.showPicker()" onchange="this.form.submit()">
+    </div>
+
+    <div style="display: flex; gap: 0.35rem; align-items: center; height: 38px;">
+      {% if filters.search or filters.supplier_id or filters.product_id or filters.start_date or filters.end_date %}
+      <a href="/purchases" class="btn btn-secondary" style="height: 38px; display: inline-flex; align-items: center; font-size: 0.8rem; padding: 0 0.75rem;" title="Clear all filters">
+        <i data-lucide="x" style="width: 14px; height: 14px;"></i>
+      </a>
+      {% endif %}
+      <button type="submit" class="btn btn-primary" style="height: 38px; display: inline-flex; align-items: center; gap: 0.35rem; font-size: 0.8rem; padding: 0 0.85rem; white-space: nowrap;">
+        <i data-lucide="filter" style="width: 14px; height: 14px;"></i>
+        <span>Filter</span>
+      </button>
+    </div>
+  </form>
+</div>
+
+<!-- High-Density Sticky Purchases Table -->
+<div class="purchases-table-wrap">
+  <table class="data-table">
+    <thead>
+      <tr>
+        <th style="width: 60px; text-align: center;">#</th>
+        <th style="width: 100px;">Date</th>
+        <th>Supplier</th>
+        <th>Reference / Invoice</th>
+        <th>Warehouse</th>
+        <th style="text-align: right;">Total Amount</th>
+        <th style="text-align: right;">Paid</th>
+        <th style="text-align: right;">Balance Due</th>
+        <th style="text-align: center; width: 110px;">Payment Status</th>
+        <th style="text-align: right; min-width: 190px;">Actions</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% if purchases|length == 0 %}
+      <tr>
+        <td colspan="10" style="text-align: center; padding: 3rem 1rem; color: var(--color-slate-400);">
+          <i data-lucide="inbox" style="width: 36px; height: 36px; margin: 0 auto 0.5rem; display: block; opacity: 0.5;"></i>
+          No purchases or shipments found matching the selected criteria.
+        </td>
+      </tr>
+      {% else %}
+      {% for p in purchases %}
+      <tr class="purchase-row" id="purchase-row-{{ p.id }}" onclick="toggleDetails({{ p.id }})">
+        <td style="text-align: center; color: var(--color-slate-500); font-weight: 600;">
+          <span class="chevron-indicator" id="chevron-{{ p.id }}">
+            <i data-lucide="chevron-right" style="width: 14px; height: 14px; vertical-align: middle;"></i>
+          </span>
+          {{ p.id }}
+        </td>
+        <td style="font-weight: 500; color: var(--color-slate-600);">{{ p.purchase_date }}</td>
+        <td style="font-weight: 600; color: var(--color-slate-900);">{{ p.supplier_name or 'Unknown Supplier' }}</td>
+        <td style="color: var(--color-slate-700);">
+          {% if p.reference_number %}
+            <span style="font-family: var(--font-mono); font-size: 0.8rem; background: var(--color-slate-100); padding: 2px 6px; border-radius: 4px;">{{ p.reference_number }}</span>
+          {% else %}
+            <span style="color: var(--color-slate-400);">-</span>
+          {% endif %}
+        </td>
+        <td>
+          <span style="display: inline-flex; align-items: center; gap: 0.25rem; font-size: 0.775rem; color: var(--color-slate-600);">
+            <i data-lucide="warehouse" style="width: 12px; height: 12px; color: var(--color-slate-400);"></i>
+            <span>{{ p.warehouse_name or "Main Warehouse" }}</span>
+          </span>
+        </td>
+        <td style="text-align: right; font-weight: 700; color: var(--color-slate-900);">
+          <span class="sensitive-data">${{ "%.2f"|format(p.grand_total) }}</span>
+        </td>
+        <td style="text-align: right; font-weight: 600; color: #059669;">
+          <span class="sensitive-data">${{ "%.2f"|format(p.amount_paid) }}</span>
+        </td>
+        <td style="text-align: right; font-weight: 700; color: {% if p.remaining_amount > 0 %}#dc2626{% else %}#64748b{% endif %};">
+          <span class="sensitive-data">${{ "%.2f"|format(p.remaining_amount) }}</span>
+        </td>
+        <td style="text-align: center;">
+          {% if p.status == 'paid' %}
+            <span class="stock-pill in-stock">
+              <i data-lucide="check-circle" style="width: 12px; height: 12px;"></i>
+              <span>Paid</span>
+            </span>
+          {% elif p.status == 'partial' %}
+            <span class="stock-pill low-stock">
+              <i data-lucide="clock" style="width: 12px; height: 12px;"></i>
+              <span>Partial</span>
+            </span>
+          {% else %}
+            <span class="stock-pill out-of-stock">
+              <i data-lucide="alert-circle" style="width: 12px; height: 12px;"></i>
+              <span>Unpaid</span>
+            </span>
+          {% endif %}
+        </td>
+        <td style="text-align: right; white-space: nowrap;" onclick="event.stopPropagation();">
+          <div style="display: inline-flex; align-items: center; justify-content: flex-end; gap: 0.35rem;">
+            <a href="/purchases/{{ p.id }}" class="btn-view-action" title="View Shipment Details">
+              <i data-lucide="eye"></i>
+              <span>View</span>
+            </a>
+            <a href="/purchases/edit/{{ p.id }}" class="btn-edit-action" title="Edit Purchase">
+              <i data-lucide="edit-3"></i>
+              <span>Edit</span>
+            </a>
+            <button type="button" class="btn-delete-action" title="Delete Purchase" onclick="deletePurchase({{ p.id }})">
+              <i data-lucide="trash-2"></i>
+              <span>Delete</span>
+            </button>
+          </div>
+        </td>
+      </tr>
+      <tr id="details-{{ p.id }}" style="display: none; background-color: #f8fafc;">
+        <td colspan="10" style="padding: 0.85rem 1.25rem;">
+          <div class="shipment-items-box">
+            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.65rem;">
+              <span style="font-size: 0.775rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: var(--color-slate-500); display: flex; align-items: center; gap: 0.35rem;">
+                <i data-lucide="boxes" style="width: 14px; height: 14px; color: var(--color-primary);"></i>
+                <span>Received Shipment Items (SKUs)</span>
+              </span>
+              <a href="/purchases/{{ p.id }}" style="font-size: 0.775rem; font-weight: 600; color: var(--color-primary); display: inline-flex; align-items: center; gap: 0.25rem;">
+                <span>Full Shipment Breakdown &rarr;</span>
+              </a>
+            </div>
+            {% if p.purchase_items %}
+            <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 0.5rem;">
+              {% for item in p.purchase_items %}
+              <div class="shipment-item-chip">
+                <span style="font-weight: 600; color: var(--color-slate-800); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="{{ item.product_name }}">{{ item.product_name }}</span>
+                <span style="font-weight: 700; color: #059669; background: #ecfdf5; padding: 2px 6px; border-radius: 4px; font-size: 0.75rem; white-space: nowrap;">x {{ item.qty|format_qty }}</span>
+              </div>
+              {% endfor %}
+            </div>
+            {% else %}
+            <span style="color: var(--color-slate-400); font-size: 0.825rem;">No items recorded for this shipment.</span>
+            {% endif %}
+          </div>
+        </td>
+      </tr>
+      {% endfor %}
+      {% endif %}
+    </tbody>
+    <tfoot>
+      <tr style="background-color: var(--color-slate-50); font-weight: 700; border-top: 2px solid var(--color-border);">
+        <td colspan="5" style="text-align: right; padding-right: 1.25rem; font-size: 0.825rem; color: var(--color-slate-500); text-transform: uppercase; letter-spacing: 0.05em;">Purchases Totals</td>
+        <td style="text-align: right; font-size: 0.95rem; font-weight: 800; color: var(--color-slate-900);"><span class="sensitive-data">${{ '%.2f' % total_grand.value }}</span></td>
+        <td style="text-align: right; font-size: 0.95rem; font-weight: 800; color: #059669;"><span class="sensitive-data">${{ '%.2f' % total_paid.value }}</span></td>
+        <td style="text-align: right; font-size: 0.95rem; font-weight: 800; color: {% if total_rem.value > 0 %}#dc2626{% else %}#64748b{% endif %};"><span class="sensitive-data">${{ '%.2f' % total_rem.value }}</span></td>
+        <td colspan="2"></td>
+      </tr>
+    </tfoot>
+  </table>
+</div>
 
 <script>
 function toggleDetails(id) {
   const detailsRow = document.getElementById(`details-${id}`);
-  const icon = document.getElementById(`icon-${id}`);
+  const chevron = document.getElementById(`chevron-${id}`);
+  if (!detailsRow) return;
   if (detailsRow.style.display === 'none') {
     detailsRow.style.display = 'table-row';
-    icon.style.transform = 'rotate(90deg)';
+    if (chevron) chevron.classList.add('expanded');
   } else {
     detailsRow.style.display = 'none';
-    icon.style.transform = 'rotate(0deg)';
+    if (chevron) chevron.classList.remove('expanded');
   }
 }
 
@@ -206,7 +358,7 @@ async function deletePurchase(id, force = false) {
       alert(data.error || "Failed to delete purchase");
     }
   } catch (err) {
-    alert("Network error");
+    alert("Network error occurred while deleting shipment.");
   }
 }
 </script>
@@ -216,9 +368,18 @@ async function deletePurchase(id, force = false) {
   $(document).ready(function() {
     $('.select2-searchable').select2({
       width: '100%',
-      placeholder: "Search for a product...",
+      placeholder: "Search product...",
       allowClear: true
     });
+    if (window.lucide && window.lucide.createIcons) {
+      window.lucide.createIcons();
+    }
+  });
+
+  document.addEventListener('DOMContentLoaded', () => {
+    if (window.lucide && window.lucide.createIcons) {
+      window.lucide.createIcons();
+    }
   });
 </script>
 {% endblock %}

@@ -2,159 +2,247 @@
 {% block title %}Shipment #{{ purchase.id }} — AK Distributors{% endblock %}
 {% block page_heading %}Purchases (Shipments){% endblock %}
 {% block content %}
-<div class="page-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem;">
-  <div>
-    <div style="display: flex; align-items: center; gap: 0.75rem;">
-      <a href="{{ url_for('purchases') }}" style="display: flex; align-items: center; justify-content: center; width: 32px; height: 32px; font-size: 1.25rem; line-height: 1; text-decoration: none; color: #000; background: #fff; border: 1px solid #e2e8f0; border-radius: 6px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); transition: box-shadow 0.2s;" onmouseover="this.style.boxShadow='0 4px 6px rgba(0,0,0,0.15)'" onmouseout="this.style.boxShadow='0 2px 4px rgba(0,0,0,0.1)'" title="Back">&larr;</a>
-      <h2 style="margin:0; font-size:1.25rem; font-weight:700;">Shipment #{{ purchase.id }}</h2>
+<!-- Detail Header Bar -->
+<div class="purchases-header-bar" style="margin-bottom: 1.25rem;">
+  <div class="purchases-title-group">
+    <a href="{{ url_for('purchases') }}" class="btn btn-secondary" style="width: 36px; height: 36px; padding: 0; display: inline-flex; align-items: center; justify-content: center; border-radius: 8px;" title="Back to Purchases">
+      <i data-lucide="arrow-left" style="width: 18px; height: 18px;"></i>
+    </a>
+    <div>
+      <div style="display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;">
+        <h2 style="margin:0; font-size:1.35rem; font-weight:700; color:var(--color-slate-900);">Shipment #{{ purchase.id }}</h2>
+        {% if purchase.status == 'paid' %}
+          <span class="stock-pill in-stock">
+            <i data-lucide="check-circle" style="width: 12px; height: 12px;"></i>
+            <span>Paid in Full</span>
+          </span>
+        {% elif purchase.status == 'partial' %}
+          <span class="stock-pill low-stock">
+            <i data-lucide="clock" style="width: 12px; height: 12px;"></i>
+            <span>Partially Paid</span>
+          </span>
+        {% else %}
+          <span class="stock-pill out-of-stock">
+            <i data-lucide="alert-circle" style="width: 12px; height: 12px;"></i>
+            <span>Unpaid</span>
+          </span>
+        {% endif %}
+      </div>
+      <p style="margin: 0.15rem 0 0 0; font-size:0.8rem; color:var(--color-slate-500);">
+        Supplier: <strong style="color: var(--color-slate-800);">{{ purchase.supplier_name }}</strong> &bull; 
+        Date: <span style="font-weight: 500;">{{ purchase.purchase_date }}</span>
+        {% if purchase.reference_number %}
+          &bull; Ref: <span style="font-family: var(--font-mono); font-weight: 600; color: var(--color-slate-700);">{{ purchase.reference_number }}</span>
+        {% endif %}
+        &bull; Warehouse: <span style="font-weight: 500;">{{ purchase.warehouse_name or "Main Warehouse" }}</span>
+      </p>
     </div>
-    <p style="color: var(--text-muted); margin-top: 0.25rem; margin-left: 2.5rem;">
-      Supplier: <strong>{{ purchase.supplier_name }}</strong> &nbsp;|&nbsp; 
-      Date: {{ purchase.purchase_date }} &nbsp;|&nbsp; 
-      Ref: {{ purchase.reference_number }}
-    </p>
   </div>
-  <div style="display: flex; gap: 0.5rem;">
-    <a href="/purchases/edit/{{ purchase.id }}" class="btn btn-outline">Edit</a>
-    <button type="button" class="btn btn-danger" onclick="deletePurchase({{ purchase.id }})">Delete</button>
+  <div style="display: flex; gap: 0.5rem; align-items: center;">
+    <a href="/purchases/edit/{{ purchase.id }}" class="btn-edit-action" style="padding: 0.45rem 0.85rem; font-size: 0.825rem;" title="Edit Purchase">
+      <i data-lucide="edit-3"></i>
+      <span>Edit Shipment</span>
+    </a>
+    <button type="button" class="btn-delete-action" style="padding: 0.45rem 0.85rem; font-size: 0.825rem;" onclick="deletePurchase({{ purchase.id }})" title="Delete Purchase">
+      <i data-lucide="trash-2"></i>
+      <span>Delete</span>
+    </button>
   </div>
 </div>
 
-<div style="display: grid; grid-template-columns: 2fr 1fr; gap: 1.5rem; align-items: start;">
+<!-- 2-Column Responsive Layout -->
+<div style="display: grid; grid-template-columns: minmax(0, 1.7fr) minmax(320px, 1.2fr); gap: 1.25rem; align-items: start;">
   
-  <!-- Items Table -->
-  <section class="panel">
-    <div class="panel-header">
-      <h3 style="margin:0;">Items Received</h3>
-    </div>
-    <div class="panel-body">
-      <table class="data-table">
-        <thead>
-          <tr>
-            <th>Product</th>
-            <th style="text-align: center;">Qty</th>
-            <th style="text-align: right;">Cost Price</th>
-            <th style="text-align: right;">Amount</th>
-          </tr>
-        </thead>
-        <tbody>
-          {% for item in items %}
-          <tr>
-            <td style="font-weight: 500;">{{ loop.index }}. {{ item.product_name }}</td>
-            <td style="text-align: center;">{{ item.qty|format_qty }}</td>
-            <td style="text-align: right;">${{ "%.2f"|format(item.cost_price) }}</td>
-            <td style="text-align: right;">${{ "%.2f"|format(item.amount) }}</td>
-          </tr>
-          {% endfor %}
-        </tbody>
-      </table>
-    </div>
-  </section>
-
-  <!-- Summary & Payments -->
-  <div style="display: flex; flex-direction: column; gap: 1.5rem;">
-    <section class="panel">
-      <div class="panel-header">
-        <h3 style="margin:0;">Summary</h3>
-      </div>
-      <div class="panel-body" style="padding: 1.5rem;">
-        <div style="display: grid; grid-template-columns: 1fr auto; row-gap: 0.75rem; align-items: center; font-size: 1.05rem;">
-          <span style="color: var(--text-muted); font-size: 0.95rem;">Subtotal</span>
-          <span style="font-weight: 500; font-size: 0.95rem; text-align: right;">${{ "%.2f"|format(purchase.subtotal) }}</span>
-          
-          <span style="color: var(--text-muted); font-size: 0.95rem;">Other Charges</span>
-          <span style="font-weight: 500; font-size: 0.95rem; text-align: right;">${{ "%.2f"|format(purchase.other_charges) }}</span>
-          
-          <div style="grid-column: 1 / -1; height: 1px; border-top: 1px dashed var(--border-color); margin: 0.25rem 0;"></div>
-          
-          <span style="color: var(--text-muted);">Total</span>
-          <span style="font-weight: 600; text-align: right;">${{ "%.2f"|format(purchase.grand_total) }}</span>
-          
-          <span style="color: var(--text-muted);">Amount Paid</span>
-          <span style="font-weight: 600; color: var(--success-text); text-align: right;">${{ "%.2f"|format(purchase.amount_paid) }}</span>
-          
-          <div style="grid-column: 1 / -1; height: 1px; background: var(--border-color); margin: 0.5rem 0;"></div>
-          
-          <span style="font-weight: 700;">Balance Due</span>
-          <span style="font-weight: 700; color: var(--danger-text); font-size: 1.2rem; text-align: right;">${{ "%.2f"|format(purchase.remaining_amount) }}</span>
+  <!-- Left Column: Received Items Table -->
+  <div>
+    <div style="background: #ffffff; border: 1px solid var(--color-border); border-radius: var(--radius-lg); box-shadow: var(--shadow-sm); overflow: hidden; margin-bottom: 1.25rem;">
+      <div style="padding: 0.85rem 1.25rem; border-bottom: 1px solid var(--color-border); display: flex; align-items: center; justify-content: space-between; background: #ffffff;">
+        <div style="display: flex; align-items: center; gap: 0.45rem; font-size: 0.825rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: var(--color-slate-600);">
+          <i data-lucide="boxes" style="width: 16px; height: 16px; color: var(--color-primary);"></i>
+          <span>Items Received</span>
         </div>
-        <div style="margin-top: 1.5rem; text-align: right;">
-          {% if purchase.status == 'paid' %}
-            <span class="badge badge-success" style="font-size: 0.9rem; padding: 0.4rem 0.75rem;">PAID IN FULL</span>
-          {% elif purchase.status == 'partial' %}
-            <span class="badge badge-warning" style="font-size: 0.9rem; padding: 0.4rem 0.75rem;">PARTIALLY PAID</span>
-          {% else %}
-            <span class="badge badge-danger" style="font-size: 0.9rem; padding: 0.4rem 0.75rem;">UNPAID</span>
-          {% endif %}
-        </div>
+        <span style="font-size: 0.775rem; font-weight: 600; color: var(--color-slate-500); background: var(--color-slate-100); padding: 2px 8px; border-radius: 999px;">
+          {{ items|length }} SKUs
+        </span>
       </div>
-    </section>
 
+      <div class="purchases-table-wrap" style="min-height: auto; max-height: 480px; border: none; border-radius: 0;">
+        <table class="data-table" style="margin: 0; width: 100%;">
+          <thead>
+            <tr>
+              <th style="width: 45px; text-align: center;">#</th>
+              <th>Product Details</th>
+              <th style="text-align: center; width: 100px;">Qty Received</th>
+              <th style="text-align: right; width: 120px;">Cost Price ($)</th>
+              <th style="text-align: right; width: 120px;">Line Total ($)</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% set total_received_qty = namespace(value=0.0) %}
+            {% for item in items %}
+            {% set total_received_qty.value = total_received_qty.value + (item.qty|default(0)|float) %}
+            <tr>
+              <td style="text-align: center; color: var(--color-slate-400); font-weight: 600;">{{ loop.index }}</td>
+              <td style="font-weight: 600; color: var(--color-slate-800);">{{ item.product_name }}</td>
+              <td style="text-align: center; font-weight: 700; color: #059669;">
+                <span style="background: #ecfdf5; padding: 2px 8px; border-radius: 4px; display: inline-block;">
+                  {{ item.qty|format_qty }}
+                </span>
+              </td>
+              <td style="text-align: right; color: var(--color-slate-700); font-weight: 500;">
+                <span class="sensitive-data">${{ "%.2f"|format(item.cost_price) }}</span>
+              </td>
+              <td style="text-align: right; font-weight: 700; color: var(--color-slate-900);">
+                <span class="sensitive-data">${{ "%.2f"|format(item.amount) }}</span>
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+          <tfoot>
+            <tr style="background: var(--color-slate-50); font-weight: 700; border-top: 2px solid var(--color-border);">
+              <td colspan="2" style="text-align: right; padding-right: 1rem; font-size: 0.8rem; color: var(--color-slate-500); text-transform: uppercase;">Total Units</td>
+              <td style="text-align: center; font-size: 0.9rem; font-weight: 800; color: #059669;">{{ total_received_qty.value|format_qty }}</td>
+              <td style="text-align: right; font-size: 0.8rem; color: var(--color-slate-500); text-transform: uppercase;">Items Total</td>
+              <td style="text-align: right; font-size: 0.95rem; font-weight: 800; color: var(--color-slate-900);">
+                <span class="sensitive-data">${{ "%.2f"|format(purchase.subtotal) }}</span>
+              </td>
+            </tr>
+          </tfoot>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- Right Column: Financial Summary & Payments -->
+  <div style="display: flex; flex-direction: column; gap: 1.25rem;">
+    
+    <!-- Financial Breakdown Card -->
+    <div style="background: #ffffff; border: 1px solid var(--color-border); border-radius: var(--radius-lg); box-shadow: var(--shadow-sm); padding: 1.25rem;">
+      <div style="display: flex; align-items: center; gap: 0.45rem; font-size: 0.825rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: var(--color-slate-600); margin-bottom: 1rem;">
+        <i data-lucide="receipt" style="width: 16px; height: 16px; color: var(--color-primary);"></i>
+        <span>Financial Summary</span>
+      </div>
+
+      <div style="display: grid; grid-template-columns: 1fr auto; row-gap: 0.65rem; align-items: center; font-size: 0.9rem;">
+        <span style="color: var(--color-slate-600);">Items Subtotal</span>
+        <span style="font-weight: 600; color: var(--color-slate-900); text-align: right;">
+          <span class="sensitive-data">${{ "%.2f"|format(purchase.subtotal) }}</span>
+        </span>
+
+        {% if purchase.other_charges and purchase.other_charges > 0 %}
+        <span style="color: var(--color-slate-600);">Other Charges / Shipping</span>
+        <span style="font-weight: 600; color: var(--color-slate-900); text-align: right;">
+          <span class="sensitive-data">+${{ "%.2f"|format(purchase.other_charges) }}</span>
+        </span>
+        {% endif %}
+
+        <div style="grid-column: 1 / -1; height: 1px; background: var(--color-border); margin: 0.25rem 0;"></div>
+
+        <span style="font-weight: 700; color: var(--color-slate-900);">Grand Total</span>
+        <span style="font-weight: 800; font-size: 1.15rem; color: var(--color-slate-900); text-align: right;">
+          <span class="sensitive-data">${{ "%.2f"|format(purchase.grand_total) }}</span>
+        </span>
+
+        <span style="color: var(--color-slate-600);">Total Paid</span>
+        <span style="font-weight: 700; color: #059669; text-align: right;">
+          <span class="sensitive-data">${{ "%.2f"|format(purchase.amount_paid) }}</span>
+        </span>
+
+        <div style="grid-column: 1 / -1; height: 1px; background: var(--color-border); margin: 0.25rem 0;"></div>
+
+        <span style="font-weight: 700; color: {% if purchase.remaining_amount > 0 %}#dc2626{% else %}#059669{% endif %};">
+          Balance Due
+        </span>
+        <span style="font-weight: 800; font-size: 1.25rem; color: {% if purchase.remaining_amount > 0 %}#dc2626{% else %}#059669{% endif %}; text-align: right;">
+          <span class="sensitive-data">${{ "%.2f"|format(purchase.remaining_amount) }}</span>
+        </span>
+      </div>
+    </div>
+
+    <!-- Quick Payment Entry Card (if balance remains) -->
     {% if purchase.remaining_amount > 0 %}
-    <section class="panel" id="payment-panel">
-      <div class="panel-header">
-        <h3 style="margin:0;">Record Payment</h3>
+    <div style="background: #ffffff; border: 1px solid var(--color-border); border-radius: var(--radius-lg); box-shadow: var(--shadow-sm); padding: 1.25rem;" id="payment-panel">
+      <div style="display: flex; align-items: center; gap: 0.45rem; font-size: 0.825rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: var(--color-slate-600); margin-bottom: 0.85rem;">
+        <i data-lucide="credit-card" style="width: 16px; height: 16px; color: #2563eb;"></i>
+        <span>Record Supplier Payment</span>
       </div>
-      <div class="panel-body" style="padding: 1.5rem;">
-        <form id="payment-form" onsubmit="submitPayment(event)">
-          <input type="hidden" id="pay_supplier_id" value="{{ purchase.supplier_id }}">
-          <input type="hidden" id="pay_purchase_id" value="{{ purchase.id }}">
-          
-          <div style="margin-bottom: 1rem;">
-            <label class="form-label">Amount ($) *</label>
-            <input type="number" id="pay_amount" class="form-control" step="0.01" min="0.01" max="{{ purchase.remaining_amount }}" value="{{ purchase.remaining_amount }}" required>
+
+      <form id="payment-form" onsubmit="submitPayment(event)">
+        <input type="hidden" id="pay_supplier_id" value="{{ purchase.supplier_id }}">
+        <input type="hidden" id="pay_purchase_id" value="{{ purchase.id }}">
+        
+        <div style="margin-bottom: 0.75rem;">
+          <label class="field-label" for="pay_amount">Payment Amount ($) *</label>
+          <div style="position: relative;">
+            <span style="position: absolute; left: 10px; top: 50%; transform: translateY(-50%); font-weight: 600; color: var(--color-slate-400);">$</span>
+            <input type="number" id="pay_amount" class="form-control" style="padding-left: 24px; font-weight: 600;" step="0.01" min="0.01" max="{{ purchase.remaining_amount }}" value="{{ purchase.remaining_amount }}" required>
           </div>
-          <div style="margin-bottom: 1rem;">
-            <label class="form-label">Payment Date *</label>
-            <input type="date" id="pay_date" class="form-control" required>
-          </div>
-          <div style="margin-bottom: 1rem;">
-            <label class="form-label">Payment Method</label>
-            <select id="pay_method" class="form-control">
-              <option value="cash">Cash</option>
-              <option value="cheque">Cheque</option>
-              <option value="bank">Bank Transfer</option>
-            </select>
-          </div>
-          <div style="margin-bottom: 1rem;">
-            <label class="form-label">Notes</label>
-            <input type="text" id="pay_notes" class="form-control" placeholder="Cheque #, Transaction ID, etc.">
-          </div>
-          <div style="margin-top: 1.5rem; text-align: right;">
-            <button type="submit" class="btn btn-primary" id="save-payment-btn" style="width: 100%;">Record Payment</button>
-          </div>
-        </form>
-      </div>
-    </section>
+        </div>
+
+        <div style="margin-bottom: 0.75rem;">
+          <label class="field-label" for="pay_date">Payment Date *</label>
+          <input type="date" id="pay_date" class="form-control" onclick="if(this.showPicker) this.showPicker()" required>
+        </div>
+
+        <div style="margin-bottom: 0.75rem;">
+          <label class="field-label" for="pay_method">Payment Method</label>
+          <select id="pay_method" class="form-control">
+            <option value="cash">Cash</option>
+            <option value="cheque">Cheque</option>
+            <option value="bank">Bank Transfer</option>
+          </select>
+        </div>
+
+        <div style="margin-bottom: 1rem;">
+          <label class="field-label" for="pay_notes">Notes (optional)</label>
+          <input type="text" id="pay_notes" class="form-control" placeholder="Cheque #, transaction ref, etc.">
+        </div>
+
+        <button type="submit" class="btn btn-primary" id="save-payment-btn" style="width: 100%; display: inline-flex; align-items: center; justify-content: center; gap: 0.4rem; font-weight: 600; height: 38px;">
+          <i data-lucide="check" style="width: 16px; height: 16px;"></i>
+          <span>Record Payment</span>
+        </button>
+      </form>
+    </div>
     {% endif %}
 
-    <section class="panel">
-      <div class="panel-header">
-        <h3 style="margin:0;">Payment History</h3>
+    <!-- Payment History Ledger -->
+    <div style="background: #ffffff; border: 1px solid var(--color-border); border-radius: var(--radius-lg); box-shadow: var(--shadow-sm); overflow: hidden;">
+      <div style="padding: 0.85rem 1.25rem; border-bottom: 1px solid var(--color-border); display: flex; align-items: center; justify-content: space-between; background: #ffffff;">
+        <div style="display: flex; align-items: center; gap: 0.45rem; font-size: 0.825rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: var(--color-slate-600);">
+          <i data-lucide="history" style="width: 16px; height: 16px; color: #7c3aed;"></i>
+          <span>Payment History</span>
+        </div>
+        <span style="font-size: 0.775rem; font-weight: 600; color: var(--color-slate-500); background: var(--color-slate-100); padding: 2px 8px; border-radius: 999px;">
+          {{ payments|length }} Entries
+        </span>
       </div>
-      <div class="panel-body" style="padding: 0;">
+
+      <div style="padding: 0;">
         {% if payments %}
           <ul style="list-style: none; padding: 0; margin: 0;">
             {% for pm in payments %}
-            <li style="padding: 1rem; border-bottom: 1px solid var(--border-color); display: flex; justify-content: space-between; align-items: center;">
+            <li style="padding: 0.85rem 1.25rem; border-bottom: 1px solid var(--color-border); display: flex; justify-content: space-between; align-items: center;">
               <div>
-                <div style="font-weight: 500;">{{ pm.payment_date }}</div>
-                <div style="font-size: 0.85rem; color: var(--text-muted); text-transform: capitalize;">{{ pm.payment_method }}</div>
-                {% if pm.notes %}<div style="font-size: 0.85rem; color: var(--text-muted);">{{ pm.notes }}</div>{% endif %}
+                <div style="font-weight: 600; color: var(--color-slate-900); font-size: 0.85rem;">{{ pm.payment_date }}</div>
+                <div style="font-size: 0.75rem; color: var(--color-slate-500); text-transform: capitalize; margin-top: 0.1rem;">
+                  Method: <strong>{{ pm.payment_method }}</strong>
+                  {% if pm.notes %}&bull; {{ pm.notes }}{% endif %}
+                </div>
               </div>
-              <div style="font-weight: 600; color: var(--success-text);">
-                +${{ "%.2f"|format(pm.amount) }}
+              <div style="font-weight: 700; color: #059669; font-size: 0.95rem;">
+                +<span class="sensitive-data">${{ "%.2f"|format(pm.amount) }}</span>
               </div>
             </li>
             {% endfor %}
           </ul>
         {% else %}
-          <div style="padding: 1.5rem; text-align: center; color: var(--text-muted);">
-            No payments recorded yet.
+          <div style="padding: 1.5rem; text-align: center; color: var(--color-slate-400); font-size: 0.825rem;">
+            No payments recorded yet for this shipment.
           </div>
         {% endif %}
       </div>
-    </section>
+    </div>
 
   </div>
 </div>
@@ -178,7 +266,7 @@
 
     const btn = document.getElementById('save-payment-btn');
     btn.disabled = true;
-    btn.textContent = 'Saving...';
+    btn.innerHTML = '<span>Saving...</span>';
 
     try {
       const res = await fetch('/api/supplier_payments', {
@@ -192,41 +280,48 @@
       } else {
         alert(data.error || "Failed to record payment");
         btn.disabled = false;
-        btn.textContent = 'Record Payment';
+        btn.innerHTML = '<i data-lucide="check" style="width: 16px; height: 16px;"></i><span>Record Payment</span>';
+        if (window.lucide) window.lucide.createIcons();
       }
     } catch (err) {
-      alert("Network error");
+      alert("Network error occurred while saving payment.");
       btn.disabled = false;
-      btn.textContent = 'Record Payment';
+      btn.innerHTML = '<i data-lucide="check" style="width: 16px; height: 16px;"></i><span>Record Payment</span>';
+      if (window.lucide) window.lucide.createIcons();
     }
   }
-</script>
-<script>
-async function deletePurchase(id, force = false) {
-  if (!force && !confirm("Are you sure you want to delete this purchase?")) return;
-  
-  const payload = force ? { force: true } : {};
-  
-  try {
-    const res = await fetch(`/api/purchases/${id}/delete`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload)
-    });
-    const data = await res.json();
+
+  async function deletePurchase(id, force = false) {
+    if (!force && !confirm("Are you sure you want to delete this purchase?")) return;
     
-    if (data.ok) {
-      window.location.href = '/purchases';
-    } else if (data.requires_confirmation) {
-      if (confirm(data.message)) {
-        deletePurchase(id, true);
+    const payload = force ? { force: true } : {};
+    
+    try {
+      const res = await fetch(`/api/purchases/${id}/delete`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+      const data = await res.json();
+      
+      if (data.ok) {
+        window.location.href = '/purchases';
+      } else if (data.requires_confirmation) {
+        if (confirm(data.message)) {
+          deletePurchase(id, true);
+        }
+      } else {
+        alert(data.error || "Failed to delete purchase");
       }
-    } else {
-      alert(data.error || "Failed to delete purchase");
+    } catch (err) {
+      alert("Network error occurred while deleting shipment.");
     }
-  } catch (err) {
-    alert("Network error");
   }
-}
+
+  document.addEventListener('DOMContentLoaded', () => {
+    if (window.lucide && window.lucide.createIcons) {
+      window.lucide.createIcons();
+    }
+  });
 </script>
 {% endblock %}

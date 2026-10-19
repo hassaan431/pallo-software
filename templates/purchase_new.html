@@ -1,137 +1,231 @@
 {% extends "base.html" %}
-{% block title %}{% if purchase %}Edit Shipment{% else %}Receive Shipment{% endif %} — AK Distributors{% endblock %}
+{% block title %}{% if purchase %}Edit Shipment #{{ purchase.id }}{% else %}Receive Shipment{% endif %} — AK Distributors{% endblock %}
 {% block page_heading %}{% if purchase %}Edit Shipment{% else %}Receive Shipment / Add Inventory{% endif %}{% endblock %}
 {% block content %}
-<div class="page-header" style="margin-bottom: 1.5rem;">
-  <h2 style="margin:0; font-size:1.25rem; font-weight:700;">{% if purchase %}Edit Shipment{% else %}Receive Shipment{% endif %}</h2>
-  <p style="color: var(--text-muted); margin-top: 0.25rem;">{% if purchase %}Edit details of an existing shipment.{% else %}Log incoming inventory from suppliers and record payment details.{% endif %}</p>
-</div>
+<!-- TomSelect CSS & JS -->
+<link href="https://cdn.jsdelivr.net/npm/tom-select@2.2.2/dist/css/tom-select.css" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/tom-select@2.2.2/dist/js/tom-select.complete.min.js"></script>
 
-<div class="panel">
-  <div class="panel-body" style="padding: 2rem;">
-    <!-- TomSelect CSS & JS -->
-    <link href="https://cdn.jsdelivr.net/npm/tom-select@2.2.2/dist/css/tom-select.css" rel="stylesheet">
-    <script src="https://cdn.jsdelivr.net/npm/tom-select@2.2.2/dist/js/tom-select.complete.min.js"></script>
-    <style>
-      .ts-control { border-radius: 8px; border: 1px solid var(--border-color); padding: 0.5rem 0.75rem; box-shadow: none; font-family: inherit; }
-      .ts-control.focus { border-color: var(--color-primary); box-shadow: 0 0 0 3px rgba(45, 106, 79, 0.1); }
-      .ts-dropdown { border-radius: 8px; border: 1px solid var(--border-color); box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06); font-family: inherit; }
-      .ts-dropdown .active { background-color: #f1f5f9; color: var(--color-text); }
-      .ts-dropdown .option { padding: 0.5rem 0.75rem; }
-      .ts-dropdown .ts-dropdown-content { max-height: 350px; } /* Shows ~10 items */
-    </style>
+<style>
+  .ts-control {
+    border-radius: 8px !important;
+    border: 1px solid var(--color-border) !important;
+    padding: 0.45rem 0.75rem !important;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.03) !important;
+    font-family: var(--font) !important;
+    font-size: 0.85rem !important;
+    font-weight: 500 !important;
+    color: var(--color-slate-800) !important;
+    min-height: 38px !important;
+  }
+  .ts-control.focus {
+    border-color: var(--color-primary) !important;
+    box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.18) !important;
+  }
+  .ts-dropdown {
+    border-radius: 8px !important;
+    border: 1px solid var(--color-border) !important;
+    box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1) !important;
+    font-family: var(--font) !important;
+    font-size: 0.85rem !important;
+  }
+  .ts-dropdown .active {
+    background-color: var(--color-slate-100) !important;
+    color: var(--color-slate-900) !important;
+  }
+  .ts-dropdown .option {
+    padding: 0.5rem 0.75rem !important;
+  }
+  .ts-dropdown .ts-dropdown-content {
+    max-height: 320px !important;
+  }
+  .purchase-table-wrap {
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-lg);
+    background: #ffffff;
+    overflow: hidden;
+    box-shadow: var(--shadow-sm);
+    margin-bottom: 1.25rem;
+  }
+  .purchase-table-wrap table thead th {
+    background: #f8fafc;
+    border-bottom: 1px solid var(--color-border);
+    font-size: 0.8rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--color-slate-600);
+    padding: 0.75rem 1rem;
+  }
+  .purchase-table-wrap table tbody td {
+    padding: 0.65rem 1rem;
+    vertical-align: middle;
+    border-bottom: 1px solid var(--color-border);
+  }
+</style>
 
-    <form id="purchase-form" onsubmit="submitPurchase(event)">
-      
-      <!-- Top Meta Info -->
-      <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem; margin-bottom: 2rem;">
-        <div>
-            <label class="form-label" for="supplier_id">Supplier <span style="color:var(--danger-text)">*</span></label>
-            <select id="supplier_id" class="form-control" required>
-              <option value="" disabled {% if not purchase %}selected{% endif %}>Select Supplier</option>
-              {% for s in suppliers %}
-              <option value="{{ s.id }}" {% if purchase and purchase.supplier_id == s.id %}selected{% endif %}>{{ s.name }}</option>
-              {% endfor %}
-            </select>
-        </div>
-        <div>
-            <div class="form-group">
-            <label for="purchase_date" class="form-label">Date Received <span style="color:var(--danger-text)">*</span></label>
-            <input type="date" class="form-control" id="purchase_date" value="{{ purchase.purchase_date if purchase else '' }}" required>
-          </div>
-          
-          <div class="form-group" style="margin-top: 1rem;">
-            <label for="warehouse_id" class="form-label">Warehouse <span style="color:var(--danger-text)">*</span></label>
-            <select class="form-control" id="warehouse_id" required>
-              {% for w in warehouses %}
-                <option value="{{ w.id }}" {% if purchase and purchase.warehouse_id == w.id %}selected{% elif not purchase and w.id == 1 %}selected{% endif %}>{{ w.name }}</option>
-              {% endfor %}
-            </select>
-          </div>
-        </div>
-        <div>
-            <label class="form-label" for="reference_number">Reference / Invoice #</label>
-            <input type="text" id="reference_number" class="form-control" value="{{ purchase.reference_number if purchase else '' }}" placeholder="e.g. INV-2023-001">
-          </div>
-      </div>
-
-      <!-- Items Table -->
-      <div class="table-wrap" style="margin-bottom: 2rem; border: 1px solid var(--border-color); border-radius: 8px;">
-        <table class="data-table" id="purchase-items-table" style="margin: 0; width: 100%;">
-          <thead style="background-color: #f8fafc;">
-            <tr>
-              <th style="width: 45%; padding: 1rem;">Product</th>
-              <th style="width: 15%; padding: 1rem;">Qty Received</th>
-              <th style="width: 15%; padding: 1rem;">Cost Price ($)</th>
-              <th style="width: 15%; padding: 1rem; text-align: right;">Amount ($)</th>
-              <th style="width: 10%; padding: 1rem; text-align: center;">Action</th>
-            </tr>
-          </thead>
-          <tbody id="items-tbody">
-            <!-- First row added by JS -->
-          </tbody>
-        </table>
-        <div style="padding: 1rem; background-color: #f8fafc; border-top: 1px solid var(--border-color);">
-          <button type="button" class="btn btn-outline btn-sm" onclick="addPurchaseRow()">+ Add Row</button>
-        </div>
-      </div>
-
-      <!-- Payment & Totals -->
-      <div style="display: flex; gap: 3rem; justify-content: space-between; border-top: 1px solid var(--border-color); padding-top: 2.5rem; flex-wrap: wrap;">
-        
-        <!-- Payment Details -->
-        <div style="flex: 1; min-width: 250px; max-width: 400px;">
-          <h4 style="margin-bottom: 1.5rem; font-weight: 600;">Payment Details</h4>
-          <div style="margin-bottom: 1.25rem;">
-            <label class="form-label">Payment Amount</label>
-            <div style="position: relative; display: flex; align-items: center;">
-              <span style="position: absolute; left: 12px; color: var(--text-muted); font-weight: 500;">$</span>
-              <input type="number" id="payment_amount" class="form-control" style="padding-left: 28px;" step="0.01" min="0" placeholder="0.00" value="{% if purchase %}{{ purchase.amount_paid }}{% else %}0{% endif %}" {% if purchase %}readonly title="Cannot edit initial payment here"{% endif %}>
-            </div>
-            <small style="color: var(--text-muted); display: block; margin-top: 0.25rem;">Leave as 0 if adding to unpaid balance.</small>
-          </div>
-          <div style="margin-bottom: 1.25rem;">
-            <label class="form-label">Payment Method</label>
-            <select id="payment_method" class="form-control">
-              <option value="cash">Cash</option>
-              <option value="cheque">Cheque</option>
-              <option value="bank">Bank Transfer</option>
-            </select>
-          </div>
-        </div>
-
-        <!-- Totals -->
-        <div style="flex: 1; min-width: 250px; max-width: 320px; background-color: #f8fafc; padding: 1.5rem; border-radius: 8px; border: 1px solid var(--border-color);">
-          <div style="display: grid; grid-template-columns: 1fr auto; row-gap: 1rem; align-items: center; font-size: 1.1rem;">
-            <span style="color: var(--text-muted);">Subtotal:</span>
-            <span id="display-subtotal" style="font-weight: 600; text-align: right;">$0.00</span>
-            
-            <label for="other_charges" style="color: var(--text-muted); margin: 0; font-weight: normal; cursor: pointer;">Other Charges:</label>
-            <div style="position: relative; display: flex; align-items: center; justify-self: end; width: 100px;">
-              <span style="position: absolute; left: 8px; color: var(--text-muted); font-weight: 500;">$</span>
-              <input type="number" id="other_charges" class="form-control" style="padding-left: 20px; padding-right: 0.5rem; text-align: right; height: 32px;" step="0.01" min="0" value="{% if purchase %}{{ purchase.other_charges }}{% else %}0.00{% endif %}">
-            </div>
-
-            <span style="color: var(--text-muted);">Amount Paid:</span>
-            <span id="display-paid" style="color: var(--success-text); font-weight: 600; text-align: right;">$0.00</span>
-            
-            <div style="grid-column: 1 / -1; height: 1px; background: var(--border-color); margin: 0.25rem 0;"></div>
-            
-            <span style="font-weight: 700; color: var(--text-color);">Balance Due:</span>
-            <span id="display-balance" style="color: var(--danger-text); font-weight: 700; font-size: 1.25rem; text-align: right;">$0.00</span>
-          </div>
-        </div>
-        
-      </div>
-
-      <div style="margin-top: 3.5rem; text-align: right; border-top: 1px solid var(--border-color); padding-top: 1.5rem;">
-        <a href="/purchases" class="btn btn-outline" style="margin-right: 0.75rem;">Cancel</a>
-        <button type="submit" class="btn btn-primary" id="save-purchase-btn">Save Shipment</button>
-      </div>
-
-    </form>
+<!-- Workstation Command Bar -->
+<div class="purchases-header-bar" style="margin-bottom: 1.25rem;">
+  <div class="purchases-title-group">
+    <a href="{{ url_for('purchases') }}" class="btn btn-secondary" style="width: 36px; height: 36px; padding: 0; display: inline-flex; align-items: center; justify-content: center; border-radius: 8px;" title="Back to Purchases">
+      <i data-lucide="arrow-left" style="width: 18px; height: 18px;"></i>
+    </a>
+    <div>
+      <h2 style="margin:0; font-size:1.35rem; font-weight:700; color:var(--color-slate-900);">
+        {% if purchase %}Edit Shipment #{{ purchase.id }}{% else %}Receive Shipment / Inbound Stock{% endif %}
+      </h2>
+      <p style="margin: 0.15rem 0 0 0; font-size:0.8rem; color:var(--color-slate-500);">
+        {% if purchase %}Update received quantities, costs, and reference information.{% else %}Log incoming supplier inventory, update cost prices, and calculate accounts payable.{% endif %}
+      </p>
+    </div>
+  </div>
+  <div>
+    <a href="/purchases" class="btn btn-secondary" style="font-size: 0.825rem; font-weight: 600;">Cancel</a>
   </div>
 </div>
+
+<form id="purchase-form" onsubmit="submitPurchase(event)">
+  <!-- Shipment Metadata Card -->
+  <div style="background: #ffffff; border: 1px solid var(--color-border); border-radius: var(--radius-lg); padding: 1.25rem; box-shadow: var(--shadow-sm); margin-bottom: 1.25rem;">
+    <div style="display: flex; align-items: center; gap: 0.45rem; font-size: 0.825rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: var(--color-slate-600); margin-bottom: 1rem;">
+      <i data-lucide="truck" style="width: 16px; height: 16px; color: #2563eb;"></i>
+      <span>Shipment Information</span>
+    </div>
+
+    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 1rem; align-items: end;">
+      <div>
+        <label class="field-label" for="supplier_id">Supplier <span style="color:#dc2626">*</span></label>
+        <select id="supplier_id" class="form-control" required>
+          <option value="" disabled {% if not purchase %}selected{% endif %}>Select Supplier</option>
+          {% for s in suppliers %}
+          <option value="{{ s.id }}" {% if purchase and purchase.supplier_id == s.id %}selected{% endif %}>{{ s.name }}</option>
+          {% endfor %}
+        </select>
+      </div>
+
+      <div>
+        <label class="field-label" for="purchase_date">Date Received <span style="color:#dc2626">*</span></label>
+        <input type="date" class="form-control" id="purchase_date" value="{{ purchase.purchase_date if purchase else '' }}" onclick="if(this.showPicker) this.showPicker()" required>
+      </div>
+
+      <div>
+        <label class="field-label" for="warehouse_id">Receiving Warehouse <span style="color:#dc2626">*</span></label>
+        <select class="form-control" id="warehouse_id" required>
+          {% for w in warehouses %}
+            <option value="{{ w.id }}" {% if purchase and purchase.warehouse_id == w.id %}selected{% elif not purchase and w.id == 1 %}selected{% endif %}>{{ w.name }}</option>
+          {% endfor %}
+        </select>
+      </div>
+
+      <div>
+        <label class="field-label" for="reference_number">Reference / Invoice #</label>
+        <input type="text" id="reference_number" class="form-control" value="{{ purchase.reference_number if purchase else '' }}" placeholder="e.g. INV-2026-001">
+      </div>
+    </div>
+  </div>
+
+  <!-- Items Received Table -->
+  <div class="purchase-table-wrap">
+    <div style="padding: 0.85rem 1.25rem; background: #ffffff; border-bottom: 1px solid var(--color-border); display: flex; align-items: center; justify-content: space-between;">
+      <div style="display: flex; align-items: center; gap: 0.45rem; font-size: 0.825rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: var(--color-slate-600);">
+        <i data-lucide="boxes" style="width: 16px; height: 16px; color: var(--color-primary);"></i>
+        <span>Shipment Line Items</span>
+      </div>
+      <button type="button" class="btn btn-secondary" onclick="addPurchaseRow()" style="display: inline-flex; align-items: center; gap: 0.35rem; font-size: 0.8rem; font-weight: 600; padding: 0.35rem 0.75rem;">
+        <i data-lucide="plus" style="width: 14px; height: 14px;"></i>
+        <span>Add Line Item</span>
+      </button>
+    </div>
+
+    <table class="data-table" id="purchase-items-table" style="margin: 0; width: 100%;">
+      <thead>
+        <tr>
+          <th style="width: 44%;">Product</th>
+          <th style="width: 16%; text-align: center;">Qty Received</th>
+          <th style="width: 16%; text-align: right;">Cost Price ($)</th>
+          <th style="width: 16%; text-align: right;">Amount ($)</th>
+          <th style="width: 8%; text-align: center;">Action</th>
+        </tr>
+      </thead>
+      <tbody id="items-tbody">
+        <!-- Rows injected dynamically via JS -->
+      </tbody>
+    </table>
+
+    <div style="padding: 0.85rem 1.25rem; background: #f8fafc; border-top: 1px solid var(--color-border);">
+      <button type="button" class="btn btn-secondary" onclick="addPurchaseRow()" style="display: inline-flex; align-items: center; gap: 0.35rem; font-size: 0.8rem; font-weight: 600;">
+        <i data-lucide="plus" style="width: 14px; height: 14px;"></i>
+        <span>Add Row</span>
+      </button>
+    </div>
+  </div>
+
+  <!-- Financial Settlement & Totals Breakdown -->
+  <div style="display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(320px, 1fr); gap: 1.25rem; align-items: start; margin-bottom: 2rem;">
+    
+    <!-- Payment Details Card -->
+    <div style="background: #ffffff; border: 1px solid var(--color-border); border-radius: var(--radius-lg); padding: 1.25rem; box-shadow: var(--shadow-sm);">
+      <div style="display: flex; align-items: center; gap: 0.45rem; font-size: 0.825rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: var(--color-slate-600); margin-bottom: 1rem;">
+        <i data-lucide="credit-card" style="width: 16px; height: 16px; color: #2563eb;"></i>
+        <span>Initial Payment Settlement</span>
+      </div>
+
+      <div style="margin-bottom: 1rem;">
+        <label class="field-label" for="payment_amount">Payment Amount</label>
+        <div style="position: relative;">
+          <span style="position: absolute; left: 10px; top: 50%; transform: translateY(-50%); font-weight: 600; color: var(--color-slate-400);">$</span>
+          <input type="number" id="payment_amount" class="form-control" style="padding-left: 24px; font-weight: 600;" step="0.01" min="0" placeholder="0.00" value="{% if purchase %}{{ purchase.amount_paid }}{% else %}0{% endif %}" {% if purchase %}readonly title="Cannot edit initial payment here"{% endif %}>
+        </div>
+        <small style="color: var(--color-slate-500); display: block; margin-top: 0.25rem; font-size: 0.75rem;">Leave as 0.00 if this shipment is unpaid or on supplier credit.</small>
+      </div>
+
+      <div style="margin-bottom: 0.5rem;">
+        <label class="field-label" for="payment_method">Payment Method</label>
+        <select id="payment_method" class="form-control">
+          <option value="cash">Cash</option>
+          <option value="cheque">Cheque</option>
+          <option value="bank">Bank Transfer</option>
+        </select>
+      </div>
+    </div>
+
+    <!-- Live Totals Summary Card -->
+    <div style="background: #ffffff; border: 1px solid var(--color-border); border-radius: var(--radius-lg); padding: 1.25rem; box-shadow: var(--shadow-sm);">
+      <div style="display: flex; align-items: center; gap: 0.45rem; font-size: 0.825rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: var(--color-slate-600); margin-bottom: 1rem;">
+        <i data-lucide="calculator" style="width: 16px; height: 16px; color: #059669;"></i>
+        <span>Shipment Totals</span>
+      </div>
+
+      <div style="display: grid; grid-template-columns: 1fr auto; row-gap: 0.75rem; align-items: center; font-size: 0.9rem;">
+        <span style="color: var(--color-slate-600);">Items Subtotal</span>
+        <span id="display-subtotal" style="font-weight: 600; color: var(--color-slate-900); text-align: right;">$0.00</span>
+
+        <label for="other_charges" class="field-label" style="margin: 0; color: var(--color-slate-600); cursor: pointer;">Other Charges / Freight</label>
+        <div style="position: relative; width: 120px; justify-self: end;">
+          <span style="position: absolute; left: 8px; top: 50%; transform: translateY(-50%); font-weight: 600; color: var(--color-slate-400);">$</span>
+          <input type="number" id="other_charges" class="form-control" style="padding-left: 20px; text-align: right; height: 34px; font-weight: 600;" step="0.01" min="0" value="{% if purchase %}{{ purchase.other_charges }}{% else %}0.00{% endif %}">
+        </div>
+
+        <span style="color: var(--color-slate-600);">Amount Paid</span>
+        <span id="display-paid" style="font-weight: 700; color: #059669; text-align: right;">$0.00</span>
+
+        <div style="grid-column: 1 / -1; height: 1px; background: var(--color-border); margin: 0.25rem 0;"></div>
+
+        <span style="font-weight: 700; color: var(--color-slate-900); font-size: 0.95rem;">Balance Due</span>
+        <span id="display-balance" style="font-weight: 800; font-size: 1.25rem; color: #dc2626; text-align: right;">$0.00</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Form Actions Bar -->
+  <div style="display: flex; justify-content: flex-end; align-items: center; gap: 0.75rem; border-top: 1px solid var(--color-border); padding-top: 1.25rem;">
+    <a href="/purchases" class="btn btn-secondary" style="font-weight: 600; padding: 0.5rem 1.25rem;">Cancel</a>
+    <button type="submit" class="btn btn-primary" id="save-purchase-btn" style="display: inline-flex; align-items: center; gap: 0.4rem; font-weight: 600; padding: 0.5rem 1.5rem;">
+      <i data-lucide="check" style="width: 16px; height: 16px;"></i>
+      <span>{% if purchase %}Update Shipment{% else %}Save Shipment{% endif %}</span>
+    </button>
+  </div>
+</form>
 
 <!-- Product Data JSON -->
 <script>
@@ -140,7 +234,6 @@
 </script>
 
 <script>
-  // Setup date
   if (!existingPurchase) {
     document.getElementById('purchase_date').valueAsDate = new Date();
   }
@@ -150,7 +243,6 @@
   function addPurchaseRow(initialData = null) {
     const tr = document.createElement('tr');
     
-    // Product select options
     let productOptions = '<option value="">-- Select Product --</option>';
     products.forEach(p => {
       const isSelected = initialData && initialData.product_id == p.id ? 'selected' : '';
@@ -161,27 +253,31 @@
     const initCost = initialData ? parseFloat(initialData.cost_price).toFixed(2) : '0.00';
 
     tr.innerHTML = `
-      <td style="padding: 1rem;">
+      <td style="padding: 0.65rem 1rem;">
         <select class="form-control prod-select" required>
           ${productOptions}
         </select>
       </td>
-      <td style="padding: 1rem;">
-        <input type="number" class="form-control qty-input" min="0.001" step="any" value="${initQty}" required oninput="calcRow(this)" placeholder="0.00">
+      <td style="padding: 0.65rem 1rem; text-align: center;">
+        <input type="number" class="form-control qty-input" style="text-align: center; height: 38px; font-weight: 600;" min="0.001" step="any" value="${initQty}" required oninput="calcRow(this)" placeholder="0.00">
       </td>
-      <td style="padding: 1rem;">
-        <input type="number" class="form-control cost-input" min="0" step="any" value="${initCost}" required oninput="calcRow(this)" placeholder="0.00">
+      <td style="padding: 0.65rem 1rem; text-align: right;">
+        <div style="position: relative;">
+          <span style="position: absolute; left: 8px; top: 50%; transform: translateY(-50%); font-weight: 600; color: var(--color-slate-400); font-size: 0.8rem;">$</span>
+          <input type="number" class="form-control cost-input" style="padding-left: 18px; text-align: right; height: 38px; font-weight: 600;" min="0" step="any" value="${initCost}" required oninput="calcRow(this)" placeholder="0.00">
+        </div>
       </td>
-      <td style="padding: 1rem; text-align: right; vertical-align: middle; font-weight: 500;">
+      <td style="padding: 0.65rem 1rem; text-align: right; vertical-align: middle; font-weight: 700; color: var(--color-slate-900);">
         $<span class="row-amount">0.00</span>
       </td>
-      <td style="padding: 1rem; text-align: center;">
-        <button type="button" class="btn btn-danger" style="padding: 0.25rem 0.5rem; line-height: 1; border-radius: 4px;" onclick="removeRow(this)">&times;</button>
+      <td style="padding: 0.65rem 1rem; text-align: center;">
+        <button type="button" class="btn-delete-action" style="padding: 0.35rem 0.5rem; border-radius: 6px;" onclick="removeRow(this)" title="Remove Row">
+          <i data-lucide="trash-2" style="width: 14px; height: 14px;"></i>
+        </button>
       </td>
     `;
     tbody.appendChild(tr);
 
-    // Initialize TomSelect for the new select
     const selectEl = tr.querySelector('.prod-select');
     new TomSelect(selectEl, {
       create: false,
@@ -191,7 +287,6 @@
         direction: "asc"
       },
       onChange: function(value) {
-        // Emulate handleProductSelect
         if(value) {
           const option = selectEl.options[selectEl.selectedIndex];
           const cost = option ? option.getAttribute('data-cost') : null;
@@ -203,19 +298,13 @@
       }
     });
 
+    if (window.lucide && window.lucide.createIcons) {
+      window.lucide.createIcons({ root: tr });
+    }
+
     if (initialData) {
       calcRow(tr.querySelector('.cost-input'));
     }
-  }
-
-  function handleProductSelect(selectEl) {
-    const option = selectEl.options[selectEl.selectedIndex];
-    const cost = option.getAttribute('data-cost');
-    const tr = selectEl.closest('tr');
-    if (cost) {
-      tr.querySelector('.cost-input').value = parseFloat(cost).toFixed(2);
-    }
-    calcRow(selectEl);
   }
 
   function removeRow(btn) {
@@ -246,13 +335,19 @@
 
     document.getElementById('display-subtotal').textContent = '$' + subtotal.toFixed(2);
     document.getElementById('display-paid').textContent = '$' + paid.toFixed(2);
-    document.getElementById('display-balance').textContent = '$' + balance.toFixed(2);
+    
+    const balanceEl = document.getElementById('display-balance');
+    balanceEl.textContent = '$' + balance.toFixed(2);
+    if (balance > 0) {
+      balanceEl.style.color = '#dc2626';
+    } else {
+      balanceEl.style.color = '#059669';
+    }
   }
 
   document.getElementById('payment_amount').addEventListener('input', calcTotals);
   document.getElementById('other_charges').addEventListener('input', calcTotals);
 
-  // Initialize rows
   if (existingPurchase && existingPurchase.items && existingPurchase.items.length > 0) {
     existingPurchase.items.forEach(item => {
       addPurchaseRow(item);
@@ -282,7 +377,7 @@
 
     if (!valid) return;
     if (items.length === 0) {
-      alert("Please add at least one item.");
+      alert("Please add at least one line item.");
       return;
     }
 
@@ -299,7 +394,6 @@
 
     const submitUrl = existingPurchase ? `/api/purchases/${existingPurchase.id}` : '/purchases/new';
     
-    // Helper function to send the request
     const sendRequest = async (force = false) => {
       if (force) {
         payload.force = true;
@@ -307,7 +401,7 @@
       
       const btn = document.getElementById('save-purchase-btn');
       btn.disabled = true;
-      btn.textContent = 'Saving...';
+      btn.innerHTML = '<span>Saving...</span>';
 
       try {
         const res = await fetch(submitUrl, {
@@ -324,21 +418,30 @@
             sendRequest(true);
           } else {
             btn.disabled = false;
-            btn.textContent = 'Save Shipment';
+            btn.innerHTML = '<i data-lucide="check" style="width: 16px; height: 16px;"></i><span>{% if purchase %}Update Shipment{% else %}Save Shipment{% endif %}</span>';
+            if (window.lucide) window.lucide.createIcons();
           }
         } else {
           alert(data.error || "Failed to save purchase");
           btn.disabled = false;
-          btn.textContent = 'Save Shipment';
+          btn.innerHTML = '<i data-lucide="check" style="width: 16px; height: 16px;"></i><span>{% if purchase %}Update Shipment{% else %}Save Shipment{% endif %}</span>';
+          if (window.lucide) window.lucide.createIcons();
         }
       } catch (err) {
-        alert("Network error");
+        alert("Network error occurred while saving shipment.");
         btn.disabled = false;
-        btn.textContent = 'Save Shipment';
+        btn.innerHTML = '<i data-lucide="check" style="width: 16px; height: 16px;"></i><span>{% if purchase %}Update Shipment{% else %}Save Shipment{% endif %}</span>';
+        if (window.lucide) window.lucide.createIcons();
       }
     };
     
     sendRequest(false);
   }
+
+  document.addEventListener('DOMContentLoaded', () => {
+    if (window.lucide && window.lucide.createIcons) {
+      window.lucide.createIcons();
+    }
+  });
 </script>
 {% endblock %}
