@@ -199,24 +199,6 @@
     color: white;
   }
 
-  .status-badge {
-    display: inline-block;
-    padding: 0.2rem 0.5rem;
-    border-radius: 12px;
-    font-size: 0.75rem;
-    font-weight: 600;
-  }
-
-  .status-badge.paid {
-    background: #10b981;
-    color: white;
-  }
-
-  .status-badge.unpaid {
-    background: #ef4444;
-    color: white;
-  }
-
   .invoice-warning {
     color: #f59e0b;
     font-size: 0.8rem;
@@ -264,25 +246,42 @@
 
 <div id="stockErrorBanner" class="error-banner" style="display: none;"></div>
 
-<section class="panel">
-  <div class="panel-header" style="display: flex; justify-content: space-between; align-items: center;">
-    <h2>{% if edit_mode %}Edit Sale{% else %}New Sale{% endif %}</h2>
+<section class="sale-workstation-panel">
+  <div class="panel-header" style="display: flex; justify-content: space-between; align-items: center; padding: 1.15rem 1.5rem;">
+    <div style="display: flex; align-items: center; gap: 0.65rem;">
+      <div style="width: 34px; height: 34px; border-radius: 8px; background: #ecfdf5; color: #059669; display: flex; align-items: center; justify-content: center;">
+        <i data-lucide="receipt"></i>
+      </div>
+      <div>
+        <h2 style="margin: 0; font-size: 1.15rem; font-weight: 700;">{% if edit_mode %}Edit Sales Invoice{% else %}New Sales Invoice{% endif %}</h2>
+        <span style="font-size: 0.75rem; color: var(--color-slate-500);">Interactive sales recording & billing workstation</span>
+      </div>
+    </div>
     {% if not edit_mode %}
     <div id="importCsvBlock">
-      <button class="btn btn-secondary" style="font-size: 0.85rem;" onclick="document.getElementById('importCsvModal').style.display='flex'">Import Old Sales (CSV)</button>
+      <button type="button" class="btn-pdf-action" onclick="document.getElementById('importCsvModal').style.display='flex'" title="Upload batch sales from CSV">
+        <i data-lucide="upload-cloud"></i>
+        <span>Import Sales (CSV)</span>
+      </button>
     </div>
     {% endif %}
   </div>
   
   {% if not edit_mode %}
-  <div id="importCsvModal" style="display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 1000; align-items: center; justify-content: center;">
-    <div class="panel" style="background: white; padding: 2rem; border-radius: 12px; width: 450px; max-width: 90vw;">
-      <h3 style="margin-top: 0;">Bulk Upload Sales via CSV</h3>
-      <p style="font-size: 0.9rem; color: #64748b; margin-bottom: 1rem;">
+  <div id="importCsvModal" style="display: none; position: fixed; inset: 0; background: rgba(15, 23, 42, 0.6); backdrop-filter: blur(4px); z-index: 1000; align-items: center; justify-content: center;">
+    <div class="panel" style="background: white; padding: 2rem; border-radius: 12px; width: 460px; max-width: 90vw; box-shadow: 0 20px 25px -5px rgba(0,0,0,0.2);">
+      <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.75rem;">
+        <i data-lucide="file-spreadsheet" style="color: var(--color-primary); width: 22px; height: 22px;"></i>
+        <h3 style="margin: 0; font-size: 1.15rem; font-weight: 700;">Bulk Upload Sales via CSV</h3>
+      </div>
+      <p style="font-size: 0.85rem; color: #64748b; margin-bottom: 1rem; line-height: 1.45;">
         Upload a CSV file to generate sales invoices. Multiple rows with the same <strong>Invoice Number</strong> are clubbed together into one invoice. 
-        New sequential invoice numbers (e.g. <code>AK-000045</code>) will be generated automatically continuing from your last sale.
+        New sequential invoice numbers will be generated automatically.
       </p>
-      <a href="{{ url_for('sales_import_csv_template') }}" style="font-size: 0.85rem; color: var(--color-primary); display: inline-block; margin-bottom: 1rem; font-weight: 600;">Download CSV Template</a>
+      <a href="{{ url_for('sales_import_csv_template') }}" style="font-size: 0.85rem; color: var(--color-primary); display: inline-flex; align-items: center; gap: 0.35rem; margin-bottom: 1.25rem; font-weight: 600; text-decoration: none;">
+        <i data-lucide="download" style="width: 14px; height: 14px;"></i>
+        <span>Download CSV Template</span>
+      </a>
       
       <div id="csvImportError" class="error-banner" style="display: none; font-size: 0.85rem; padding: 0.75rem;"></div>
       <div id="csvImportSuccess" style="display: none; background: #ecfdf5; color: #059669; border: 1px solid #a7f3d0; padding: 0.75rem; border-radius: 8px; margin-bottom: 1rem; font-size: 0.85rem; font-weight: 600;"></div>
@@ -291,7 +290,7 @@
         <input type="file" id="csvFileInput" accept=".csv" class="form-control" style="margin-bottom: 1.5rem;">
         <div style="display: flex; justify-content: flex-end; gap: 0.5rem;">
           <button type="button" class="btn btn-secondary" onclick="document.getElementById('importCsvModal').style.display='none'">Cancel</button>
-          <button type="button" class="btn btn-primary" onclick="submitCsvImport()">Upload & Import</button>
+          <button type="button" class="btn btn-primary" onclick="submitCsvImport()">Upload &amp; Import</button>
         </div>
       </form>
     </div>
@@ -340,18 +339,21 @@
   </script>
   {% endif %}
 
-  <div class="panel-body" style="padding: 1.35rem;">
+  <div class="panel-body" style="padding: 1.5rem;">
     <form id="saleForm" method="post" action="{% if edit_mode %}{{ url_for('sales_update', sale_id=edit_sale.id) }}{% else %}{{ url_for('sales_new') }}{% endif %}" target="_self">
       <div class="sale-grid">
         <div>
           <div class="form-group">
-            <label class="field-label" for="customerSearch">Customer</label>
+            <label class="field-label" for="customerSearch">
+              <i data-lucide="user" style="width: 14px; height: 14px; vertical-align: middle; margin-right: 2px;"></i>
+              <span>Customer</span>
+            </label>
             <div class="search-wrap">
               <input
                 class="form-control"
                 type="text"
                 id="customerSearch"
-                placeholder="Search customers..."
+                placeholder="Search customers by name..."
                 autocomplete="off"
                 {% if edit_mode %}value="{{ edit_sale.customer_name }}"{% endif %}
               >
@@ -361,13 +363,19 @@
           </div>
 
           <div class="form-group">
-            <label class="field-label" for="invoiceDate">Invoice Date</label>
+            <label class="field-label" for="invoiceDate">
+              <i data-lucide="calendar" style="width: 14px; height: 14px; vertical-align: middle; margin-right: 2px;"></i>
+              <span>Invoice Date</span>
+            </label>
             <input class="form-control" type="date" id="invoiceDate" name="invoice_date" value="{% if edit_mode %}{{ edit_sale.invoice_date }}{% else %}{{ today }}{% endif %}" required>
           </div>
 
           {% if current_user.role == 'admin' %}
           <div class="form-group">
-            <label class="field-label" for="warehouseId">Warehouse</label>
+            <label class="field-label" for="warehouseId">
+              <i data-lucide="building-2" style="width: 14px; height: 14px; vertical-align: middle; margin-right: 2px;"></i>
+              <span>Warehouse</span>
+            </label>
             <select class="form-control" id="warehouseId" name="warehouse_id">
               {% for w in warehouses %}
                 <option value="{{ w.id }}" {% if edit_mode and edit_sale.warehouse_id == w.id %}selected{% elif not edit_mode and w.id == 1 %}selected{% endif %}>{{ w.name }}</option>
@@ -377,27 +385,35 @@
           {% endif %}
 
           <div class="form-group">
-            <label class="field-label" for="dueDate">Due Date</label>
+            <label class="field-label" for="dueDate">
+              <i data-lucide="clock" style="width: 14px; height: 14px; vertical-align: middle; margin-right: 2px;"></i>
+              <span>Due Date</span>
+            </label>
             <input class="form-control" type="date" id="dueDate" name="due_date" value="{% if edit_mode %}{{ edit_sale.due_date or '' }}{% endif %}">
           </div>
 
-
           <div class="form-group">
             <label class="field-label" for="notesInput">Notes (optional)</label>
-            <textarea class="form-control" id="notesInput" name="notes" rows="4" placeholder="Add any notes...">{% if edit_mode %}{{ edit_sale.notes or '' }}{% endif %}</textarea>
+            <textarea class="form-control" id="notesInput" name="notes" rows="3" placeholder="Add special instructions or delivery notes...">{% if edit_mode %}{{ edit_sale.notes or '' }}{% endif %}</textarea>
           </div>
         </div>
 
         <div>
           <div class="form-group">
-            <label class="field-label" for="invoiceNumber">Invoice #</label>
+            <label class="field-label" for="invoiceNumber">
+              <i data-lucide="hash" style="width: 14px; height: 14px; vertical-align: middle; margin-right: 2px;"></i>
+              <span>Invoice #</span>
+            </label>
             <input class="form-control" type="text" id="invoiceNumber" name="invoice_number" value="{% if edit_mode %}{{ edit_sale.invoice_number }}{% else %}{{ next_invoice_number }}{% endif %}">
-            <div class="invoice-hint">Auto-generated. You can override if needed.</div>
+            <div class="invoice-hint">Sequential invoice number. You can override if required.</div>
             <div id="invoiceWarning" class="invoice-warning" style="display: none;"></div>
           </div>
 
           <div class="form-group">
-            <label class="field-label" for="salesmanId">Salesman</label>
+            <label class="field-label" for="salesmanId">
+              <i data-lucide="user-check" style="width: 14px; height: 14px; vertical-align: middle; margin-right: 2px;"></i>
+              <span>Salesman</span>
+            </label>
             <select class="form-control" id="salesmanId" name="salesman_id">
               <option value="">-- None --</option>
               {% for u in all_users %}
@@ -407,12 +423,12 @@
           </div>
 
           <div class="form-group">
-            <label class="field-label" for="termsInput">Terms</label>
-            <input class="form-control" type="text" id="termsInput" name="terms" value="{% if edit_mode %}{{ edit_sale.terms or '' }}{% endif %}">
+            <label class="field-label" for="termsInput">Payment Terms</label>
+            <input class="form-control" type="text" id="termsInput" name="terms" placeholder="e.g. Net 30, Due on Receipt" value="{% if edit_mode %}{{ edit_sale.terms or '' }}{% endif %}">
           </div>
 
           <div class="form-group">
-            <label class="field-label">Payment Type</label>
+            <label class="field-label">Payment Method</label>
             <div class="toggle-pills" role="radiogroup" aria-label="Payment type">
               <label class="toggle-pill">
                 <input type="radio" name="payment_type" value="cash" {% if not edit_mode or edit_sale.payment_type == 'cash' %}checked{% endif %}>
@@ -429,22 +445,22 @@
             </div>
           </div>
 
-          <div id="credit-fields" style="display:none; margin-top: 16px;">
+          <div id="credit-fields" class="credit-breakdown-box" style="display:none;">
             <!-- Total Bill (read-only) -->
-            <div class="form-group">
-              <label style="font-size: 0.8rem; font-weight: 600; color: var(--color-text-muted); display: block; margin-bottom: 0.35rem;">Total Bill ($)</label>
+            <div class="form-group" style="margin-bottom: 0.75rem;">
+              <label class="field-label">Total Bill ($)</label>
               <input type="text" id="total-bill-display" 
                      readonly 
-                     style="width: 100%; padding: 0.55rem 0.75rem; border: 1px solid var(--color-border); border-radius: 8px; font-size: 0.95rem; background: #f4f6f9; font-weight: bold;"
+                     class="form-control"
+                     style="background: #f8fafc; font-weight: 700;"
                      placeholder="0.00">
             </div>
 
             <!-- Paid Upfront -->
-            <div class="form-group" style="margin-top:12px;">
-              <label style="font-size: 0.8rem; font-weight: 600; color: var(--color-text-muted); display: block; margin-bottom: 0.35rem;">Paid Upfront ($) 
-                <span style="color:#e8800a;">
-                  (leave 0 if nothing paid)
-                </span>
+            <div class="form-group" style="margin-bottom: 0.75rem;">
+              <label class="field-label">
+                <span>Paid Upfront ($)</span>
+                <span style="font-weight: 500; font-size: 0.75rem; color: #b45309;">(leave 0 if unpaid)</span>
               </label>
               <input type="number" 
                      id="paid-upfront" 
@@ -452,17 +468,19 @@
                      min="0" 
                      step="0.01"
                      value="0"
-                     placeholder="Enter amount paid now"
-                     style="width: 100%; padding: 0.55rem 0.75rem; border: 2px solid #e8800a; border-radius: 8px; font-size: 0.95rem; background: #fff;">
+                     class="form-control"
+                     style="border-color: #f59e0b; font-weight: 600;"
+                     placeholder="Enter amount paid now">
             </div>
 
             <!-- Remaining (read-only) -->
-            <div class="form-group" style="margin-top:12px;">
-              <label style="font-size: 0.8rem; font-weight: 600; color: var(--color-text-muted); display: block; margin-bottom: 0.35rem;">Remaining on Credit ($)</label>
+            <div class="form-group" style="margin-bottom: 0;">
+              <label class="field-label">Remaining Balance on Credit ($)</label>
               <input type="text" 
                      id="remaining-display" 
                      readonly
-                     style="width: 100%; padding: 0.55rem 0.75rem; border: 1px solid var(--color-border); border-radius: 8px; font-size: 0.95rem; background: #fff0f0; color: #dc2626; font-weight: bold;"
+                     class="form-control"
+                     style="background: #fef2f2; color: #dc2626; font-weight: 800;"
                      placeholder="0.00">
             </div>
           </div>
@@ -476,169 +494,213 @@
         </div>
       </div>
 
-      <div style="margin-top: 1.35rem;">
-        <div class="panel" style="box-shadow:none; border:1px solid var(--color-border); background: #fff;">
-          <div class="panel-header" style="border-bottom:1px solid var(--color-border); background: #fafbfc;">
-            <h2 style="font-size:1.05rem;">Line Items</h2>
+      <!-- Line Items Workstation Table -->
+      <div class="line-items-panel">
+        <div class="line-items-header">
+          <div style="display: flex; align-items: center; gap: 0.5rem;">
+            <i data-lucide="list-ordered" style="width: 16px; height: 16px; color: var(--color-primary);"></i>
+            <h3 style="margin: 0; font-size: 0.95rem; font-weight: 700;">Invoice Line Items</h3>
           </div>
-          <div class="panel-body">
-            <div class="table-wrap">
-              <table class="data-table">
-                <thead>
-                  <tr>
-                    <th style="width: 60px;">#</th>
-                    <th>Item &amp; Description</th>
-                    <th style="width: 120px;">Qty</th>
-                    <th style="width: 140px;">Rate</th>
-                    <th style="width: 150px;">Amount</th>
-                    <th style="width: 70px;"></th>
-                  </tr>
-                </thead>
-                <tbody id="lineItemsTbody"></tbody>
-              </table>
-            </div>
+          <span class="kpi-section-badge">Tax-Inclusive Rates</span>
+        </div>
+        <div class="panel-body" style="padding: 0;">
+          <div class="table-wrap">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th style="width: 50px; text-align: center;">#</th>
+                  <th>Item &amp; Description</th>
+                  <th style="width: 120px;">Qty</th>
+                  <th style="width: 140px;">Rate</th>
+                  <th style="width: 150px;">Amount</th>
+                  <th style="width: 60px; text-align: center;"></th>
+                </tr>
+              </thead>
+              <tbody id="lineItemsTbody"></tbody>
+            </table>
+          </div>
 
-            <div style="margin-top: 0.95rem; display:flex; justify-content:flex-start;">
-              <button type="button" class="btn btn-primary" id="addItemBtn">Add Item</button>
-            </div>
+          <div style="padding: 1rem 1.25rem; display: flex; justify-content: flex-start; background: #fafbfc; border-top: 1px solid var(--color-border-subtle);">
+            <button type="button" class="btn btn-secondary" id="addItemBtn" style="display: inline-flex; align-items: center; gap: 0.35rem;">
+              <i data-lucide="plus"></i>
+              <span>Add Line Item</span>
+            </button>
           </div>
         </div>
       </div>
 
-      <div style="margin-top: 1.05rem; display:flex; justify-content:flex-end;">
-        <div style="width: 420px;">
-          <div style="font-weight:800; color: var(--color-text-muted); margin-bottom:0.5rem; text-align:left;">Totals</div>
-          <div style="display:grid; gap:0.65rem; padding: 0.95rem 1rem; border-radius: 10px; background: #fff; border: 1px solid var(--color-border); box-shadow: var(--shadow-card);">
-            <div style="display:flex; justify-content:space-between; gap:1rem;">
-              <div style="color: var(--color-text-muted); font-weight:700;">Subtotal</div>
-              <div id="subtotalAmount" class="row-amount sensitive-data">$0.00</div>
+      <!-- Calculations and Totals Block -->
+      <div style="margin-top: 1.5rem; display: flex; justify-content: flex-end;">
+        <div class="sale-totals-box">
+          <div class="totals-row">
+            <span class="totals-label">Subtotal</span>
+            <span id="subtotalAmount" class="totals-value sensitive-data">$0.00</span>
+          </div>
+          <div class="totals-row">
+            <span class="totals-label">Discount</span>
+            <div style="display: flex; align-items: center; gap: 0.35rem;">
+              <span style="font-weight: 700; color: var(--color-slate-400);">$</span>
+              <input class="form-control" style="width: 140px; padding: 0.35rem 0.5rem; font-weight: 600;" type="number" min="0" step="0.01" id="discountInput" name="discount_amount" value="{% if edit_mode %}{{ edit_sale.discount_amount or 0.00 }}{% else %}0.00{% endif %}">
             </div>
-            <div style="display:flex; justify-content:space-between; gap:1rem; align-items:center;">
-              <div style="color: var(--color-text-muted); font-weight:700;">Discount</div>
-              <div style="display:flex; align-items:center; gap:0.45rem;">
-                <div style="font-weight:900; color: var(--color-text-muted);">$</div>
-                <input class="form-control" style="width: 170px;" type="number" min="0" step="0.01" id="discountInput" name="discount_amount" value="{% if edit_mode %}{{ edit_sale.discount_amount or 0.00 }}{% else %}0.00{% endif %}">
-              </div>
-            </div>
-            <div style="display:flex; justify-content:space-between; gap:1rem; align-items:baseline;">
-              <div style="color: var(--color-text-muted); font-weight:800;">Grand Total</div>
-              <div id="grandTotalAmount" class="grand-total sensitive-data">$0.00</div>
-            </div>
-            <div style="display:flex; justify-content:space-between; gap:1rem; align-items:baseline; margin-top: 0.5rem; padding-top: 0.5rem; border-top: 1px dashed var(--color-border);">
-              <div style="color: var(--color-text-muted); font-weight:800;">Profit Margin</div>
-              <div id="profitMarginAmount" class="sensitive-data" style="font-weight: 800; color: var(--color-success);">0.00%</div>
-            </div>
-            <div style="display:flex; justify-content:space-between; gap:1rem; align-items:baseline;">
-              <div style="color: var(--color-text-muted); font-weight:800;">Profit Amount</div>
-              <div id="profitAmount" class="sensitive-data" style="font-weight: 800; color: var(--color-success);">$0.00</div>
-            </div>
+          </div>
+          <div class="totals-divider"></div>
+          <div class="totals-row">
+            <span class="totals-label" style="font-size: 1.05rem; font-weight: 700; color: var(--color-slate-900);">Grand Total</span>
+            <span id="grandTotalAmount" class="totals-grand sensitive-data">$0.00</span>
+          </div>
+          <div class="totals-divider"></div>
+          <div class="totals-row">
+            <span class="totals-label">Estimated Margin</span>
+            <span id="profitMarginAmount" class="sensitive-data kpi-pill positive" style="font-weight: 700;">0.00%</span>
+          </div>
+          <div class="totals-row">
+            <span class="totals-label">Estimated Profit</span>
+            <span id="profitAmount" class="totals-value sensitive-data" style="color: #059669; font-weight: 700;">$0.00</span>
           </div>
         </div>
       </div>
 
-      <div style="margin-top: 1.35rem; display:flex; gap:0.75rem; justify-content:flex-end; flex-wrap: wrap;">
-        <button type="submit" class="btn btn-outline-secondary" name="generate_quote" value="1" formtarget="_blank">Generate Quote</button>
+      <!-- Form Actions Toolbar -->
+      <div style="margin-top: 1.75rem; display: flex; gap: 0.75rem; justify-content: flex-end; flex-wrap: wrap; padding-top: 1.25rem; border-top: 1px solid var(--color-border-subtle);">
+        <button type="submit" class="btn btn-secondary" name="generate_quote" value="1" formtarget="_blank" style="display: inline-flex; align-items: center; gap: 0.35rem;">
+          <i data-lucide="file-text"></i>
+          <span>Generate Quote</span>
+        </button>
         {% if edit_mode %}
-          <button type="submit" class="btn btn-secondary" id="saveSaleBtn">Update Sale</button>
-          <button type="submit" class="btn btn-primary" id="generateInvoiceBtn" name="generate_invoice" value="1">Update &amp; Regenerate Invoice</button>
+          <button type="submit" class="btn btn-secondary" id="saveSaleBtn" style="display: inline-flex; align-items: center; gap: 0.35rem;">
+            <i data-lucide="save"></i>
+            <span>Update Sale</span>
+          </button>
+          <button type="submit" class="btn btn-primary" id="generateInvoiceBtn" name="generate_invoice" value="1" style="display: inline-flex; align-items: center; gap: 0.35rem;">
+            <i data-lucide="printer"></i>
+            <span>Update &amp; Regenerate Invoice</span>
+          </button>
         {% else %}
-          <button type="submit" class="btn btn-secondary" id="saveSaleBtn">Save Sale</button>
-          <button type="submit" class="btn btn-primary" id="generateInvoiceBtn" name="generate_invoice" value="1">Save &amp; Generate Invoice</button>
+          <button type="submit" class="btn btn-secondary" id="saveSaleBtn" style="display: inline-flex; align-items: center; gap: 0.35rem;">
+            <i data-lucide="save"></i>
+            <span>Save Sale</span>
+          </button>
+          <button type="submit" class="btn btn-primary" id="generateInvoiceBtn" name="generate_invoice" value="1" style="display: inline-flex; align-items: center; gap: 0.35rem;">
+            <i data-lucide="printer"></i>
+            <span>Save &amp; Generate Invoice</span>
+          </button>
         {% endif %}
       </div>
     </form>
   </div>
 </section>
 
-<section class="panel" style="margin-top:1.6rem;">
-  <div class="panel-header">
-    <h2>Recent Sales</h2>
+<!-- Sales History & Invoices Ledger -->
+<section class="panel" style="margin-top: 2rem;">
+  <div class="panel-header" style="display: flex; justify-content: space-between; align-items: center; padding: 1.15rem 1.5rem;">
+    <div style="display: flex; align-items: center; gap: 0.65rem;">
+      <div style="width: 34px; height: 34px; border-radius: 8px; background: #ecfdf5; color: #059669; display: flex; align-items: center; justify-content: center;">
+        <i data-lucide="history"></i>
+      </div>
+      <div>
+        <h2 style="margin: 0; font-size: 1.15rem; font-weight: 700;">Recent Sales &amp; Invoices</h2>
+        <span style="font-size: 0.75rem; color: var(--color-slate-500);">Historical transaction ledger & status overview</span>
+      </div>
+    </div>
+    <div style="display: flex; gap: 0.5rem; align-items: center;">
+      <a href="/sales/export" id="exportSalesBtn" class="btn-pdf-action" title="Export current sales to CSV">
+        <i data-lucide="file-spreadsheet"></i>
+        <span>Export CSV</span>
+      </a>
+    </div>
   </div>
-  <div class="panel-body">
-    <details class="recent-details" open style="padding: 16px 20px; background: #f9fafb; border-radius: 8px; border: 1px solid #e5e7eb; margin-bottom: 16px;">
-      <summary>Filter &amp; View History</summary>
-      <div style="display: flex; gap: 16px; align-items: flex-end; padding: 16px 0 0 0; flex-wrap: wrap;">
-          <div>
-            <label class="field-label" for="filterDateFrom" style="margin-bottom: 6px; display: block;">Date From</label>
-            <input class="form-control" type="date" id="filterDateFrom" style="padding: 8px 12px; border-radius: 6px;">
-          </div>
-          <div>
-            <label class="field-label" for="filterDateTo" style="margin-bottom: 6px; display: block;">Date To</label>
-            <input class="form-control" type="date" id="filterDateTo" style="padding: 8px 12px; border-radius: 6px;">
-          </div>
-          <div>
-            <label class="field-label" for="filterSearch" style="margin-bottom: 6px; display: block;">Search</label>
-            <input class="form-control" type="text" id="filterSearch" placeholder="Invoice # or Customer..." style="padding: 8px 12px; border-radius: 6px;">
-          </div>
-          <div style="min-width: 220px;">
-            <label class="field-label" for="filterCustomer" style="margin-bottom: 6px; display: block;">Customer</label>
-            <select class="form-control select2-searchable" id="filterCustomer" style="width: 100%;">
-              <option value="all" selected>All Customers</option>
-              {% for c in customers %}
-              <option value="{{ c.id }}">{{ c.name }}</option>
-              {% endfor %}
-            </select>
-          </div>
-          <div style="min-width: 220px;">
-            <label class="field-label" for="filterProduct" style="margin-bottom: 6px; display: block;">Product</label>
-            <select class="form-control select2-searchable" id="filterProduct" style="width: 100%;">
-              <option value="all" selected>All Products</option>
-              {% for p in products %}
-              <option value="{{ p.id }}">{{ p.name }}</option>
-              {% endfor %}
-            </select>
-          </div>
-          <div>
-            <label class="field-label" for="filterPaymentType" style="margin-bottom: 6px; display: block;">Payment Type</label>
-            <select class="form-control" id="filterPaymentType" style="padding: 8px 12px; border-radius: 6px;">
-              <option value="all" selected>All</option>
-              <option value="cash">Cash</option>
-              <option value="cheque">Cheque</option>
-              <option value="credit">Credit</option>
-            </select>
-          </div>
-          <div>
-            <label class="field-label" for="filterWarehouse" style="margin-bottom: 6px; display: block;">Warehouse</label>
-            <select class="form-control" id="filterWarehouse" style="padding: 8px 12px; border-radius: 6px;">
-              <option value="all" selected>All Warehouses</option>
-              {% for w in warehouses %}
-              <option value="{{ w.id }}">{{ w.name }}</option>
-              {% endfor %}
-            </select>
-          </div>
-        </div>
-        <div style="margin-top:0.9rem; display:flex; justify-content:flex-end; gap: 8px;">
-          <button type="button" class="btn btn-primary" id="filterBtn">Filter</button>
-          <a href="/sales/export" id="exportSalesBtn" class="btn btn-secondary"><i class="fas fa-file-csv"></i> Export CSV</a>
-        </div>
 
-      <div class="table-wrap">
-        <table class="data-table" id="salesHistoryTable" style="font-size: 0.85rem;">
-          <thead>
-            <tr>
-              <th style="white-space: nowrap;">Invoice#</th>
-              <th style="white-space: nowrap;">Date</th>
-              <th style="white-space: nowrap; min-width: 140px;">Customer</th>
-              <th style="white-space: nowrap;">Grand Total</th>
-              <th style="white-space: nowrap;">Profit Margin</th>
-              <th style="white-space: nowrap;">Profit Amount</th>
-              <th style="white-space: nowrap;">Remaining</th>
-              <th style="white-space: nowrap;">Status</th>
-              <th style="white-space: nowrap;">Salesman</th>
-              <th style="width: 200px;">Actions</th>
-            </tr>
-          </thead>
-          <tbody id="recentSalesTbody"></tbody>
-        </table>
+  <div class="panel-body" style="padding: 1.25rem 1.5rem;">
+    <div class="sales-filter-card">
+      <div style="display: flex; align-items: center; gap: 0.4rem; font-size: 0.8rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: var(--color-slate-500); margin-bottom: 0.85rem;">
+        <i data-lucide="filter" style="width: 14px; height: 14px; color: var(--color-primary);"></i>
+        <span>Filter Transactions</span>
       </div>
-      <div id="salesPagination" style="margin-top: 12px; display: flex; justify-content: space-between; align-items: center; font-size: 0.9rem;">
-        <span id="salesPageInfo"></span>
-        <div style="display: flex; gap: 8px;">
-          <button type="button" class="btn btn-secondary btn-sm" id="prevSalesPageBtn">Previous</button>
-          <button type="button" class="btn btn-secondary btn-sm" id="nextSalesPageBtn">Next</button>
+      <div class="sales-filter-grid">
+        <div>
+          <label class="field-label" for="filterDateFrom">Date From</label>
+          <input class="form-control" type="date" id="filterDateFrom">
+        </div>
+        <div>
+          <label class="field-label" for="filterDateTo">Date To</label>
+          <input class="form-control" type="date" id="filterDateTo">
+        </div>
+        <div>
+          <label class="field-label" for="filterSearch">Search</label>
+          <input class="form-control" type="text" id="filterSearch" placeholder="Invoice # or Customer...">
+        </div>
+        <div style="min-width: 180px;">
+          <label class="field-label" for="filterCustomer">Customer</label>
+          <select class="form-control select2-searchable" id="filterCustomer" style="width: 100%;">
+            <option value="all" selected>All Customers</option>
+            {% for c in customers %}
+            <option value="{{ c.id }}">{{ c.name }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div style="min-width: 180px;">
+          <label class="field-label" for="filterProduct">Product</label>
+          <select class="form-control select2-searchable" id="filterProduct" style="width: 100%;">
+            <option value="all" selected>All Products</option>
+            {% for p in products %}
+            <option value="{{ p.id }}">{{ p.name }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div>
+          <label class="field-label" for="filterPaymentType">Payment Type</label>
+          <select class="form-control" id="filterPaymentType">
+            <option value="all" selected>All Types</option>
+            <option value="cash">Cash</option>
+            <option value="cheque">Cheque</option>
+            <option value="credit">Credit</option>
+          </select>
+        </div>
+        <div>
+          <label class="field-label" for="filterWarehouse">Warehouse</label>
+          <select class="form-control" id="filterWarehouse">
+            <option value="all" selected>All Warehouses</option>
+            {% for w in warehouses %}
+            <option value="{{ w.id }}">{{ w.name }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div>
+          <button type="button" class="btn btn-primary" id="filterBtn" style="width: 100%; display: inline-flex; align-items: center; justify-content: center; gap: 0.35rem;">
+            <i data-lucide="filter"></i>
+            <span>Filter</span>
+          </button>
         </div>
       </div>
-    </details>
+    </div>
+
+    <div class="table-wrap">
+      <table class="data-table" id="salesHistoryTable">
+        <thead>
+          <tr>
+            <th>Invoice #</th>
+            <th>Date</th>
+            <th>Customer</th>
+            <th>Grand Total</th>
+            <th>Margin</th>
+            <th>Profit</th>
+            <th>Remaining</th>
+            <th style="text-align: center;">Status</th>
+            <th>Salesman</th>
+            <th style="text-align: right; min-width: 160px;">Actions</th>
+          </tr>
+        </thead>
+        <tbody id="recentSalesTbody"></tbody>
+      </table>
+    </div>
+
+    <div id="salesPagination" style="margin-top: 1rem; display: flex; justify-content: space-between; align-items: center; font-size: 0.85rem; padding-top: 0.75rem; border-top: 1px solid var(--color-border-subtle);">
+      <span id="salesPageInfo" style="color: var(--color-slate-500); font-weight: 500;"></span>
+      <div style="display: flex; gap: 0.5rem;">
+        <button type="button" class="btn btn-secondary btn-sm" id="prevSalesPageBtn">Previous</button>
+        <button type="button" class="btn btn-secondary btn-sm" id="nextSalesPageBtn">Next</button>
+      </div>
+    </div>
   </div>
 </section>
 
@@ -1341,10 +1403,27 @@
     rows.forEach((s) => {
       const tr = document.createElement('tr');
       tr.style.cursor = 'pointer';
-      tr.onclick = () => viewSale(s.id);
+      tr.onclick = () => {
+        if (window.openInvoiceDrawer) {
+          window.openInvoiceDrawer(s.id);
+        } else {
+          viewSale(s.id);
+        }
+      };
 
       const tdInvoice = document.createElement('td');
-      tdInvoice.textContent = s.invoice_number || '';
+      const invLink = document.createElement('a');
+      invLink.className = 'drawer-preview-link';
+      invLink.innerHTML = `<i data-lucide="file-text" style="width:13px;height:13px;"></i><span>${s.invoice_number || ''}</span>`;
+      invLink.onclick = (e) => {
+        e.stopPropagation();
+        if (window.openInvoiceDrawer) {
+          window.openInvoiceDrawer(s.id);
+        } else {
+          viewSale(s.id);
+        }
+      };
+      tdInvoice.appendChild(invLink);
       tr.appendChild(tdInvoice);
 
       const tdDate = document.createElement('td');
@@ -1392,13 +1471,12 @@
       tr.appendChild(tdRemaining);
 
       const tdStatus = document.createElement('td');
+      tdStatus.style.textAlign = 'center';
       const st = (s.status || 'unpaid').toLowerCase();
-      let badgeStyle = 'padding: 4px 8px; border-radius: 4px; font-size: 0.75rem; font-weight: 600; text-transform: uppercase;';
-      if (st === 'paid') badgeStyle += 'background-color: #d1fae5; color: #065f46;';
-      else if (st === 'partial') badgeStyle += 'background-color: #fef3c7; color: #92400e;';
-      else if (st === 'quote') badgeStyle += 'background-color: #dbeafe; color: #1e40af;';
-      else badgeStyle += 'background-color: #fee2e2; color: #991b1b;';
-      tdStatus.innerHTML = `<span style="${badgeStyle}">${st}</span>`;
+      const statusSpan = document.createElement('span');
+      statusSpan.className = `status-badge ${st}`;
+      statusSpan.textContent = st;
+      tdStatus.appendChild(statusSpan);
       tr.appendChild(tdStatus);
 
       const tdSalesman = document.createElement('td');
@@ -1406,34 +1484,27 @@
       tr.appendChild(tdSalesman);
       
       const tdActions = document.createElement('td');
-      tdActions.style.display = 'flex';
-      tdActions.style.gap = '0.5rem';
+      tdActions.style.textAlign = 'right';
+      tdActions.style.whiteSpace = 'nowrap';
+      
+      const actionsWrap = document.createElement('div');
+      actionsWrap.style.display = 'inline-flex';
+      actionsWrap.style.alignItems = 'center';
+      actionsWrap.style.justifyContent = 'flex-end';
+      actionsWrap.style.gap = '0.35rem';
       
       const pdfLink = document.createElement('a');
-      pdfLink.className = 'btn btn-pdf';
+      pdfLink.className = 'btn-pdf-action';
       pdfLink.target = '_blank';
       pdfLink.href = '/sales/' + s.id + '/invoice/pdf';
-      pdfLink.textContent = s.status === 'quote' ? 'Quotation' : 'Invoice';
-      pdfLink.style.padding = '6px 14px';
-      pdfLink.style.fontSize = '14px';
+      pdfLink.innerHTML = `<i data-lucide="file-down"></i><span>${s.status === 'quote' ? 'Quote' : 'PDF'}</span>`;
       pdfLink.onclick = (e) => e.stopPropagation();
 
       const editLink = document.createElement('a');
+      editLink.className = 'btn-edit-action';
       editLink.href = '/sales/edit/' + s.id;
+      editLink.innerHTML = `<i data-lucide="edit-3"></i><span>Edit</span>`;
       editLink.onclick = (e) => e.stopPropagation();
-      const editBtn = document.createElement('button');
-      editBtn.type = 'button';
-      editBtn.textContent = 'Edit';
-      editBtn.style.padding = '4px 10px';
-      editBtn.style.fontSize = '12px';
-      editBtn.style.borderRadius = '4px';
-      editBtn.style.background = '#3b82f6';
-      editBtn.style.color = 'white';
-      editBtn.style.border = 'none';
-      editBtn.style.cursor = 'pointer';
-      editBtn.style.margin = '0 2px';
-      editBtn.onclick = (e) => e.stopPropagation();
-      editLink.appendChild(editBtn);
 
       const delForm = document.createElement('form');
       delForm.method = 'post';
@@ -1446,27 +1517,24 @@
 
       const delBtn = document.createElement('button');
       delBtn.type = 'submit';
-      delBtn.textContent = 'Delete';
-      delBtn.style.padding = '4px 10px';
-      delBtn.style.fontSize = '12px';
-      delBtn.style.borderRadius = '4px';
-      delBtn.style.background = '#dc2626';
-      delBtn.style.color = 'white';
-      delBtn.style.border = 'none';
-      delBtn.style.cursor = 'pointer';
-      delBtn.style.margin = '0 2px';
+      delBtn.className = 'btn-delete-action';
+      delBtn.innerHTML = `<i data-lucide="trash-2"></i><span>Delete</span>`;
 
       delForm.appendChild(delBtn);
       
-      tdActions.appendChild(pdfLink);
-      tdActions.appendChild(editLink);
-      tdActions.appendChild(delForm);
+      actionsWrap.appendChild(pdfLink);
+      actionsWrap.appendChild(editLink);
+      actionsWrap.appendChild(delForm);
 
-      // Record Payment Button removed from here and moved to viewSale modal
+      tdActions.appendChild(actionsWrap);
       tr.appendChild(tdActions);
 
       recentSalesTbody.appendChild(tr);
     });
+
+    if (window.lucide && window.lucide.createIcons) {
+      window.lucide.createIcons({ root: recentSalesTbody });
+    }
   }
 
   let allSalesData = [];

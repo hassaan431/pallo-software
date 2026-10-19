@@ -576,7 +576,7 @@
           const res = await fetch(`/sales/${saleId}/details`);
           if (!res.ok) throw new Error("Invoice details not found");
           const data = await res.json();
-          const s = data.sale;
+          const s = data.sale || data;
           const items = data.items || [];
 
           let pillClass = "status-pill-emerald";
@@ -586,6 +586,11 @@
           } else if (statusText.toLowerCase() === "unpaid" || statusText.toLowerCase() === "credit") {
             pillClass = "status-pill-crimson";
           }
+
+          const isPaid = statusText.toLowerCase() === "paid" || (Number(s.remaining_amount || 0) <= 0 && statusText.toLowerCase() !== "quote");
+          const paidStampHtml = isPaid ? `
+            <div class="drawer-paid-stamp">PAID</div>
+          ` : "";
 
           let itemsRows = items.map(it => `
             <tr>
@@ -597,7 +602,9 @@
           `).join("");
 
           const bodyHtml = `
-            <div class="drawer-summary-grid">
+            <div style="position: relative;">
+              ${paidStampHtml}
+              <div class="drawer-summary-grid">
               <div class="drawer-summary-card">
                 <div class="card-label">Customer</div>
                 <div class="card-val" style="font-size: 1.05rem; color: var(--color-slate-900);">${s.customer_name || 'Walk-in Customer'}</div>
@@ -653,6 +660,7 @@
                 <span style="color:var(--color-slate-500);">Amount Paid:</span>
                 <strong style="color:var(--color-primary);">$${Number(s.amount_paid || 0).toFixed(2)}</strong>
               </div>
+            </div>
             </div>
           `;
 

@@ -210,6 +210,8 @@ def generate_invoice_pdf(sale_id: int) -> bytes:
     return generate_pdf_from_data(sale, customer, sale_items, is_quote=(status == "quote"))
 
 def generate_pdf_from_data(sale: dict, customer: dict, sale_items: list, is_quote: bool = False) -> bytes:
+    sale = dict(sale) if sale else {}
+    customer = dict(customer) if customer else {}
     # Page setup
     page_width, page_height = letter  # (612, 792)
     margin = 0.5 * inch  # 36pt
@@ -713,6 +715,25 @@ def generate_pdf_from_data(sale: dict, customer: dict, sale_items: list, is_quot
             cnv.drawString(x0, margin + 10, "Thank you for your business!")
             cnv.setFont("Helvetica", 7)
             cnv.drawString(x0, margin + 2, "Solutions by Hassaan bin Jalil")
+
+        # Translucent PAID rubber stamp if invoice is paid
+        is_paid = (sale.get("status") == "paid" or float(sale.get("remaining_amount", 0) or 0) <= 0) and not is_quote
+        if is_paid and page_num == 1:
+            cnv.saveState()
+            stamp_color = colors.Color(0.06, 0.65, 0.42, alpha=0.22)
+            cnv.setFillColor(stamp_color)
+            cnv.setStrokeColor(stamp_color)
+            cnv.setLineWidth(3)
+            # Position over the invoice header/meta area
+            cnv.translate(x0 + usable_width - 95, page_height - margin - 85)
+            cnv.rotate(-15)
+            w, h = 135, 48
+            cnv.roundRect(-w/2, -h/2, w, h, 6, stroke=1, fill=0)
+            cnv.setLineWidth(1.2)
+            cnv.roundRect(-w/2 + 3, -h/2 + 3, w - 6, h - 6, 4, stroke=1, fill=0)
+            cnv.setFont("Helvetica-Bold", 26)
+            cnv.drawCentredString(0, -9, "PAID")
+            cnv.restoreState()
 
         cnv.showPage()
         page_num += 1
