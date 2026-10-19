@@ -2,153 +2,326 @@
 {% block title %}Suppliers & Brands — AK Distributors{% endblock %}
 {% block page_heading %}Suppliers & Brands{% endblock %}
 {% block content %}
-<div class="page-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem;">
-  <h2 style="margin:0; font-size:1.25rem; font-weight:700;">Suppliers & Brands</h2>
-  <div>
-    <button type="button" class="btn btn-primary" onclick="openAddSupplierModal()">Add Supplier</button>
+
+<!-- Workstation Command Bar -->
+<div class="suppliers-header-bar">
+  <div class="suppliers-title-group">
+    <div style="width: 36px; height: 36px; border-radius: 10px; background: #eff6ff; color: #2563eb; display: flex; align-items: center; justify-content: center; box-shadow: 0 1px 3px rgba(37, 99, 235, 0.2);">
+      <i data-lucide="building-2" style="width: 20px; height: 20px;"></i>
+    </div>
+    <div>
+      <h2 style="margin:0; font-size:1.25rem; font-weight:700; color:var(--color-slate-900);">Suppliers & Brand Directory</h2>
+      <p style="margin:0; font-size:0.775rem; color:var(--color-slate-500);">Trade partners, brand representations, commissions & payable balances</p>
+    </div>
+  </div>
+  <div style="display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap;">
+    <button type="button" class="btn btn-secondary" onclick="openModal(document.getElementById('addBrandModal'))" style="display: inline-flex; align-items: center; gap: 0.4rem; font-size: 0.825rem; font-weight: 600;">
+      <i data-lucide="tag" style="width: 14px; height: 14px;"></i>
+      <span>+ Add Brand</span>
+    </button>
+    <button type="button" class="btn btn-primary" onclick="openAddSupplierModal()" style="display: inline-flex; align-items: center; gap: 0.4rem; font-size: 0.825rem; font-weight: 600;">
+      <i data-lucide="building-2" style="width: 14px; height: 14px;"></i>
+      <span>+ Add Supplier</span>
+    </button>
   </div>
 </div>
 
-<section class="panel">
-  <div class="panel-header">
-    <h3 style="margin: 0;">Suppliers</h3>
-  </div>
-  <div class="panel-body">
-    <div class="table-wrap">
-      <table class="data-table">
-        <thead>
-          <tr>
-            <th>ID</th>
-            <th>Business Name</th>
-            <th>Contact Name</th>
-            <th>Phone</th>
-            <th>Address</th>
-            <th>Products</th>
-            <th style="text-align: right;">Total Paid</th>
-            <th style="text-align: right;">Balance Due</th>
-            <th style="width: 150px; text-align: right;">Actions</th>
-          </tr>
-        </thead>
-        <tbody>
-          {% for s in suppliers %}
-          <tr>
-            <td>{{ s.id }}</td>
-            <td style="font-weight: 500;">{{ s.name }}</td>
-            <td>{{ s.contact_name or '-' }}</td>
-            <td>{{ s.phone or '-' }}</td>
-            <td>{{ s.address or '-' }}</td>
-            <td>{{ s.products_count }}</td>
-            <td style="text-align: right; color: var(--success-text);">${{ "%.2f"|format(s.total_paid or 0) }}</td>
-            <td style="text-align: right; color: var(--danger-text); font-weight: 500;">${{ "%.2f"|format(s.total_balance or 0) }}</td>
-            <td style="text-align: right;">
-              <div style="display: flex; gap: 0.25rem; justify-content: flex-end; align-items: center;">
-                <button class="btn btn-secondary btn-sm" onclick="openSupplierHistoryModal({{ s.id }}, '{{ s.name | escape }}')">History</button>
-                <button class="btn btn-secondary btn-sm" onclick='openEditSupplierModal({{ s|tojson }})'>Edit</button>
-                <form action="/suppliers/delete/{{ s.id }}" method="POST" style="margin:0;" onsubmit="return confirm('Delete this supplier?');">
-                  <button type="submit" class="btn btn-danger btn-sm">Delete</button>
-                </form>
-              </div>
-            </td>
-          </tr>
-          {% else %}
-          <tr>
-            <td colspan="6" style="text-align: center; color: var(--color-text-muted);">No suppliers found.</td>
-          </tr>
-          {% endfor %}
-        </tbody>
-      </table>
+<!-- Financial & Operations Metric Overview (3 Cards) -->
+{% set total_payable_sum = namespace(value=0.0) %}
+{% set total_paid_sum = namespace(value=0.0) %}
+{% set total_prod_linked = namespace(value=0) %}
+{% for s in suppliers %}
+  {% set total_payable_sum.value = total_payable_sum.value + (s.total_balance|default(0)|float) %}
+  {% set total_paid_sum.value = total_paid_sum.value + (s.total_paid|default(0)|float) %}
+  {% set total_prod_linked.value = total_prod_linked.value + (s.products_count|default(0)|int) %}
+{% endfor %}
+{% set public_brands_count = namespace(value=0) %}
+{% for b in brands %}
+  {% if b.show_on_website %}
+    {% set public_brands_count.value = public_brands_count.value + 1 %}
+  {% endif %}
+{% endfor %}
+
+<div class="suppliers-stats-grid">
+  <article class="suppliers-stat-card">
+    <div class="suppliers-stat-content">
+      <h3>Trade Suppliers</h3>
+      <p class="suppliers-stat-value">{{ suppliers|length }}</p>
+      <p class="suppliers-stat-note">{{ total_prod_linked.value }} linked products across catalog</p>
     </div>
+    <div class="suppliers-stat-icon blue">
+      <i data-lucide="building-2"></i>
+    </div>
+  </article>
+
+  <article class="suppliers-stat-card">
+    <div class="suppliers-stat-content">
+      <h3>Active Brands</h3>
+      <p class="suppliers-stat-value">{{ brands|length }}</p>
+      <p class="suppliers-stat-note">{{ public_brands_count.value }} visible on public website</p>
+    </div>
+    <div class="suppliers-stat-icon emerald">
+      <i data-lucide="tag"></i>
+    </div>
+  </article>
+
+  <article class="suppliers-stat-card">
+    <div class="suppliers-stat-content">
+      <h3>Total Accounts Payable</h3>
+      <p class="suppliers-stat-value" style="color: {% if total_payable_sum.value > 0 %}#dc2626{% else %}var(--color-slate-900){% endif %};">
+        <span class="sensitive-data">${{ "%.2f"|format(total_payable_sum.value) }}</span>
+      </p>
+      <p class="suppliers-stat-note">Paid to date: <span class="sensitive-data" style="color: #059669; font-weight: 600;">${{ "%.2f"|format(total_paid_sum.value) }}</span></p>
+    </div>
+    <div class="suppliers-stat-icon amber">
+      <i data-lucide="credit-card"></i>
+    </div>
+  </article>
+</div>
+
+<!-- Suppliers Directory Table -->
+<section class="suppliers-section-card">
+  <div class="suppliers-section-header">
+    <div class="suppliers-section-title">
+      <i data-lucide="building-2" style="width: 16px; height: 16px; color: #2563eb;"></i>
+      <h3>Supplier Directory & Balances</h3>
+      <span class="suppliers-count-badge">{{ suppliers|length }} records</span>
+    </div>
+    <div style="display: flex; gap: 0.5rem; align-items: center;">
+      <div class="suppliers-search-box">
+        <i data-lucide="search"></i>
+        <input type="text" id="supplierSearchInput" class="suppliers-search-input" placeholder="Search suppliers..." autocomplete="off">
+      </div>
+      <button type="button" class="btn btn-primary btn-sm" onclick="openAddSupplierModal()" style="display: inline-flex; align-items: center; gap: 0.35rem; font-size: 0.8rem; font-weight: 600;">
+        <i data-lucide="plus" style="width: 13px; height: 13px;"></i>
+        <span>Add Supplier</span>
+      </button>
+    </div>
+  </div>
+  <div class="suppliers-table-wrap">
+    <table class="data-table" id="suppliersTable">
+      <thead>
+        <tr>
+          <th style="width: 60px;">ID</th>
+          <th>Business Name</th>
+          <th>Contact Name</th>
+          <th>Phone</th>
+          <th>Address</th>
+          <th style="text-align: center; width: 110px;">Products</th>
+          <th style="text-align: right; width: 130px;">Total Paid</th>
+          <th style="text-align: right; width: 130px;">Balance Due</th>
+          <th style="width: 220px; text-align: right;">Actions</th>
+        </tr>
+      </thead>
+      <tbody id="suppliersTableBody">
+        {% for s in suppliers %}
+        <tr class="supplier-row" data-search="{{ (s.name ~ ' ' ~ (s.contact_name or '') ~ ' ' ~ (s.phone or '') ~ ' ' ~ (s.address or ''))|lower }}">
+          <td><span class="row-id-chip">#{{ s.id }}</span></td>
+          <td style="font-weight: 600; color: var(--color-slate-900);">{{ s.name }}</td>
+          <td>
+            {% if s.contact_name %}
+            <span style="display:inline-flex; align-items:center; gap:0.35rem; color:var(--color-slate-700);">
+              <i data-lucide="user" style="width:13px; height:13px; color:var(--color-slate-400);"></i>
+              {{ s.contact_name }}
+            </span>
+            {% else %}
+            <span style="color:var(--color-slate-400);">-</span>
+            {% endif %}
+          </td>
+          <td>
+            {% if s.phone %}
+            <span style="display:inline-flex; align-items:center; gap:0.35rem; color:var(--color-slate-700);">
+              <i data-lucide="phone" style="width:13px; height:13px; color:var(--color-slate-400);"></i>
+              {{ s.phone }}
+            </span>
+            {% else %}
+            <span style="color:var(--color-slate-400);">-</span>
+            {% endif %}
+          </td>
+          <td>
+            {% if s.address %}
+            <span style="display:inline-flex; align-items:center; gap:0.35rem; color:var(--color-slate-600); max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="{{ s.address }}">
+              <i data-lucide="map-pin" style="width:13px; height:13px; color:var(--color-slate-400); flex-shrink:0;"></i>
+              {{ s.address }}
+            </span>
+            {% else %}
+            <span style="color:var(--color-slate-400);">-</span>
+            {% endif %}
+          </td>
+          <td style="text-align: center;">
+            <span class="stock-pill in-stock" style="font-size: 0.75rem; padding: 2px 8px;">{{ s.products_count }} items</span>
+          </td>
+          <td style="text-align: right; color: #059669; font-weight: 600;">
+            <span class="sensitive-data">${{ "%.2f"|format(s.total_paid or 0) }}</span>
+          </td>
+          <td style="text-align: right;">
+            {% if (s.total_balance or 0) > 0 %}
+            <span class="sensitive-data" style="color: #dc2626; font-weight: 700;">${{ "%.2f"|format(s.total_balance or 0) }}</span>
+            {% else %}
+            <span class="sensitive-data" style="color: var(--color-slate-500); font-weight: 500;">$0.00</span>
+            {% endif %}
+          </td>
+          <td style="text-align: right;">
+            <div style="display: flex; gap: 0.35rem; justify-content: flex-end; align-items: center;">
+              <button type="button" class="btn-history-action" onclick="openSupplierHistoryModal({{ s.id }}, '{{ s.name | escape }}')" title="View Delivery History">
+                <i data-lucide="history"></i>
+                <span>History</span>
+              </button>
+              <button type="button" class="btn-edit-action" onclick='openEditSupplierModal({{ s|tojson }})' title="Edit Supplier">
+                <i data-lucide="pencil"></i>
+                <span>Edit</span>
+              </button>
+              <form action="/suppliers/delete/{{ s.id }}" method="POST" style="margin:0; display:inline;" onsubmit="return confirm('Delete supplier {{ s.name | escape }}?');">
+                <button type="submit" class="btn-delete-action" title="Delete Supplier">
+                  <i data-lucide="trash-2"></i>
+                  <span>Delete</span>
+                </button>
+              </form>
+            </div>
+          </td>
+        </tr>
+        {% else %}
+        <tr>
+          <td colspan="9" style="text-align: center; padding: 2.5rem 1rem; color: var(--color-slate-400);">No suppliers found in directory.</td>
+        </tr>
+        {% endfor %}
+        <tr id="supplierEmptySearchRow" style="display: none;">
+          <td colspan="9" style="text-align: center; padding: 2.5rem 1rem; color: var(--color-slate-400);">No suppliers matching search query.</td>
+        </tr>
+      </tbody>
+    </table>
   </div>
 </section>
 
-<section class="panel" style="margin-top: 2rem;">
-  <div class="panel-header" style="display: flex; justify-content: space-between; align-items: center;">
-    <h3 style="margin: 0;">Brands</h3>
-    <button class="btn btn-primary" onclick="openModal(document.getElementById('addBrandModal'))">+ Add Brand</button>
-  </div>
-  <div class="panel-body">
-    <div class="table-wrap">
-      <table class="data-table">
-        <thead>
-          <tr>
-            <th>ID</th>
-            <th>Name</th>
-            <th>Commission Rate</th>
-            <th>Website Visibility</th>
-            <th>Products</th>
-            <th style="width: 150px; text-align: right;">Actions</th>
-          </tr>
-        </thead>
-        <tbody>
-          {% for b in brands %}
-          <tr>
-            <td>{{ b.id }}</td>
-            <td style="font-weight: 500;">
-                <div style="display: flex; align-items: center; gap: 0.5rem;">
-                    {% set logo_name = b.name | brand_logo_filename %}
-                    {% if logo_name %}
-                    <img src="/static/logos/brands/{{ logo_name }}" alt="Logo" style="height: 24px; width: 24px; object-fit: contain; border-radius: 4px; border: 1px solid #e2e8f0;">
-                    {% endif %}
-                    {{ b.name }}
-                </div>
-            </td>
-            <td>{{ b.commission_rate or '0' }}%</td>
-            <td>
-                {% if b.show_on_website %}
-                <span style="display:inline-block; padding:2px 8px; border-radius:12px; font-size:0.75rem; background:#dcfce7; color:#166534;">Visible</span>
-                {% else %}
-                <span style="display:inline-block; padding:2px 8px; border-radius:12px; font-size:0.75rem; background:#fee2e2; color:#991b1b;">Hidden</span>
-                {% endif %}
-            </td>
-            <td>{{ b.products_count }}</td>
-            <td style="text-align: right;">
-              <div style="display: flex; gap: 0.25rem; justify-content: flex-end; align-items: center;">
-                <button class="btn btn-secondary btn-sm" onclick='openEditBrandModal({{ b|tojson }})'>Edit</button>
-                <form action="/brands/delete/{{ b.id }}" method="POST" style="margin:0;" onsubmit="return confirm('Delete this brand? This will remove the brand from all associated products.');">
-                  <button type="submit" class="btn btn-danger btn-sm">Delete</button>
-                </form>
-              </div>
-            </td>
-          </tr>
-          {% else %}
-          <tr>
-            <td colspan="3" style="text-align: center; color: var(--color-text-muted);">No brands found.</td>
-          </tr>
-          {% endfor %}
-        </tbody>
-      </table>
+<!-- Brand Catalog Table -->
+<section class="suppliers-section-card">
+  <div class="suppliers-section-header">
+    <div class="suppliers-section-title">
+      <i data-lucide="tag" style="width: 16px; height: 16px; color: #059669;"></i>
+      <h3>Brand Representation & Catalog</h3>
+      <span class="suppliers-count-badge">{{ brands|length }} brands</span>
     </div>
+    <div style="display: flex; gap: 0.5rem; align-items: center;">
+      <div class="suppliers-search-box">
+        <i data-lucide="search"></i>
+        <input type="text" id="brandSearchInput" class="suppliers-search-input" placeholder="Search brands..." autocomplete="off">
+      </div>
+      <button type="button" class="btn btn-primary btn-sm" onclick="openModal(document.getElementById('addBrandModal'))" style="display: inline-flex; align-items: center; gap: 0.35rem; font-size: 0.8rem; font-weight: 600;">
+        <i data-lucide="plus" style="width: 13px; height: 13px;"></i>
+        <span>Add Brand</span>
+      </button>
+    </div>
+  </div>
+  <div class="brands-table-wrap">
+    <table class="data-table" id="brandsTable">
+      <thead>
+        <tr>
+          <th style="width: 60px;">ID</th>
+          <th>Brand & Logo</th>
+          <th style="text-align: center; width: 140px;">Commission Rate</th>
+          <th style="text-align: center; width: 150px;">Website Visibility</th>
+          <th style="text-align: center; width: 120px;">Products</th>
+          <th style="width: 160px; text-align: right;">Actions</th>
+        </tr>
+      </thead>
+      <tbody id="brandsTableBody">
+        {% for b in brands %}
+        <tr class="brand-row" data-search="{{ b.name|lower }}">
+          <td><span class="row-id-chip">#{{ b.id }}</span></td>
+          <td>
+            <div style="display: flex; align-items: center; gap: 0.65rem;">
+              {% set logo_name = b.name | brand_logo_filename %}
+              {% if logo_name %}
+              <img src="/static/logos/brands/{{ logo_name }}" alt="{{ b.name }}" class="brand-logo-preview">
+              {% else %}
+              <div class="brand-avatar-fallback">{{ b.name[:2]|upper }}</div>
+              {% endif %}
+              <span style="font-weight: 600; color: var(--color-slate-900);">{{ b.name }}</span>
+            </div>
+          </td>
+          <td style="text-align: center;">
+            <span class="stock-pill in-stock" style="background: #f1f5f9; color: #334155; border: 1px solid #e2e8f0; font-weight: 600;">
+              {{ b.commission_rate or '0' }}%
+            </span>
+          </td>
+          <td style="text-align: center;">
+            {% if b.show_on_website %}
+            <span class="stock-pill in-stock" style="gap: 4px; display: inline-flex; align-items: center;">
+              <i data-lucide="eye" style="width: 12px; height: 12px;"></i>
+              Visible
+            </span>
+            {% else %}
+            <span class="stock-pill out-of-stock" style="gap: 4px; display: inline-flex; align-items: center;">
+              <i data-lucide="eye-off" style="width: 12px; height: 12px;"></i>
+              Hidden
+            </span>
+            {% endif %}
+          </td>
+          <td style="text-align: center;">
+            <span class="stock-pill in-stock" style="font-size: 0.75rem; padding: 2px 8px;">{{ b.products_count }} items</span>
+          </td>
+          <td style="text-align: right;">
+            <div style="display: flex; gap: 0.35rem; justify-content: flex-end; align-items: center;">
+              <button type="button" class="btn-edit-action" onclick='openEditBrandModal({{ b|tojson }})' title="Edit Brand">
+                <i data-lucide="pencil"></i>
+                <span>Edit</span>
+              </button>
+              <form action="/brands/delete/{{ b.id }}" method="POST" style="margin:0; display:inline;" onsubmit="return confirm('Delete this brand? This will remove the brand from all associated products.');">
+                <button type="submit" class="btn-delete-action" title="Delete Brand">
+                  <i data-lucide="trash-2"></i>
+                  <span>Delete</span>
+                </button>
+              </form>
+            </div>
+          </td>
+        </tr>
+        {% else %}
+        <tr>
+          <td colspan="6" style="text-align: center; padding: 2.5rem 1rem; color: var(--color-slate-400);">No brands found in catalog.</td>
+        </tr>
+        {% endfor %}
+        <tr id="brandEmptySearchRow" style="display: none;">
+          <td colspan="6" style="text-align: center; padding: 2.5rem 1rem; color: var(--color-slate-400);">No brands matching search query.</td>
+        </tr>
+      </tbody>
+    </table>
   </div>
 </section>
 
 <!-- Add Supplier Modal -->
 <div id="addSupplierModal" class="modal-backdrop" aria-hidden="true">
-  <div class="modal" role="dialog" aria-modal="true" style="max-width: 400px;">
+  <div class="modal" role="dialog" aria-modal="true" style="max-width: 440px;">
     <div class="modal-header">
-      <h3 style="margin:0;">Add Supplier</h3>
+      <div style="display: flex; align-items: center; gap: 0.5rem;">
+        <i data-lucide="building-2" style="width: 18px; height: 18px; color: #2563eb;"></i>
+        <h3 style="margin:0; font-size: 1.1rem; font-weight: 700;">Add Supplier</h3>
+      </div>
       <button type="button" class="modal-close" data-close-modal="addSupplierModal" aria-label="Close">&times;</button>
     </div>
-    <div class="modal-body">
+    <div class="modal-body" style="padding: 1.25rem;">
       <form action="/suppliers/add" method="POST">
-        <div class="form-group" style="margin-bottom:1rem;">
-          <label class="field-label" style="display:block; margin-bottom:0.25rem;">Business Name *</label>
-          <input type="text" name="name" class="form-control" required style="width:100%;">
+        <div class="form-group" style="margin-bottom: 0.85rem;">
+          <label class="field-label" style="display:block; margin-bottom: 0.3rem; font-weight: 600; font-size: 0.8rem; color: var(--color-slate-700);">Business Name *</label>
+          <input type="text" name="name" class="form-control" required style="width:100%;" placeholder="e.g. Acme Wholesale LLC">
         </div>
-        <div class="form-group" style="margin-bottom:1rem;">
-          <label class="field-label" style="display:block; margin-bottom:0.25rem;">Contact Name</label>
-          <input type="text" name="contact_name" class="form-control" style="width:100%;">
+        <div class="form-group" style="margin-bottom: 0.85rem;">
+          <label class="field-label" style="display:block; margin-bottom: 0.3rem; font-weight: 600; font-size: 0.8rem; color: var(--color-slate-700);">Contact Person</label>
+          <input type="text" name="contact_name" class="form-control" style="width:100%;" placeholder="e.g. John Doe">
         </div>
-        <div class="form-group" style="margin-bottom:1rem;">
-          <label class="field-label" style="display:block; margin-bottom:0.25rem;">Phone</label>
-          <input type="text" name="phone" class="form-control" style="width:100%;">
+        <div class="form-group" style="margin-bottom: 0.85rem;">
+          <label class="field-label" style="display:block; margin-bottom: 0.3rem; font-weight: 600; font-size: 0.8rem; color: var(--color-slate-700);">Phone</label>
+          <input type="text" name="phone" class="form-control" style="width:100%;" placeholder="e.g. (555) 123-4567">
         </div>
-        <div class="form-group" style="margin-bottom:1rem;">
-          <label class="field-label" style="display:block; margin-bottom:0.25rem;">Address</label>
-          <input type="text" name="address" class="form-control" style="width:100%;">
+        <div class="form-group" style="margin-bottom: 1.25rem;">
+          <label class="field-label" style="display:block; margin-bottom: 0.3rem; font-weight: 600; font-size: 0.8rem; color: var(--color-slate-700);">Address</label>
+          <input type="text" name="address" class="form-control" style="width:100%;" placeholder="e.g. 123 Warehouse Rd, City, State">
         </div>
-        <div style="display: flex; justify-content: flex-end; gap: 0.5rem; margin-top: 1.5rem;">
+        <div style="display: flex; justify-content: flex-end; gap: 0.5rem;">
           <button type="button" class="btn btn-secondary" data-close-modal="addSupplierModal">Cancel</button>
-          <button type="submit" class="btn btn-primary">Save Supplier</button>
+          <button type="submit" class="btn btn-primary" style="display: inline-flex; align-items: center; gap: 0.4rem;">
+            <i data-lucide="check" style="width: 14px; height: 14px;"></i>
+            <span>Save Supplier</span>
+          </button>
         </div>
       </form>
     </div>
@@ -157,32 +330,38 @@
 
 <!-- Edit Supplier Modal -->
 <div id="editSupplierModal" class="modal-backdrop" aria-hidden="true">
-  <div class="modal" role="dialog" aria-modal="true" style="max-width: 400px;">
+  <div class="modal" role="dialog" aria-modal="true" style="max-width: 440px;">
     <div class="modal-header">
-      <h3 style="margin:0;">Edit Supplier</h3>
+      <div style="display: flex; align-items: center; gap: 0.5rem;">
+        <i data-lucide="pencil" style="width: 18px; height: 18px; color: #2563eb;"></i>
+        <h3 style="margin:0; font-size: 1.1rem; font-weight: 700;">Edit Supplier</h3>
+      </div>
       <button type="button" class="modal-close" data-close-modal="editSupplierModal" aria-label="Close">&times;</button>
     </div>
-    <div class="modal-body">
+    <div class="modal-body" style="padding: 1.25rem;">
       <form id="editSupplierForm" method="POST">
-        <div class="form-group" style="margin-bottom:1rem;">
-          <label class="field-label" style="display:block; margin-bottom:0.25rem;">Business Name *</label>
+        <div class="form-group" style="margin-bottom: 0.85rem;">
+          <label class="field-label" style="display:block; margin-bottom: 0.3rem; font-weight: 600; font-size: 0.8rem; color: var(--color-slate-700);">Business Name *</label>
           <input type="text" id="editSupplierName" name="name" class="form-control" required style="width:100%;">
         </div>
-        <div class="form-group" style="margin-bottom:1rem;">
-          <label class="field-label" style="display:block; margin-bottom:0.25rem;">Contact Name</label>
+        <div class="form-group" style="margin-bottom: 0.85rem;">
+          <label class="field-label" style="display:block; margin-bottom: 0.3rem; font-weight: 600; font-size: 0.8rem; color: var(--color-slate-700);">Contact Person</label>
           <input type="text" id="editSupplierContactName" name="contact_name" class="form-control" style="width:100%;">
         </div>
-        <div class="form-group" style="margin-bottom:1rem;">
-          <label class="field-label" style="display:block; margin-bottom:0.25rem;">Phone</label>
+        <div class="form-group" style="margin-bottom: 0.85rem;">
+          <label class="field-label" style="display:block; margin-bottom: 0.3rem; font-weight: 600; font-size: 0.8rem; color: var(--color-slate-700);">Phone</label>
           <input type="text" id="editSupplierPhone" name="phone" class="form-control" style="width:100%;">
         </div>
-        <div class="form-group" style="margin-bottom:1rem;">
-          <label class="field-label" style="display:block; margin-bottom:0.25rem;">Address</label>
+        <div class="form-group" style="margin-bottom: 1.25rem;">
+          <label class="field-label" style="display:block; margin-bottom: 0.3rem; font-weight: 600; font-size: 0.8rem; color: var(--color-slate-700);">Address</label>
           <input type="text" id="editSupplierAddress" name="address" class="form-control" style="width:100%;">
         </div>
-        <div style="display: flex; justify-content: flex-end; gap: 0.5rem; margin-top: 1.5rem;">
+        <div style="display: flex; justify-content: flex-end; gap: 0.5rem;">
           <button type="button" class="btn btn-secondary" data-close-modal="editSupplierModal">Cancel</button>
-          <button type="submit" class="btn btn-primary">Update Supplier</button>
+          <button type="submit" class="btn btn-primary" style="display: inline-flex; align-items: center; gap: 0.4rem;">
+            <i data-lucide="check" style="width: 14px; height: 14px;"></i>
+            <span>Update Supplier</span>
+          </button>
         </div>
       </form>
     </div>
@@ -191,32 +370,38 @@
 
 <!-- Add Brand Modal -->
 <div id="addBrandModal" class="modal-backdrop" aria-hidden="true">
-  <div class="modal" role="dialog" aria-modal="true" style="max-width: 400px;">
+  <div class="modal" role="dialog" aria-modal="true" style="max-width: 440px;">
     <div class="modal-header">
-      <h3 style="margin:0;">Add Brand</h3>
+      <div style="display: flex; align-items: center; gap: 0.5rem;">
+        <i data-lucide="tag" style="width: 18px; height: 18px; color: #059669;"></i>
+        <h3 style="margin:0; font-size: 1.1rem; font-weight: 700;">Add Brand</h3>
+      </div>
       <button type="button" class="modal-close" data-close-modal="addBrandModal" aria-label="Close">&times;</button>
     </div>
-    <div class="modal-body">
+    <div class="modal-body" style="padding: 1.25rem;">
       <form action="/brands/add" method="POST" enctype="multipart/form-data">
-        <div class="form-group" style="margin-bottom:1rem;">
-          <label class="field-label" style="display:block; margin-bottom:0.25rem;">Name *</label>
-          <input type="text" name="name" class="form-control" required style="width:100%;">
+        <div class="form-group" style="margin-bottom: 0.85rem;">
+          <label class="field-label" style="display:block; margin-bottom: 0.3rem; font-weight: 600; font-size: 0.8rem; color: var(--color-slate-700);">Brand Name *</label>
+          <input type="text" name="name" class="form-control" required style="width:100%;" placeholder="e.g. BrandCo">
         </div>
-        <div class="form-group" style="margin-bottom:1rem;">
-          <label class="field-label" style="display:block; margin-bottom:0.25rem;">Commission Rate (%)</label>
+        <div class="form-group" style="margin-bottom: 0.85rem;">
+          <label class="field-label" style="display:block; margin-bottom: 0.3rem; font-weight: 600; font-size: 0.8rem; color: var(--color-slate-700);">Commission Rate (%)</label>
           <input type="number" step="0.01" name="commission_rate" class="form-control" value="0" style="width:100%;">
         </div>
-        <div class="form-group" style="margin-bottom:1rem;">
-          <label class="field-label" style="display:block; margin-bottom:0.25rem;">Logo (optional)</label>
+        <div class="form-group" style="margin-bottom: 0.85rem;">
+          <label class="field-label" style="display:block; margin-bottom: 0.3rem; font-weight: 600; font-size: 0.8rem; color: var(--color-slate-700);">Brand Logo (PNG, JPG)</label>
           <input type="file" name="logo" accept="image/png, image/jpeg" class="form-control" style="width:100%;">
         </div>
-        <div class="form-group" style="margin-bottom:1rem; display: flex; align-items: center; gap: 0.5rem;">
-          <input type="checkbox" name="show_on_website" id="addBrandShowWebsite" checked>
-          <label for="addBrandShowWebsite" style="margin:0; cursor:pointer;">Show on Public Website</label>
+        <div class="form-group" style="margin-bottom: 1.25rem; display: flex; align-items: center; gap: 0.5rem;">
+          <input type="checkbox" name="show_on_website" id="addBrandShowWebsite" checked style="width: 16px; height: 16px; accent-color: var(--color-primary); cursor: pointer;">
+          <label for="addBrandShowWebsite" style="margin:0; font-size: 0.85rem; font-weight: 500; color: var(--color-slate-700); cursor:pointer;">Show on Public Website</label>
         </div>
-        <div style="display: flex; justify-content: flex-end; gap: 0.5rem; margin-top: 1.5rem;">
+        <div style="display: flex; justify-content: flex-end; gap: 0.5rem;">
           <button type="button" class="btn btn-secondary" data-close-modal="addBrandModal">Cancel</button>
-          <button type="submit" class="btn btn-primary">Add Brand</button>
+          <button type="submit" class="btn btn-primary" style="display: inline-flex; align-items: center; gap: 0.4rem;">
+            <i data-lucide="check" style="width: 14px; height: 14px;"></i>
+            <span>Add Brand</span>
+          </button>
         </div>
       </form>
     </div>
@@ -225,32 +410,38 @@
 
 <!-- Edit Brand Modal -->
 <div id="editBrandModal" class="modal-backdrop" aria-hidden="true">
-  <div class="modal" role="dialog" aria-modal="true" style="max-width: 400px;">
+  <div class="modal" role="dialog" aria-modal="true" style="max-width: 440px;">
     <div class="modal-header">
-      <h3 style="margin:0;">Edit Brand</h3>
+      <div style="display: flex; align-items: center; gap: 0.5rem;">
+        <i data-lucide="pencil" style="width: 18px; height: 18px; color: #059669;"></i>
+        <h3 style="margin:0; font-size: 1.1rem; font-weight: 700;">Edit Brand</h3>
+      </div>
       <button type="button" class="modal-close" data-close-modal="editBrandModal" aria-label="Close">&times;</button>
     </div>
-    <div class="modal-body">
+    <div class="modal-body" style="padding: 1.25rem;">
       <form id="editBrandForm" method="POST" enctype="multipart/form-data">
-        <div class="form-group" style="margin-bottom:1rem;">
-          <label class="field-label" style="display:block; margin-bottom:0.25rem;">Name *</label>
+        <div class="form-group" style="margin-bottom: 0.85rem;">
+          <label class="field-label" style="display:block; margin-bottom: 0.3rem; font-weight: 600; font-size: 0.8rem; color: var(--color-slate-700);">Brand Name *</label>
           <input type="text" id="editBrandName" name="name" class="form-control" required style="width:100%;">
         </div>
-        <div class="form-group" style="margin-bottom:1rem;">
-          <label class="field-label" style="display:block; margin-bottom:0.25rem;">Commission Rate (%)</label>
+        <div class="form-group" style="margin-bottom: 0.85rem;">
+          <label class="field-label" style="display:block; margin-bottom: 0.3rem; font-weight: 600; font-size: 0.8rem; color: var(--color-slate-700);">Commission Rate (%)</label>
           <input type="number" step="0.01" id="editBrandCommissionRate" name="commission_rate" class="form-control" value="0" style="width:100%;">
         </div>
-        <div class="form-group" style="margin-bottom:1rem;">
-          <label class="field-label" style="display:block; margin-bottom:0.25rem;">Upload New Logo (optional)</label>
+        <div class="form-group" style="margin-bottom: 0.85rem;">
+          <label class="field-label" style="display:block; margin-bottom: 0.3rem; font-weight: 600; font-size: 0.8rem; color: var(--color-slate-700);">Upload New Logo (optional)</label>
           <input type="file" name="logo" accept="image/png, image/jpeg" class="form-control" style="width:100%;">
         </div>
-        <div class="form-group" style="margin-bottom:1rem; display: flex; align-items: center; gap: 0.5rem;">
-          <input type="checkbox" name="show_on_website" id="editBrandShowWebsite">
-          <label for="editBrandShowWebsite" style="margin:0; cursor:pointer;">Show on Public Website</label>
+        <div class="form-group" style="margin-bottom: 1.25rem; display: flex; align-items: center; gap: 0.5rem;">
+          <input type="checkbox" name="show_on_website" id="editBrandShowWebsite" style="width: 16px; height: 16px; accent-color: var(--color-primary); cursor: pointer;">
+          <label for="editBrandShowWebsite" style="margin:0; font-size: 0.85rem; font-weight: 500; color: var(--color-slate-700); cursor:pointer;">Show on Public Website</label>
         </div>
-        <div style="display: flex; justify-content: flex-end; gap: 0.5rem; margin-top: 1.5rem;">
+        <div style="display: flex; justify-content: flex-end; gap: 0.5rem;">
           <button type="button" class="btn btn-secondary" data-close-modal="editBrandModal">Cancel</button>
-          <button type="submit" class="btn btn-primary">Update Brand</button>
+          <button type="submit" class="btn btn-primary" style="display: inline-flex; align-items: center; gap: 0.4rem;">
+            <i data-lucide="check" style="width: 14px; height: 14px;"></i>
+            <span>Update Brand</span>
+          </button>
         </div>
       </form>
     </div>
@@ -261,25 +452,28 @@
 <div id="supplierHistoryModal" class="modal-backdrop" aria-hidden="true">
   <div class="modal" role="dialog" aria-modal="true" style="max-width: 650px;">
     <div class="modal-header">
-      <h3 style="margin:0;">Supplier History: <span id="shSupplierName"></span></h3>
+      <div style="display: flex; align-items: center; gap: 0.5rem;">
+        <i data-lucide="history" style="width: 18px; height: 18px; color: #4f46e5;"></i>
+        <h3 style="margin:0; font-size: 1.1rem; font-weight: 700;">Supplier History: <span id="shSupplierName" style="color: #4f46e5;"></span></h3>
+      </div>
       <button type="button" class="modal-close" data-close-modal="supplierHistoryModal" aria-label="Close">&times;</button>
     </div>
-    <div class="modal-body" style="max-height: 60vh; overflow-y: auto;">
+    <div class="modal-body" style="max-height: 60vh; overflow-y: auto; padding: 0;">
       <table class="data-table">
         <thead>
           <tr>
-            <th>Date</th>
-            <th>Product Name</th>
-            <th style="text-align: right;">Quantity Added</th>
-            <th style="text-align: right;">Value Added</th>
+            <th style="padding: 8px 12px;">Date</th>
+            <th style="padding: 8px 12px;">Product Name</th>
+            <th style="text-align: right; padding: 8px 12px;">Quantity Added</th>
+            <th style="text-align: right; padding: 8px 12px;">Value Added</th>
           </tr>
         </thead>
         <tbody id="shTableBody">
-          <tr><td colspan="4" style="text-align:center;">Loading...</td></tr>
+          <tr><td colspan="4" style="text-align:center; padding: 2rem 1rem; color: var(--color-slate-400);">Loading...</td></tr>
         </tbody>
       </table>
     </div>
-    <div class="modal-footer" style="padding: 1rem; border-top: 1px solid var(--color-border); display: flex; justify-content: flex-end;">
+    <div class="modal-footer" style="padding: 0.85rem 1.25rem; border-top: 1px solid var(--color-border); display: flex; justify-content: flex-end; background: #fafafa;">
       <button type="button" class="btn btn-secondary" data-close-modal="supplierHistoryModal">Close</button>
     </div>
   </div>
@@ -290,6 +484,9 @@ function openModal(modalEl) {
   if (!modalEl) return;
   modalEl.classList.add('is-open');
   modalEl.setAttribute('aria-hidden', 'false');
+  if (window.lucide) {
+    window.lucide.createIcons();
+  }
 }
 
 function closeModal(modalEl) {
@@ -323,7 +520,6 @@ function openEditBrandModal(b) {
   document.getElementById('editBrandForm').action = '/brands/edit/' + b.id;
   document.getElementById('editBrandName').value = b.name;
   document.getElementById('editBrandCommissionRate').value = b.commission_rate || 0;
-  // If b.show_on_website is undefined, default to true for backward compatibility
   const showWeb = b.show_on_website !== undefined ? b.show_on_website : true;
   document.getElementById('editBrandShowWebsite').checked = !!showWeb;
   openModal(document.getElementById('editBrandModal'));
@@ -332,7 +528,7 @@ function openEditBrandModal(b) {
 async function openSupplierHistoryModal(supplierId, supplierName) {
   document.getElementById('shSupplierName').textContent = supplierName;
   const tbody = document.getElementById('shTableBody');
-  tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;">Loading...</td></tr>';
+  tbody.innerHTML = '<tr><td colspan="4" style="text-align:center; padding: 2rem 1rem; color: var(--color-slate-400);">Loading history...</td></tr>';
   openModal(document.getElementById('supplierHistoryModal'));
   
   try {
@@ -345,26 +541,65 @@ async function openSupplierHistoryModal(supplierId, supplierName) {
         const tr = document.createElement('tr');
         const dt = new Date(r.addition_date).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric', timeZone: 'UTC' });
         tr.innerHTML = `
-          <td>${dt}</td>
-          <td style="font-weight: 500;">${r.product_name}</td>
-          <td style="text-align: right;">${r.total_added}</td>
-          <td style="text-align: right; font-weight: 600;">$${r.total_value.toFixed(2)}</td>
+          <td style="padding: 8px 12px; font-size: 0.825rem;">${dt}</td>
+          <td style="padding: 8px 12px; font-weight: 600; color: var(--color-slate-900); font-size: 0.825rem;">${r.product_name}</td>
+          <td style="text-align: right; padding: 8px 12px; font-size: 0.825rem;"><span class="stock-pill in-stock" style="font-size:0.75rem; padding: 2px 7px;">${r.total_added}</span></td>
+          <td style="text-align: right; padding: 8px 12px; font-weight: 700; color: #059669; font-size: 0.825rem;">$${r.total_value.toFixed(2)}</td>
         `;
         tbody.appendChild(tr);
       });
     } else {
-      tbody.innerHTML = '<tr><td colspan="4" style="text-align:center; color: var(--color-text-muted);">No additions found for this supplier.</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="4" style="text-align:center; padding: 2rem 1rem; color: var(--color-slate-400);">No additions found for this supplier.</td></tr>';
     }
   } catch (err) {
-    tbody.innerHTML = '<tr><td colspan="4" style="text-align:center; color: var(--color-danger);">Failed to load history.</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="4" style="text-align:center; padding: 2rem 1rem; color: #dc2626;">Failed to load history.</td></tr>';
     console.error(err);
   }
 }
 
+// Instant client-side search filtering
+document.getElementById('supplierSearchInput')?.addEventListener('input', function(e) {
+  const query = e.target.value.toLowerCase().trim();
+  const rows = document.querySelectorAll('.supplier-row');
+  let visibleCount = 0;
+  rows.forEach(row => {
+    const text = row.getAttribute('data-search') || row.innerText.toLowerCase();
+    if (!query || text.includes(query)) {
+      row.style.display = '';
+      visibleCount++;
+    } else {
+      row.style.display = 'none';
+    }
+  });
+  const emptyRow = document.getElementById('supplierEmptySearchRow');
+  if (emptyRow) {
+    emptyRow.style.display = visibleCount === 0 ? '' : 'none';
+  }
+});
+
+document.getElementById('brandSearchInput')?.addEventListener('input', function(e) {
+  const query = e.target.value.toLowerCase().trim();
+  const rows = document.querySelectorAll('.brand-row');
+  let visibleCount = 0;
+  rows.forEach(row => {
+    const text = row.getAttribute('data-search') || row.innerText.toLowerCase();
+    if (!query || text.includes(query)) {
+      row.style.display = '';
+      visibleCount++;
+    } else {
+      row.style.display = 'none';
+    }
+  });
+  const emptyRow = document.getElementById('brandEmptySearchRow');
+  if (emptyRow) {
+    emptyRow.style.display = visibleCount === 0 ? '' : 'none';
+  }
+});
 
 [
   document.getElementById('addSupplierModal'), 
   document.getElementById('editSupplierModal'), 
+  document.getElementById('addBrandModal'),
   document.getElementById('editBrandModal'),
   document.getElementById('supplierHistoryModal')
 ].forEach((modalEl) => {
@@ -372,6 +607,12 @@ async function openSupplierHistoryModal(supplierId, supplierName) {
   modalEl.addEventListener('click', (e) => {
     if (e.target === modalEl) closeModal(modalEl);
   });
+});
+
+document.addEventListener('DOMContentLoaded', () => {
+  if (window.lucide) {
+    window.lucide.createIcons();
+  }
 });
 </script>
 {% endblock %}
