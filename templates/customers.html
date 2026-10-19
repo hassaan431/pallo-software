@@ -1,241 +1,290 @@
 {% extends "base.html" %}
-{% block title %}Customers — AK Distributors{% endblock %}
-{% block page_heading %}Customers{% endblock %}
+{% block title %}Customers & Accounts Receivable — AK Distributors{% endblock %}
+{% block page_heading %}Customers & Accounts Receivable{% endblock %}
 {% block content %}
-<style>
-  .btn-edit {
-    background: #2563eb;
-    color: #fff;
-  }
-  .btn-edit:hover {
-    background: #1d4ed8;
-    color: #fff;
-  }
-  .btn-history {
-    background: #16a34a;
-    color: #fff;
-  }
-  .btn-history:hover {
-    background: #15803d;
-    color: #fff;
-  }
-  textarea.form-control {
-    min-height: 84px;
-    resize: vertical;
-  }
-  .section-header {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 1rem;
-    margin-bottom: 1rem;
-  }
-  .modal-field {
-    margin-bottom: 16px;
-  }
-  .modal-field label {
-    font-weight: bold;
-    font-size: 13px;
-    color: #374151;
-    display: block;
-    margin-bottom: 4px;
-  }
-  .modal-field .form-control {
-    width: 100%;
-    padding: 10px 12px;
-    border-radius: 6px;
-    border: 1px solid #d1d5db;
-    font-size: 14px;
-  }
-  .modal-field .form-control:focus {
-    outline: none;
-    border-color: #3b82f6;
-    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
-  }
-  .required {
-    color: #dc2626;
-  }
-  .history-modal {
-    width: 85vw;
-    max-width: 900px;
-  }
-  .history-modal .modal-body {
-    max-height: 70vh;
-    overflow-y: auto;
-  }
-  .history-summary {
-    background: #f8fafc;
-    padding: 16px;
-    border-radius: 8px;
-    margin-bottom: 16px;
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-  }
-  .history-summary-item {
-    text-align: center;
-  }
-  .history-summary-label {
-    font-size: 12px;
-    color: #6b7280;
-    font-weight: 600;
-    margin-bottom: 4px;
-  }
-  .history-summary-value {
-    font-size: 18px;
-    font-weight: 700;
-    color: #111827;
-  }
-  .history-table th:nth-child(1) { width: 15%; }
-  .history-table th:nth-child(2) { width: 12%; }
-  .history-table th:nth-child(3) { width: 8%; }
-  .history-table th:nth-child(4) { width: 15%; }
-  .history-table th:nth-child(5) { width: 15%; }
-  .history-table th:nth-child(6) { width: 12%; }
-  .history-table th:nth-child(7) { width: 10%; }
-</style>
 
-<div class="section-header">
-  <h2 style="margin:0; font-size:1.25rem; font-weight:700;">Customers</h2>
-  <button type="button" class="btn btn-primary" id="openAddCustomerModal">Add Customer</button>
+<!-- Workstation Command Bar -->
+<div class="customers-header-bar">
+  <div class="customers-title-group">
+    <div style="width: 36px; height: 36px; border-radius: 10px; background: #eff6ff; color: #2563eb; display: flex; align-items: center; justify-content: center; box-shadow: 0 1px 3px rgba(37, 99, 235, 0.2);">
+      <i data-lucide="users" style="width: 20px; height: 20px;"></i>
+    </div>
+    <div>
+      <h2 style="margin:0; font-size:1.25rem; font-weight:700; color:var(--color-slate-900);">Customers & Accounts Receivable</h2>
+      <p style="margin:0; font-size:0.775rem; color:var(--color-slate-500);">Customer directory, credit management, purchase ledgers & receivable balances</p>
+    </div>
+  </div>
+  <div style="display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap;">
+    <button type="button" class="btn btn-primary" id="openAddCustomerModal" style="display: inline-flex; align-items: center; gap: 0.4rem; font-size: 0.825rem; font-weight: 600;">
+      <i data-lucide="user-plus" style="width: 14px; height: 14px;"></i>
+      <span>Add Customer</span>
+    </button>
+  </div>
 </div>
 
 {% if error %}
-<div class="alert-error" role="alert" style="margin-top:-0.25rem;">{{ error }}</div>
+<div class="alert-error" role="alert" style="margin-bottom: 1rem; padding: 0.75rem 1rem; border-radius: 8px;">{{ error }}</div>
 {% endif %}
 
-<div class="card-grid" style="margin-bottom: 1.25rem;">
-  <article class="stat-card">
-    <h3>Total Customers</h3>
-    <p class="stat-value">{{ total_customers }}</p>
-    <p class="stat-note">Active customer records</p>
+<!-- Financial & Customer Metric Overview (3 Cards) -->
+{% set total_invoiced_all = namespace(value=0.0) %}
+{% set total_paid_all = namespace(value=0.0) %}
+{% set total_receivable_all = namespace(value=0.0) %}
+{% for c in customers %}
+  {% set total_invoiced_all.value = total_invoiced_all.value + (c.total_invoiced|default(0)|float) %}
+  {% set total_paid_all.value = total_paid_all.value + (c.total_paid|default(0)|float) %}
+  {% set total_receivable_all.value = total_receivable_all.value + (c.total_receivable|default(0)|float) %}
+{% endfor %}
+
+<div class="customers-stats-grid">
+  <article class="customers-stat-card">
+    <div class="customers-stat-content">
+      <h3>Active Customers</h3>
+      <p class="customers-stat-value">{{ customers|length }}</p>
+      <p class="customers-stat-note">Covering {{ areas_covered }} territories & cities</p>
+    </div>
+    <div class="customers-stat-icon blue">
+      <i data-lucide="users"></i>
+    </div>
   </article>
-  <article class="stat-card">
-    <h3>Total Areas Covered</h3>
-    <p class="stat-value">{{ areas_covered }}</p>
-    <p class="stat-note">Distinct areas/cities</p>
+
+  <article class="customers-stat-card">
+    <div class="customers-stat-content">
+      <h3>Total Invoiced Sales</h3>
+      <p class="customers-stat-value">
+        <span class="sensitive-data">${{ "%.2f"|format(total_invoiced_all.value) }}</span>
+      </p>
+      <p class="customers-stat-note">Cumulative customer billings</p>
+    </div>
+    <div class="customers-stat-icon emerald">
+      <i data-lucide="receipt"></i>
+    </div>
+  </article>
+
+  <article class="customers-stat-card">
+    <div class="customers-stat-content">
+      <h3>Total Accounts Receivable</h3>
+      <p class="customers-stat-value" style="color: {% if total_receivable_all.value > 0 %}#dc2626{% else %}var(--color-slate-900){% endif %};">
+        <span class="sensitive-data">${{ "%.2f"|format(total_receivable_all.value) }}</span>
+      </p>
+      <p class="customers-stat-note">Collected: <span class="sensitive-data" style="color:#059669; font-weight:600;">${{ "%.2f"|format(total_paid_all.value) }}</span></p>
+    </div>
+    <div class="customers-stat-icon rose">
+      <i data-lucide="wallet"></i>
+    </div>
   </article>
 </div>
 
-<section class="panel">
-  <div class="panel-header" style="display: flex; justify-content: space-between; align-items: center; gap: 1rem; flex-wrap: wrap;">
-    <h2>Customer List</h2>
-    <input type="text" id="customerSearch" class="form-control" placeholder="Search customers..." style="max-width: 300px;">
+<!-- Customers Directory Card & Table -->
+<section class="customers-section-card">
+  <div class="customers-section-header">
+    <div class="suppliers-section-title">
+      <i data-lucide="users" style="width: 16px; height: 16px; color: #2563eb;"></i>
+      <h3>Customer Directory & Balances</h3>
+      <span class="suppliers-count-badge">{{ customers|length }} clients</span>
+    </div>
+    <div style="display: flex; gap: 0.5rem; align-items: center;">
+      <div class="suppliers-search-box">
+        <i data-lucide="search"></i>
+        <input type="text" id="customerSearch" class="suppliers-search-input" placeholder="Search customers..." autocomplete="off">
+      </div>
+      <button type="button" class="btn btn-primary btn-sm" onclick="document.getElementById('openAddCustomerModal').click()" style="display: inline-flex; align-items: center; gap: 0.35rem; font-size: 0.8rem; font-weight: 600;">
+        <i data-lucide="user-plus" style="width: 13px; height: 13px;"></i>
+        <span>Add Customer</span>
+      </button>
+    </div>
   </div>
-  <div class="panel-body">
-    <div class="table-wrap">
-      <table class="data-table">
-        <thead>
-          <tr>
-            <th>#</th>
-            <th>Name</th>
-            <th>Area</th>
-            <th>City, State</th>
-            <th>Phone</th>
-            <th>Salesman</th>
-            <th style="width: 320px;">Actions</th>
-          </tr>
-        </thead>
-        <tbody>
-          {% if customers|length == 0 %}
-          <tr>
-            <td colspan="7" class="empty-state">No customers found.</td>
-          </tr>
-          {% else %}
-          {% for c in customers %}
-          <tr id="customer-row-{{ c.id }}">
-            <td>{{ loop.index }}</td>
-            <td>{{ c.name }}</td>
-            <td>{{ c.area or '' }}</td>
-            <td>{{ (c.area or '') + ((', ' + c.state) if c.state else '') }}</td>
-            <td>{{ c.phone or '' }}</td>
-            <td>{{ c.salesman_name or 'Unassigned' }}</td>
-            <td style="display: flex; gap: 0.5rem; flex-wrap: wrap; align-items: center;">
+  <div class="customers-table-wrap">
+    <table class="data-table" id="customersTable">
+      <thead>
+        <tr>
+          <th style="width: 60px;">ID</th>
+          <th>Customer Name</th>
+          <th>Contact Info</th>
+          <th>Territory & Address</th>
+          <th>Salesman</th>
+          <th style="text-align: center; width: 100px;">Orders</th>
+          <th style="text-align: right; width: 130px;">Total Invoiced</th>
+          <th style="text-align: right; width: 140px;">Balance Due</th>
+          <th style="width: 200px; text-align: right;">Actions</th>
+        </tr>
+      </thead>
+      <tbody id="customersTableBody">
+        {% for c in customers %}
+        <tr id="customer-row-{{ c.id }}" class="customer-row" data-search="{{ (c.name ~ ' ' ~ (c.area or '') ~ ' ' ~ (c.phone or '') ~ ' ' ~ (c.email or '') ~ ' ' ~ (c.salesman_name or ''))|lower }}">
+          <td><span class="row-id-chip">#{{ c.id }}</span></td>
+          <td>
+            <div style="display: flex; align-items: center; gap: 0.6rem;">
+              <div class="customer-avatar-monogram">{{ c.name[:2]|upper }}</div>
+              <div>
+                <div style="font-weight: 600; color: var(--color-slate-900);">{{ c.name }}</div>
+                {% if c.terms %}
+                <span style="font-size: 0.725rem; color: var(--color-slate-400);">{{ c.terms }}</span>
+                {% endif %}
+              </div>
+            </div>
+          </td>
+          <td>
+            {% if c.phone or c.email %}
+            <div style="display: flex; flex-direction: column; gap: 2px;">
+              {% if c.phone %}
+              <span style="display:inline-flex; align-items:center; gap:0.35rem; font-size:0.8rem; color:var(--color-slate-700);">
+                <i data-lucide="phone" style="width:12px; height:12px; color:var(--color-slate-400);"></i>
+                {{ c.phone }}
+              </span>
+              {% endif %}
+              {% if c.email %}
+              <span style="display:inline-flex; align-items:center; gap:0.35rem; font-size:0.75rem; color:var(--color-slate-500);">
+                <i data-lucide="mail" style="width:12px; height:12px; color:var(--color-slate-400);"></i>
+                {{ c.email }}
+              </span>
+              {% endif %}
+            </div>
+            {% else %}
+            <span style="color: var(--color-slate-400);">-</span>
+            {% endif %}
+          </td>
+          <td>
+            {% if c.area or c.bill_address %}
+            <div>
+              <div style="font-weight: 500; color: var(--color-slate-800); font-size: 0.825rem;">{{ c.area or 'N/A' }}{% if c.state %}, {{ c.state }}{% endif %}</div>
+              {% if c.bill_address %}
+              <span style="font-size: 0.725rem; color: var(--color-slate-400); max-width: 180px; display: inline-block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="{{ c.bill_address }}">
+                {{ c.bill_address }}
+              </span>
+              {% endif %}
+            </div>
+            {% else %}
+            <span style="color: var(--color-slate-400);">-</span>
+            {% endif %}
+          </td>
+          <td>
+            {% if c.salesman_name %}
+            <span class="suppliers-count-badge" style="font-size: 0.725rem;">
+              <i data-lucide="user" style="width: 11px; height: 11px; margin-right: 3px;"></i>
+              {{ c.salesman_name }}
+            </span>
+            {% else %}
+            <span style="color: var(--color-slate-400); font-size: 0.775rem;">Unassigned</span>
+            {% endif %}
+          </td>
+          <td style="text-align: center;">
+            <span class="stock-pill in-stock" style="font-size: 0.75rem; padding: 2px 8px;">
+              {{ c.invoices_count or 0 }} orders
+            </span>
+          </td>
+          <td style="text-align: right; font-weight: 600; color: var(--color-slate-800);">
+            <span class="sensitive-data">${{ "%.2f"|format(c.total_invoiced or 0) }}</span>
+          </td>
+          <td style="text-align: right;">
+            {% if (c.total_receivable or 0) > 0 %}
+            <span class="sensitive-data" style="color: #dc2626; font-weight: 700;">${{ "%.2f"|format(c.total_receivable or 0) }}</span>
+            {% else %}
+            <span class="sensitive-data" style="color: #059669; font-weight: 500;">$0.00</span>
+            {% endif %}
+          </td>
+          <td style="text-align: right;">
+            <div style="display: flex; gap: 0.35rem; justify-content: flex-end; align-items: center;">
               <button
                 type="button"
-                class="btn btn-edit"
-                data-action="edit-customer"
-                data-customer='{{ {"id": c.id, "name": c.name, "bill_address": c.bill_address or "", "ship_address": c.ship_address or "", "area": c.area or "", "state": c.state or "", "phone": c.phone or "", "email": c.email or "", "salesman_id": c.salesman_id or ""} | tojson }}'
-              >
-                Edit
-              </button>
-
-              <form method="post" action="{{ url_for('customers_delete', customer_id=c.id) }}" style="margin: 0;" onsubmit="return confirm({{ ('Delete ' ~ c.name ~ '? This will not delete their sales history. ') | tojson }});">
-                <button type="submit" class="btn btn-danger">Delete</button>
-              </form>
-
-              <button
-                type="button"
-                class="btn btn-history"
+                class="btn-history-action"
                 data-action="history-customer"
                 data-customer-id="{{ c.id }}"
                 data-customer-name='{{ c.name | e }}'
+                title="View Customer Purchase Statement"
               >
-                History
+                <i data-lucide="history"></i>
+                <span>History</span>
               </button>
-            </td>
-          </tr>
-          {% endfor %}
-          {% endif %}
-        </tbody>
-      </table>
-    </div>
+              <button
+                type="button"
+                class="btn-edit-action"
+                data-action="edit-customer"
+                data-customer='{{ {"id": c.id, "name": c.name, "bill_address": c.bill_address or "", "ship_address": c.ship_address or "", "area": c.area or "", "state": c.state or "", "phone": c.phone or "", "email": c.email or "", "salesman_id": c.salesman_id or ""} | tojson }}'
+                title="Edit Customer"
+              >
+                <i data-lucide="pencil"></i>
+                <span>Edit</span>
+              </button>
+              <form method="post" action="{{ url_for('customers_delete', customer_id=c.id) }}" style="margin: 0; display: inline;" onsubmit="return confirm({{ ('Delete ' ~ c.name ~ '? This will not delete their sales history.') | tojson }});">
+                <button type="submit" class="btn-delete-action" title="Delete Customer">
+                  <i data-lucide="trash-2"></i>
+                  <span>Delete</span>
+                </button>
+              </form>
+            </div>
+          </td>
+        </tr>
+        {% else %}
+        <tr>
+          <td colspan="9" style="text-align: center; padding: 2.5rem 1rem; color: var(--color-slate-400);">No customers found in directory.</td>
+        </tr>
+        {% endfor %}
+        <tr id="customerEmptySearchRow" style="display: none;">
+          <td colspan="9" style="text-align: center; padding: 2.5rem 1rem; color: var(--color-slate-400);">No customers matching search query.</td>
+        </tr>
+      </tbody>
+    </table>
   </div>
 </section>
 
+<!-- Add Customer Modal -->
 <div id="addCustomerModal" class="modal-backdrop" aria-hidden="true">
-  <div class="modal" role="dialog" aria-modal="true" aria-label="Add Customer">
+  <div class="modal" role="dialog" aria-modal="true" style="max-width: 520px; width: 95%;">
     <div class="modal-header">
-      <h3>Add Customer</h3>
+      <div style="display: flex; align-items: center; gap: 0.5rem;">
+        <i data-lucide="user-plus" style="width: 18px; height: 18px; color: #2563eb;"></i>
+        <h3 style="margin:0; font-size: 1.1rem; font-weight: 700;">Add New Customer</h3>
+      </div>
       <button type="button" class="modal-close" data-close-modal="addCustomerModal" aria-label="Close">&times;</button>
     </div>
-    <div class="modal-body">
+    <div class="modal-body" style="padding: 1.25rem;">
       <form id="addCustomerForm" method="post" action="{{ url_for('customers_add') }}">
-        <div class="modal-field">
-          <label for="addFullName">Full Name <span class="required">*</span></label>
-          <input class="form-control" type="text" id="addFullName" name="full_name" required>
+        <div class="form-group" style="margin-bottom: 0.85rem;">
+          <label class="field-label" for="addFullName" style="display:block; margin-bottom: 0.3rem; font-weight: 600; font-size: 0.8rem; color: var(--color-slate-700);">Full Name / Business *</label>
+          <input class="form-control" type="text" id="addFullName" name="full_name" required style="width:100%;" placeholder="e.g. John's Mart">
         </div>
 
-        <div class="modal-field">
-          <label for="addBillingAddress">Billing Address <span class="required">*</span></label>
-          <textarea class="form-control" id="addBillingAddress" name="bill_address" rows="3" required></textarea>
+        <div class="form-group" style="margin-bottom: 0.85rem;">
+          <label class="field-label" for="addBillingAddress" style="display:block; margin-bottom: 0.3rem; font-weight: 600; font-size: 0.8rem; color: var(--color-slate-700);">Billing Address *</label>
+          <textarea class="form-control" id="addBillingAddress" name="bill_address" rows="2" required style="width:100%; resize: vertical;" placeholder="123 Main St, Suite 100"></textarea>
         </div>
 
-        <div class="modal-field">
-          <label>
-            <input type="checkbox" id="addSameAsBilling" name="same_as_billing" value="on">
-            Same as billing address
-          </label>
+        <div style="margin-bottom: 0.85rem; display: flex; align-items: center; gap: 0.5rem;">
+          <input type="checkbox" id="addSameAsBilling" name="same_as_billing" value="on" style="width: 16px; height: 16px; accent-color: var(--color-primary); cursor: pointer;">
+          <label for="addSameAsBilling" style="margin:0; font-size: 0.85rem; font-weight: 500; color: var(--color-slate-700); cursor: pointer;">Shipping address same as billing</label>
         </div>
 
-        <div class="modal-field">
-          <label for="addShippingAddress">Shipping Address</label>
-          <textarea class="form-control" id="addShippingAddress" name="ship_address" rows="3"></textarea>
+        <div class="form-group" style="margin-bottom: 0.85rem;">
+          <label class="field-label" for="addShippingAddress" style="display:block; margin-bottom: 0.3rem; font-weight: 600; font-size: 0.8rem; color: var(--color-slate-700);">Shipping Address</label>
+          <textarea class="form-control" id="addShippingAddress" name="ship_address" rows="2" style="width:100%; resize: vertical;"></textarea>
         </div>
 
-        <div class="modal-field">
-          <label for="addArea">Area / City</label>
-          <input class="form-control" type="text" id="addArea" name="area">
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; margin-bottom: 0.85rem;">
+          <div>
+            <label class="field-label" for="addArea" style="display:block; margin-bottom: 0.3rem; font-weight: 600; font-size: 0.8rem; color: var(--color-slate-700);">Area / City</label>
+            <input class="form-control" type="text" id="addArea" name="area" placeholder="e.g. Sacramento">
+          </div>
+          <div>
+            <label class="field-label" for="addState" style="display:block; margin-bottom: 0.3rem; font-weight: 600; font-size: 0.8rem; color: var(--color-slate-700);">State</label>
+            <input class="form-control" type="text" id="addState" name="state" placeholder="e.g. CA">
+          </div>
         </div>
 
-        <div class="modal-field">
-          <label for="addState">State</label>
-          <input class="form-control" type="text" id="addState" name="state">
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; margin-bottom: 0.85rem;">
+          <div>
+            <label class="field-label" for="addPhone" style="display:block; margin-bottom: 0.3rem; font-weight: 600; font-size: 0.8rem; color: var(--color-slate-700);">Phone *</label>
+            <input class="form-control" type="tel" id="addPhone" name="phone" required placeholder="(555) 000-0000">
+          </div>
+          <div>
+            <label class="field-label" for="addEmail" style="display:block; margin-bottom: 0.3rem; font-weight: 600; font-size: 0.8rem; color: var(--color-slate-700);">Email</label>
+            <input class="form-control" type="email" id="addEmail" name="email" placeholder="customer@example.com">
+          </div>
         </div>
 
-        <div class="modal-field">
-          <label for="addPhone">Phone</label>
-          <input class="form-control" type="tel" id="addPhone" name="phone">
-        </div>
-
-        <div class="modal-field">
-          <label for="addEmail">Email</label>
-          <input class="form-control" type="email" id="addEmail" name="email">
-        </div>
-
-        <div class="modal-field">
-          <label for="addSalesman">Salesman</label>
-          <select class="form-control" id="addSalesman" name="salesman_id">
+        <div class="form-group" style="margin-bottom: 1.25rem;">
+          <label class="field-label" for="addSalesman" style="display:block; margin-bottom: 0.3rem; font-weight: 600; font-size: 0.8rem; color: var(--color-slate-700);">Assigned Salesman</label>
+          <select class="form-control" id="addSalesman" name="salesman_id" style="width:100%;">
             <option value="">-- Unassigned --</option>
             {% for u in users %}
             <option value="{{ u.id }}">{{ u.username }}</option>
@@ -243,70 +292,77 @@
           </select>
         </div>
 
-        <div class="inline-flex" style="justify-content: flex-end; gap: 0.65rem; margin-top: 0.25rem;">
+        <div style="display: flex; justify-content: flex-end; gap: 0.5rem;">
           <button type="button" class="btn btn-secondary" data-close-modal="addCustomerModal">Cancel</button>
-          <button type="submit" class="btn btn-primary">Save Customer</button>
+          <button type="submit" class="btn btn-primary" style="display: inline-flex; align-items: center; gap: 0.4rem;">
+            <i data-lucide="check" style="width: 14px; height: 14px;"></i>
+            <span>Save Customer</span>
+          </button>
         </div>
       </form>
     </div>
   </div>
 </div>
 
+<!-- Edit Customer Modal -->
 <div id="editCustomerModal" class="modal-backdrop" aria-hidden="true">
-  <div class="modal" role="dialog" aria-modal="true" aria-label="Edit Customer">
+  <div class="modal" role="dialog" aria-modal="true" style="max-width: 520px; width: 95%;">
     <div class="modal-header">
-      <h3>Edit Customer</h3>
+      <div style="display: flex; align-items: center; gap: 0.5rem;">
+        <i data-lucide="pencil" style="width: 18px; height: 18px; color: #2563eb;"></i>
+        <h3 style="margin:0; font-size: 1.1rem; font-weight: 700;">Edit Customer</h3>
+      </div>
       <button type="button" class="modal-close" data-close-modal="editCustomerModal" aria-label="Close">&times;</button>
     </div>
-    <div class="modal-body">
+    <div class="modal-body" style="padding: 1.25rem;">
       <form id="editCustomerForm" method="post" action="/customers/edit/0">
         <input type="hidden" id="editCustomerId" name="customer_id" value="0">
 
-        <div class="modal-field">
-          <label for="editFullName">Full Name <span class="required">*</span></label>
-          <input class="form-control" type="text" id="editFullName" name="full_name" required>
+        <div class="form-group" style="margin-bottom: 0.85rem;">
+          <label class="field-label" for="editFullName" style="display:block; margin-bottom: 0.3rem; font-weight: 600; font-size: 0.8rem; color: var(--color-slate-700);">Full Name / Business *</label>
+          <input class="form-control" type="text" id="editFullName" name="full_name" required style="width:100%;">
         </div>
 
-        <div class="modal-field">
-          <label for="editBillingAddress">Billing Address <span class="required">*</span></label>
-          <textarea class="form-control" id="editBillingAddress" name="bill_address" rows="3" required></textarea>
+        <div class="form-group" style="margin-bottom: 0.85rem;">
+          <label class="field-label" for="editBillingAddress" style="display:block; margin-bottom: 0.3rem; font-weight: 600; font-size: 0.8rem; color: var(--color-slate-700);">Billing Address *</label>
+          <textarea class="form-control" id="editBillingAddress" name="bill_address" rows="2" required style="width:100%; resize: vertical;"></textarea>
         </div>
 
-        <div class="modal-field">
-          <label>
-            <input type="checkbox" id="editSameAsBilling" name="same_as_billing" value="on">
-            Same as billing address
-          </label>
+        <div style="margin-bottom: 0.85rem; display: flex; align-items: center; gap: 0.5rem;">
+          <input type="checkbox" id="editSameAsBilling" name="same_as_billing" value="on" style="width: 16px; height: 16px; accent-color: var(--color-primary); cursor: pointer;">
+          <label for="editSameAsBilling" style="margin:0; font-size: 0.85rem; font-weight: 500; color: var(--color-slate-700); cursor: pointer;">Shipping address same as billing</label>
         </div>
 
-        <div class="modal-field">
-          <label for="editShippingAddress">Shipping Address</label>
-          <textarea class="form-control" id="editShippingAddress" name="ship_address" rows="3"></textarea>
+        <div class="form-group" style="margin-bottom: 0.85rem;">
+          <label class="field-label" for="editShippingAddress" style="display:block; margin-bottom: 0.3rem; font-weight: 600; font-size: 0.8rem; color: var(--color-slate-700);">Shipping Address</label>
+          <textarea class="form-control" id="editShippingAddress" name="ship_address" rows="2" style="width:100%; resize: vertical;"></textarea>
         </div>
 
-        <div class="modal-field">
-          <label for="editArea">Area / City</label>
-          <input class="form-control" type="text" id="editArea" name="area">
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; margin-bottom: 0.85rem;">
+          <div>
+            <label class="field-label" for="editArea" style="display:block; margin-bottom: 0.3rem; font-weight: 600; font-size: 0.8rem; color: var(--color-slate-700);">Area / City</label>
+            <input class="form-control" type="text" id="editArea" name="area">
+          </div>
+          <div>
+            <label class="field-label" for="editState" style="display:block; margin-bottom: 0.3rem; font-weight: 600; font-size: 0.8rem; color: var(--color-slate-700);">State</label>
+            <input class="form-control" type="text" id="editState" name="state">
+          </div>
         </div>
 
-        <div class="modal-field">
-          <label for="editState">State</label>
-          <input class="form-control" type="text" id="editState" name="state">
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; margin-bottom: 0.85rem;">
+          <div>
+            <label class="field-label" for="editPhone" style="display:block; margin-bottom: 0.3rem; font-weight: 600; font-size: 0.8rem; color: var(--color-slate-700);">Phone *</label>
+            <input class="form-control" type="text" id="editPhone" name="phone" required>
+          </div>
+          <div>
+            <label class="field-label" for="editEmail" style="display:block; margin-bottom: 0.3rem; font-weight: 600; font-size: 0.8rem; color: var(--color-slate-700);">Email</label>
+            <input class="form-control" type="email" id="editEmail" name="email">
+          </div>
         </div>
 
-        <div class="modal-field">
-          <label for="editPhone">Phone <span class="required">*</span></label>
-          <input class="form-control" type="text" id="editPhone" name="phone" required>
-        </div>
-
-        <div class="modal-field">
-          <label for="editEmail">Email</label>
-          <input class="form-control" type="email" id="editEmail" name="email">
-        </div>
-
-        <div class="modal-field">
-          <label for="editSalesman">Salesman</label>
-          <select class="form-control" id="editSalesman" name="salesman_id">
+        <div class="form-group" style="margin-bottom: 1.25rem;">
+          <label class="field-label" for="editSalesman" style="display:block; margin-bottom: 0.3rem; font-weight: 600; font-size: 0.8rem; color: var(--color-slate-700);">Assigned Salesman</label>
+          <select class="form-control" id="editSalesman" name="salesman_id" style="width:100%;">
             <option value="">-- Unassigned --</option>
             {% for u in users %}
             <option value="{{ u.id }}">{{ u.username }}</option>
@@ -314,52 +370,62 @@
           </select>
         </div>
 
-        <div class="inline-flex" style="justify-content: flex-end; gap: 0.65rem; margin-top: 0.25rem;">
+        <div style="display: flex; justify-content: flex-end; gap: 0.5rem;">
           <button type="button" class="btn btn-secondary" data-close-modal="editCustomerModal">Cancel</button>
-          <button type="submit" class="btn btn-primary">Save Changes</button>
+          <button type="submit" class="btn btn-primary" style="display: inline-flex; align-items: center; gap: 0.4rem;">
+            <i data-lucide="check" style="width: 14px; height: 14px;"></i>
+            <span>Update Customer</span>
+          </button>
         </div>
       </form>
     </div>
   </div>
 </div>
 
+<!-- Customer History & Statement Modal -->
 <div id="historyCustomerModal" class="modal-backdrop" aria-hidden="true">
-  <div class="modal history-modal" role="dialog" aria-modal="true" aria-label="Customer History">
+  <div class="modal" role="dialog" aria-modal="true" style="max-width: 880px; width: 95%;">
     <div class="modal-header">
-      <h3 id="historyModalTitle">Customer Purchase History</h3>
+      <div style="display: flex; align-items: center; gap: 0.5rem;">
+        <i data-lucide="receipt" style="width: 18px; height: 18px; color: #4f46e5;"></i>
+        <h3 id="historyModalTitle" style="margin:0; font-size: 1.1rem; font-weight: 700;">Customer Purchase History</h3>
+      </div>
       <button type="button" class="modal-close" data-close-modal="historyCustomerModal" aria-label="Close">&times;</button>
     </div>
-    <div class="modal-body">
-      <div class="history-summary" id="historySummary">
-        <div class="history-summary-item">
-          <div class="history-summary-label">Total Orders</div>
-          <div class="history-summary-value" id="totalOrders">0</div>
+    <div class="modal-body" style="padding: 1.25rem; max-height: 70vh; overflow-y: auto;">
+      <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.85rem; margin-bottom: 1.25rem;">
+        <div style="background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 8px; padding: 0.75rem 1rem; text-align: center;">
+          <div style="font-size: 0.75rem; color: #1e40af; font-weight: 600; text-transform: uppercase;">Total Orders</div>
+          <div style="font-size: 1.45rem; font-weight: 800; color: #1e3a8a; margin-top: 0.2rem;" id="totalOrders">0</div>
         </div>
-        <div class="history-summary-item">
-          <div class="history-summary-label">Total Spent</div>
-          <div class="history-summary-value" id="totalSpent">$0.00</div>
+        <div style="background: #ecfdf5; border: 1px solid #a7f3d0; border-radius: 8px; padding: 0.75rem 1rem; text-align: center;">
+          <div style="font-size: 0.75rem; color: #065f46; font-weight: 600; text-transform: uppercase;">Total Spent</div>
+          <div style="font-size: 1.45rem; font-weight: 800; color: #047857; margin-top: 0.2rem;" id="totalSpent">$0.00</div>
         </div>
-        <div class="history-summary-item">
-          <div class="history-summary-label">Outstanding Amount</div>
-          <div class="history-summary-value" id="outstandingAmount">$0.00</div>
+        <div style="background: #fef2f2; border: 1px solid #fecaca; border-radius: 8px; padding: 0.75rem 1rem; text-align: center;">
+          <div style="font-size: 0.75rem; color: #991b1b; font-weight: 600; text-transform: uppercase;">Outstanding Balance</div>
+          <div style="font-size: 1.45rem; font-weight: 800; color: #dc2626; margin-top: 0.2rem;" id="outstandingAmount">$0.00</div>
         </div>
       </div>
-      <div class="table-wrap">
-        <table class="data-table history-table">
+      <div class="warehouses-table-wrap" style="max-height: 380px;">
+        <table class="data-table">
           <thead>
             <tr>
-              <th>Invoice#</th>
+              <th>Invoice #</th>
               <th>Date</th>
-              <th>Items</th>
-              <th>Grand Total</th>
+              <th style="text-align: center;">Items</th>
+              <th style="text-align: right;">Grand Total</th>
               <th>Payment Type</th>
-              <th>Status</th>
-              <th>Actions</th>
+              <th style="text-align: center;">Status</th>
+              <th style="text-align: right; width: 90px;">Action</th>
             </tr>
           </thead>
           <tbody id="historyTbody"></tbody>
         </table>
       </div>
+    </div>
+    <div class="modal-footer" style="padding: 0.85rem 1.25rem; border-top: 1px solid var(--color-border); display: flex; justify-content: flex-end; background: #fafafa;">
+      <button type="button" class="btn btn-secondary" data-close-modal="historyCustomerModal">Close</button>
     </div>
   </div>
 </div>
@@ -369,15 +435,25 @@ document.addEventListener('DOMContentLoaded', function() {
   const searchInput = document.getElementById('customerSearch');
   if (searchInput) {
     searchInput.addEventListener('input', function() {
-      const term = this.value.toLowerCase();
-      const rows = document.querySelectorAll('.data-table tbody tr');
+      const term = this.value.toLowerCase().trim();
+      const rows = document.querySelectorAll('.customer-row');
+      let visibleCount = 0;
       rows.forEach(row => {
-        if (row.querySelector('.empty-state')) return;
-        const text = row.textContent.toLowerCase();
-        row.style.display = text.includes(term) ? '' : 'none';
+        const text = row.getAttribute('data-search') || row.innerText.toLowerCase();
+        if (!term || text.includes(term)) {
+          row.style.display = '';
+          visibleCount++;
+        } else {
+          row.style.display = 'none';
+        }
       });
+      const emptyRow = document.getElementById('customerEmptySearchRow');
+      if (emptyRow) {
+        emptyRow.style.display = visibleCount === 0 ? '' : 'none';
+      }
     });
   }
+
   const addCustomerModal = document.getElementById('addCustomerModal');
   const editCustomerModal = document.getElementById('editCustomerModal');
   const historyCustomerModal = document.getElementById('historyCustomerModal');
@@ -388,6 +464,9 @@ document.addEventListener('DOMContentLoaded', function() {
     if (!modalEl) return;
     modalEl.classList.add('is-open');
     modalEl.setAttribute('aria-hidden', 'false');
+    if (window.lucide) {
+      window.lucide.createIcons();
+    }
   }
 
   function closeModal(modalEl) {
@@ -412,7 +491,7 @@ document.addEventListener('DOMContentLoaded', function() {
   });
 
   function normalizeAddress(s) {
-    return (s || '').replace(/\\r\\n/g, '\\n').replace(/\\r/g, '\\n').trim();
+    return (s || '').replace(/\r\n/g, '\n').replace(/\r/g, '\n').trim();
   }
 
   const addSameAsBilling = document.getElementById('addSameAsBilling');
@@ -521,10 +600,9 @@ document.addEventListener('DOMContentLoaded', function() {
 
     if (!historyModalTitle || !historyTbody) return;
 
-    historyModalTitle.textContent = 'Purchase History — ' + customerName;
-    historyTbody.innerHTML = '';
+    historyModalTitle.textContent = 'Purchase Ledger — ' + customerName;
+    historyTbody.innerHTML = '<tr><td colspan="7" style="text-align:center; padding: 2.5rem 1rem; color: var(--color-slate-400);">Loading purchase history...</td></tr>';
 
-    // Reset summary values with safety checks
     if (totalOrders) totalOrders.textContent = '0';
     if (totalSpent) totalSpent.textContent = '$0.00';
     if (outstandingAmount) outstandingAmount.textContent = '$0.00';
@@ -539,7 +617,7 @@ document.addEventListener('DOMContentLoaded', function() {
       .then((res) => res.json())
       .then((rows) => {
         if (!Array.isArray(rows) || rows.length === 0) {
-          historyTbody.innerHTML = '<tr><td colspan="7" class="empty-state">No sales recorded yet</td></tr>';
+          historyTbody.innerHTML = '<tr><td colspan="7" style="text-align:center; padding: 2.5rem 1rem; color: var(--color-slate-400);">No sales recorded yet</td></tr>';
           return;
         }
 
@@ -547,40 +625,39 @@ document.addEventListener('DOMContentLoaded', function() {
         let totalOrdersCount = rows.length;
         let outstandingAmountValue = 0;
         
+        historyTbody.innerHTML = '';
         rows.forEach((r) => {
           const grand = Number(r.grand_total || 0);
           totalSpentAmount += grand;
-          // Use remaining_amount instead of checking status
           const remaining = Number(r.remaining_amount || 0);
           outstandingAmountValue += remaining;
           const tr = document.createElement('tr');
-          tr.innerHTML =
-            '<td>' + (r.invoice_number || '') + '</td>' +
-            '<td>' + (r.invoice_date || '') + '</td>' +
-            '<td>' + (r.item_count || 0) + '</td>' +
-            '<td>$' + grand.toFixed(2) + '</td>' +
-            '<td>' + (r.payment_type || '') + '</td>' +
-            '<td>' + (r.status || '') + '</td>' +
-            '<td><button class="btn btn-sm btn-primary" onclick="viewSaleFromHistory(\''+r.invoice_number+'\')">View</button></td>';
+          tr.innerHTML = `
+            <td><span class="row-id-chip">${r.invoice_number || ''}</span></td>
+            <td style="font-size:0.825rem; color:var(--color-slate-600);">${r.invoice_date || ''}</td>
+            <td style="text-align: center;"><span class="suppliers-count-badge" style="font-size:0.75rem;">${r.item_count || 0}</span></td>
+            <td style="text-align: right; font-weight: 700; color: var(--color-slate-900); font-size:0.825rem;">$${grand.toFixed(2)}</td>
+            <td style="font-size:0.825rem; color:var(--color-slate-700);">${r.payment_type || 'Cash'}</td>
+            <td style="text-align: center;">
+              <span class="stock-pill in-stock" style="font-size:0.725rem; padding: 2px 7px;">${(r.status || 'PAID').toUpperCase()}</span>
+            </td>
+            <td style="text-align: right;">
+              <button class="btn btn-sm btn-primary" onclick="viewSaleFromHistory('${r.invoice_number}')" style="font-size:0.75rem; padding: 2px 8px;">View</button>
+            </td>
+          `;
           historyTbody.appendChild(tr);
         });
         
-        // Update summary with safety checks and proper styling
         if (totalOrders) totalOrders.textContent = totalOrdersCount;
         if (totalSpent) totalSpent.textContent = '$' + totalSpentAmount.toFixed(2);
         if (outstandingAmount) {
           outstandingAmount.textContent = '$' + outstandingAmountValue.toFixed(2);
-          // Add red color if outstanding > 0, grey if zero
-          if (outstandingAmountValue > 0) {
-            outstandingAmount.style.color = '#dc2626';
-          } else {
-            outstandingAmount.style.color = '#6b7280';
-          }
+          outstandingAmount.style.color = outstandingAmountValue > 0 ? '#dc2626' : '#059669';
         }
       })
       .catch((err) => {
         console.error('Failed to load history:', err);
-        historyTbody.innerHTML = '<tr><td colspan="7" class="empty-state">Failed to load history.</td></tr>';
+        historyTbody.innerHTML = '<tr><td colspan="7" style="text-align:center; padding: 2.5rem 1rem; color: #dc2626;">Failed to load history.</td></tr>';
       });
   }
 
@@ -610,114 +687,90 @@ document.addEventListener('DOMContentLoaded', function() {
       showHistory(customerId, customerName);
     }
   });
+
+  if (window.lucide) {
+    window.lucide.createIcons();
+  }
 });
 
-// Function to view sale details from history
-  function viewSaleFromHistory(invoiceNumber) {
-    fetch('/sales/by-invoice/' + invoiceNumber, {
-      method: 'GET',
-      headers: { 'X-Requested-With': 'fetch' },
-      credentials: 'same-origin'
+function viewSaleFromHistory(invoiceNumber) {
+  fetch('/sales/by-invoice/' + invoiceNumber, {
+    method: 'GET',
+    headers: { 'X-Requested-With': 'fetch' },
+    credentials: 'same-origin'
+  })
+    .then((res) => res.json())
+    .then((data) => {
+      if (data.error) {
+        alert(data.error);
+        return;
+      }
+      showSaleDetailsModal(data);
     })
-      .then((res) => res.json())
-      .then((data) => {
-        if (data.error) {
-          alert(data.error);
-          return;
-        }
-        
-        // Show modal with sale details
-        showSaleDetailsModal(data);
-      })
-      .catch((err) => {
-        console.error('Error fetching sale details:', err);
-        alert('Failed to load sale details');
-      });
-  }
+    .catch((err) => {
+      console.error('Error fetching sale details:', err);
+      alert('Failed to load sale details');
+    });
+}
 
-  // Function to show sale details modal
-  function showSaleDetailsModal(saleData) {
-    // Create modal HTML
-    const modalHtml = `
-      <div id="saleDetailsModal" style="display: flex; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 99999; justify-content: center; align-items: center;">
-        <div class="modal" style="position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); z-index: 9999; background: white; border-radius: 8px; box-shadow: 0 8px 24px rgba(0,0,0,0.15); max-width: 900px; width: 80vw;">
-          <div class="modal-header" style="display: flex; justify-content: space-between; align-items: center; padding: 1rem; border-bottom: 1px solid #e5e7eb;">
-            <h3 style="margin: 0; color: #1a2332;">Sale Details - Invoice #${saleData.invoice_number}</h3>
-            <button type="button" onclick="closeSaleDetailsModal()" style="background: none; border: none; font-size: 1.5rem; cursor: pointer; color: #6b7280;">&times;</button>
+function showSaleDetailsModal(saleData) {
+  const modalHtml = `
+    <div id="saleDetailsModal" class="modal-backdrop is-open" style="display:flex; z-index: 10000;">
+      <div class="modal" style="max-width: 760px; width: 92%;">
+        <div class="modal-header">
+          <h3 style="margin: 0; font-size: 1.1rem; font-weight: 700;">Sale Details — Invoice #${saleData.invoice_number}</h3>
+          <button type="button" class="modal-close" onclick="closeSaleDetailsModal()" aria-label="Close">&times;</button>
+        </div>
+        <div class="modal-body" style="padding: 1.25rem; max-height: 70vh; overflow-y: auto;">
+          <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.75rem; margin-bottom: 1.25rem; background: #fafafa; padding: 0.85rem; border-radius: 8px; border: 1px solid var(--color-border);">
+            <div><span style="font-size:0.75rem; color:var(--color-slate-500); display:block;">Invoice #</span><strong style="color:var(--color-slate-900); font-size:0.9rem;">#${saleData.invoice_number}</strong></div>
+            <div><span style="font-size:0.75rem; color:var(--color-slate-500); display:block;">Invoice Date</span><strong style="color:var(--color-slate-900); font-size:0.9rem;">${saleData.invoice_date}</strong></div>
+            <div><span style="font-size:0.75rem; color:var(--color-slate-500); display:block;">Customer</span><strong style="color:var(--color-slate-900); font-size:0.9rem;">${saleData.customer_name}</strong></div>
           </div>
-          <div class="modal-body" style="padding: 1.5rem; max-height: 70vh; overflow-y: auto;">
-            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-bottom: 1rem;">
-              <div>
-                <strong>Invoice #:</strong> ${saleData.invoice_number}
-              </div>
-              <div>
-                <strong>Date:</strong> ${saleData.invoice_date}
-              </div>
-              <div>
-                <strong>Customer:</strong> ${saleData.customer_name}
-              </div>
-            </div>
-            
-            <div style="margin-bottom: 1rem;">
-              <h4 style="margin: 0 0 0.5rem 0; color: #1a2332;">Items</h4>
-              <table style="width: 100%; border-collapse: collapse; margin-bottom: 1rem;">
-                <thead>
-                  <tr style="background: #f9fafb;">
-                    <th style="padding: 0.5rem; text-align: left; border: 1px solid #e5e7eb;">Product</th>
-                    <th style="padding: 0.5rem; text-align: left; border: 1px solid #e5e7eb;">Unit</th>
-                    <th style="padding: 0.5rem; text-align: left; border: 1px solid #e5e7eb;">Qty</th>
-                    <th style="padding: 0.5rem; text-align: right; border: 1px solid #e5e7eb;">Amount</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  ${saleData.items.map(item => `
-                    <tr>
-                      <td style="padding: 0.5rem; border: 1px solid #e5e7eb;">${item.product_name}</td>
-                      <td style="padding: 0.5rem; border: 1px solid #e5e7eb;">${item.unit || 'Each'}</td>
-                      <td style="padding: 0.5rem; text-align: center; border: 1px solid #e5e7eb;">${item.qty}</td>
-                      <td style="padding: 0.5rem; text-align: right; border: 1px solid #e5e7eb;">$${item.amount.toFixed(2)}</td>
-                    </tr>
-                  `).join('')}
-                </tbody>
-              </table>
-            </div>
-            
-            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
-              <div>
-                <strong>Subtotal:</strong> $${saleData.subtotal.toFixed(2)}
-              </div>
-              <div>
-                <strong>Discount:</strong> $${saleData.discount_amount.toFixed(2)}
-              </div>
-              <div>
-                <strong>Grand Total:</strong> $${saleData.grand_total.toFixed(2)}
-              </div>
-              <div>
-                <strong>Paid:</strong> $${saleData.amount_paid.toFixed(2)}
-              </div>
-              <div>
-                <strong>Remaining:</strong> $${saleData.remaining_amount.toFixed(2)}
-              </div>
-            </div>
-          </div>
-          <div class="modal-footer" style="padding: 1rem; text-align: right; border-top: 1px solid #e5e7eb;">
-            <button type="button" onclick="closeSaleDetailsModal()" style="padding: 0.75rem 1.5rem; background: #6b7280; color: white; border: none; border-radius: 6px; cursor: pointer;">Close</button>
+          
+          <table class="data-table" style="margin-bottom: 1.25rem;">
+            <thead>
+              <tr>
+                <th>Product</th>
+                <th>Unit</th>
+                <th style="text-align: center;">Qty</th>
+                <th style="text-align: right;">Amount</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${saleData.items.map(item => `
+                <tr>
+                  <td style="font-weight: 600; color: var(--color-slate-900);">${item.product_name}</td>
+                  <td>${item.unit || 'Each'}</td>
+                  <td style="text-align: center;"><span class="stock-pill in-stock" style="font-size:0.75rem; padding: 2px 7px;">${item.qty}</span></td>
+                  <td style="text-align: right; font-weight: 700; color: var(--color-slate-900);">$${item.amount.toFixed(2)}</td>
+                </tr>
+              `).join('')}
+            </tbody>
+          </table>
+          
+          <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 0.75rem; background: #fafafa; padding: 0.85rem; border-radius: 8px; border: 1px solid var(--color-border); text-align: center;">
+            <div><span style="font-size:0.725rem; color:var(--color-slate-500); display:block;">Subtotal</span><strong>$${saleData.subtotal.toFixed(2)}</strong></div>
+            <div><span style="font-size:0.725rem; color:var(--color-slate-500); display:block;">Discount</span><strong>$${saleData.discount_amount.toFixed(2)}</strong></div>
+            <div><span style="font-size:0.725rem; color:var(--color-slate-500); display:block;">Grand Total</span><strong style="color: #2563eb; font-size: 1.1rem;">$${saleData.grand_total.toFixed(2)}</strong></div>
+            <div><span style="font-size:0.725rem; color:var(--color-slate-500); display:block;">Paid</span><strong style="color: #059669;">$${saleData.amount_paid.toFixed(2)}</strong></div>
+            <div><span style="font-size:0.725rem; color:var(--color-slate-500); display:block;">Remaining</span><strong style="color: ${saleData.remaining_amount > 0 ? '#dc2626' : '#6b7280'};">$${saleData.remaining_amount.toFixed(2)}</strong></div>
           </div>
         </div>
+        <div class="modal-footer" style="padding: 0.85rem 1.25rem; border-top: 1px solid var(--color-border); display: flex; justify-content: flex-end; background: #fafafa;">
+          <button type="button" class="btn btn-secondary" onclick="closeSaleDetailsModal()">Close</button>
+        </div>
       </div>
-    `;
-    
-    // Add modal to page
-    document.body.insertAdjacentHTML('beforeend', modalHtml);
-  }
+    </div>
+  `;
+  document.body.insertAdjacentHTML('beforeend', modalHtml);
+}
 
-  // Function to close sale details modal
-  function closeSaleDetailsModal() {
-    const modal = document.getElementById('saleDetailsModal');
-    if (modal) {
-      modal.remove();
-    }
+function closeSaleDetailsModal() {
+  const modal = document.getElementById('saleDetailsModal');
+  if (modal) {
+    modal.remove();
   }
+}
 </script>
 {% endblock %}
-

@@ -2110,9 +2110,15 @@ def customers():
                 c.terms,
                 c.salesman_id,
                 u.username AS salesman_name,
-                c.created_at
+                c.created_at,
+                COUNT(s.id) as invoices_count,
+                COALESCE(SUM(s.grand_total), 0) as total_invoiced,
+                COALESCE(SUM(s.amount_paid), 0) as total_paid,
+                COALESCE(SUM(s.remaining_amount), 0) as total_receivable
             FROM customers c
             LEFT JOIN users u ON c.salesman_id = u.id
+            LEFT JOIN sales s ON c.id = s.customer_id AND s.status != 'quote'
+            GROUP BY c.id
             ORDER BY c.created_at DESC, c.id DESC
             """
         )
