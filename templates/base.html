@@ -280,6 +280,48 @@
   <!-- Global Toast Notification Rack -->
   <div id="toastRack" class="toast-rack" aria-live="polite" aria-atomic="true"></div>
 
+  <!-- Command Palette (Cmd + K) Modal -->
+  <div id="cmdKModal" class="cmdk-backdrop" style="display:none;" aria-hidden="true" role="dialog" aria-modal="true" aria-label="Command Palette">
+    <div class="cmdk-modal">
+      <div class="cmdk-header">
+        <i data-lucide="search" class="cmdk-header-icon"></i>
+        <input id="cmdKInput" type="text" class="cmdk-input" placeholder="Search pages, invoices, actions, or products..." autocomplete="off" spellcheck="false">
+        <kbd class="cmdk-kbd">ESC</kbd>
+      </div>
+      <div id="cmdkResults" class="cmdk-results">
+        <!-- Rendered dynamically -->
+      </div>
+      <div class="cmdk-footer">
+        <div class="cmdk-footer-hints">
+          <span class="cmdk-footer-hint"><kbd class="cmdk-kbd">↑</kbd><kbd class="cmdk-kbd">↓</kbd> Navigate</span>
+          <span class="cmdk-footer-hint"><kbd class="cmdk-kbd">↵</kbd> Select</span>
+          <span class="cmdk-footer-hint"><kbd class="cmdk-kbd">ESC</kbd> Dismiss</span>
+        </div>
+        <div style="font-weight: 600; color: var(--color-slate-400);">AK Portal</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Universal Slide-Over Drawer Component -->
+  <div id="drawerBackdrop" class="drawer-backdrop" style="display:none;" aria-hidden="true"></div>
+  <aside id="universalDrawer" class="slide-drawer" aria-hidden="true" role="dialog" aria-modal="true" aria-label="Details Drawer">
+    <div class="drawer-header">
+      <div class="drawer-title-box">
+        <h3 id="drawerTitle" class="drawer-title">Details</h3>
+        <span id="drawerBadge" class="status-pill status-pill-emerald" style="display:none;"></span>
+      </div>
+      <button id="drawerCloseBtn" class="drawer-close-btn" type="button" aria-label="Close drawer">
+        <i data-lucide="x"></i>
+      </button>
+    </div>
+    <div id="drawerBody" class="drawer-body">
+      <!-- Injected dynamically -->
+    </div>
+    <div id="drawerFooter" class="drawer-footer" style="display:none;">
+      <!-- Injected actions -->
+    </div>
+  </aside>
+
   <!-- Ingest Server-Side Flash Messages into Toast System -->
   {% with messages = get_flashed_messages(with_categories=true) %}
     {% if messages %}
@@ -468,20 +510,471 @@
         });
       }
 
-      // 5. Cmd+K Quick Search Trigger & Shortcut
+      // 5. Universal Slide-Over Drawer Controller
+      const drawerEl = document.getElementById('universalDrawer');
+      const drawerBackdrop = document.getElementById('drawerBackdrop');
+      const drawerTitle = document.getElementById('drawerTitle');
+      const drawerBadge = document.getElementById('drawerBadge');
+      const drawerBody = document.getElementById('drawerBody');
+      const drawerFooter = document.getElementById('drawerFooter');
+      const drawerCloseBtn = document.getElementById('drawerCloseBtn');
+
+      window.openDrawer = function({ title, badgeText = '', badgeClass = 'status-pill-emerald', bodyHtml = '', footerHtml = '', width = '' }) {
+        if (!drawerEl || !drawerBackdrop) return;
+        
+        drawerTitle.textContent = title || 'Details';
+        if (badgeText) {
+          drawerBadge.textContent = badgeText;
+          drawerBadge.className = `status-pill ${badgeClass}`;
+          drawerBadge.style.display = 'inline-flex';
+        } else {
+          drawerBadge.style.display = 'none';
+        }
+
+        drawerBody.innerHTML = bodyHtml;
+        if (footerHtml) {
+          drawerFooter.innerHTML = footerHtml;
+          drawerFooter.style.display = 'flex';
+        } else {
+          drawerFooter.innerHTML = '';
+          drawerFooter.style.display = 'none';
+        }
+
+        if (width) {
+          drawerEl.style.width = width;
+        } else {
+          drawerEl.style.width = '';
+        }
+
+        drawerBackdrop.style.display = 'block';
+        requestAnimationFrame(() => {
+          drawerBackdrop.classList.add('is-open');
+          drawerEl.classList.add('is-open');
+          drawerEl.setAttribute('aria-hidden', 'false');
+        });
+
+        if (window.lucide && typeof window.lucide.createIcons === 'function') {
+          window.lucide.createIcons({ root: drawerEl });
+        }
+      };
+
+      window.closeDrawer = function() {
+        if (!drawerEl || !drawerBackdrop) return;
+        drawerEl.classList.remove('is-open');
+        drawerBackdrop.classList.remove('is-open');
+        drawerEl.setAttribute('aria-hidden', 'true');
+        setTimeout(() => {
+          if (!drawerEl.classList.contains('is-open')) {
+            drawerBackdrop.style.display = 'none';
+            drawerBody.innerHTML = '';
+          }
+        }, 280);
+      };
+
+      if (drawerCloseBtn) drawerCloseBtn.addEventListener('click', window.closeDrawer);
+      if (drawerBackdrop) drawerBackdrop.addEventListener('click', window.closeDrawer);
+
+      // Slide-Over Invoice Drawer API
+      window.openInvoiceDrawer = async function(saleId) {
+        window.openDrawer({
+          title: `Invoice #${saleId}`,
+          badgeText: "FETCHING...",
+          badgeClass: "status-pill-slate",
+          bodyHtml: `
+            <div style="padding: 3rem 0; text-align: center; color: var(--color-slate-400);">
+              <div style="display:inline-block; width:28px; height:28px; border:2.5px solid #10b981; border-top-color:transparent; border-radius:50%; animation:cmdkSpin 0.7s linear infinite;"></div>
+              <p style="margin-top:0.85rem; font-size:0.875rem;">Loading invoice breakdown...</p>
+            </div>
+            <style>@keyframes cmdkSpin { to { transform: rotate(360deg); } }</style>
+          `
+        });
+
+        try {
+          const res = await fetch(`/sales/${saleId}/details`);
+          if (!res.ok) throw new Error("Invoice details not found");
+          const data = await res.json();
+          const s = data.sale;
+          const items = data.items || [];
+
+          let pillClass = "status-pill-emerald";
+          let statusText = s.status || "Paid";
+          if (statusText.toLowerCase() === "partial" || statusText.toLowerCase() === "pending") {
+            pillClass = "status-pill-amber";
+          } else if (statusText.toLowerCase() === "unpaid" || statusText.toLowerCase() === "credit") {
+            pillClass = "status-pill-crimson";
+          }
+
+          let itemsRows = items.map(it => `
+            <tr>
+              <td style="font-weight: 500;">${it.description || "Product"}</td>
+              <td style="text-align: right;">${it.qty || 1}</td>
+              <td style="text-align: right;">$${Number(it.rate || 0).toFixed(2)}</td>
+              <td style="text-align: right; font-weight: 600;">$${Number(it.amount || 0).toFixed(2)}</td>
+            </tr>
+          `).join("");
+
+          const bodyHtml = `
+            <div class="drawer-summary-grid">
+              <div class="drawer-summary-card">
+                <div class="card-label">Customer</div>
+                <div class="card-val" style="font-size: 1.05rem; color: var(--color-slate-900);">${s.customer_name || 'Walk-in Customer'}</div>
+                <div style="font-size: 0.75rem; color: var(--color-slate-500); margin-top: 2px;">Salesman: ${s.salesman_name || 'Admin'}</div>
+              </div>
+              <div class="drawer-summary-card">
+                <div class="card-label">Invoice Date</div>
+                <div class="card-val" style="font-size: 1.05rem;">${s.invoice_date || '-'}</div>
+                <div style="font-size: 0.75rem; color: var(--color-slate-500); margin-top: 2px;">Due: ${s.due_date || 'N/A'}</div>
+              </div>
+            </div>
+
+            <div class="drawer-summary-grid">
+              <div class="drawer-summary-card">
+                <div class="card-label">Grand Total</div>
+                <div class="card-val sensitive-data" style="color: var(--color-primary-hover);">$${Number(s.grand_total || 0).toFixed(2)}</div>
+              </div>
+              <div class="drawer-summary-card">
+                <div class="card-label">Balance Due</div>
+                <div class="card-val sensitive-data" style="color: ${Number(s.remaining_amount) > 0 ? 'var(--color-danger)' : 'var(--color-primary)'};">$${Number(s.remaining_amount || 0).toFixed(2)}</div>
+              </div>
+            </div>
+
+            <div style="margin-top: 1.25rem;">
+              <h4 style="margin: 0 0 0.5rem; font-size: 0.75rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: var(--color-slate-500);">Line Items (${items.length})</h4>
+              <div style="border: 1px solid var(--color-border); border-radius: 8px; overflow: hidden;">
+                <table class="drawer-items-table">
+                  <thead>
+                    <tr>
+                      <th>Item Description</th>
+                      <th style="text-align: right;">Qty</th>
+                      <th style="text-align: right;">Rate</th>
+                      <th style="text-align: right;">Amount</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    ${itemsRows || '<tr><td colspan="4" style="text-align:center; padding:1.25rem; color:var(--color-slate-400);">No line items recorded</td></tr>'}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            <div style="margin-top: 1.25rem; padding: 0.85rem 1rem; background: var(--color-slate-50); border-radius: 8px; font-size: 0.825rem; display: flex; flex-direction: column; gap: 0.4rem; border: 1px solid var(--color-border-subtle);">
+              <div style="display:flex; justify-content:space-between;">
+                <span style="color:var(--color-slate-500);">Subtotal:</span>
+                <strong>$${Number(s.subtotal || 0).toFixed(2)}</strong>
+              </div>
+              <div style="display:flex; justify-content:space-between;">
+                <span style="color:var(--color-slate-500);">Discount:</span>
+                <span style="color:var(--color-danger);">-$${Number(s.discount_amount || 0).toFixed(2)}</span>
+              </div>
+              <div style="display:flex; justify-content:space-between; border-top: 1px solid var(--color-border-subtle); padding-top: 0.4rem;">
+                <span style="color:var(--color-slate-500);">Amount Paid:</span>
+                <strong style="color:var(--color-primary);">$${Number(s.amount_paid || 0).toFixed(2)}</strong>
+              </div>
+            </div>
+          `;
+
+          const footerHtml = `
+            <a href="/sales/${s.id}/invoice/pdf" target="_blank" class="btn btn-primary" style="font-size: 0.825rem; padding: 0.45rem 0.9rem; display: inline-flex; align-items: center; gap: 0.45rem;">
+              <i data-lucide="printer"></i>
+              <span>Print PDF</span>
+            </a>
+            <a href="/sales/edit/${s.id}" class="btn btn-secondary" style="font-size: 0.825rem; padding: 0.45rem 0.9rem; display: inline-flex; align-items: center; gap: 0.45rem;">
+              <i data-lucide="edit"></i>
+              <span>Edit Sale</span>
+            </a>
+            <button type="button" onclick="window.closeDrawer()" class="btn" style="background:#fff; border:1px solid var(--color-border); font-size:0.825rem; padding:0.45rem 0.9rem;">Close</button>
+          `;
+
+          window.openDrawer({
+            title: `Invoice #${s.invoice_number}`,
+            badgeText: statusText.toUpperCase(),
+            badgeClass: pillClass,
+            bodyHtml,
+            footerHtml
+          });
+        } catch (err) {
+          window.openDrawer({
+            title: "Invoice Error",
+            badgeText: "ERROR",
+            badgeClass: "status-pill-crimson",
+            bodyHtml: `<p style="color: var(--color-danger); padding: 1.5rem 0; text-align: center;">Unable to load invoice: ${err.message}</p>`,
+            footerHtml: `<button type="button" onclick="window.closeDrawer()" class="btn btn-secondary">Close</button>`
+          });
+        }
+      };
+
+      window.openInvoiceDrawerByNumber = async function(invoiceNum) {
+        try {
+          const res = await fetch(`/sales/by-invoice/${encodeURIComponent(invoiceNum)}`);
+          if (!res.ok) throw new Error("Invoice not found");
+          const sale = await res.json();
+          if (sale && sale.id) {
+            window.openInvoiceDrawer(sale.id);
+          } else {
+            throw new Error("Invalid invoice data");
+          }
+        } catch (e) {
+          window.showToast("Could not find invoice " + invoiceNum, "danger");
+        }
+      };
+
+      // 6. Global Command Palette (Cmd + K) Controller
+      const cmdKModal = document.getElementById('cmdKModal');
+      const cmdKInput = document.getElementById('cmdKInput');
+      const cmdkResults = document.getElementById('cmdkResults');
       const cmdKBtn = document.getElementById('cmdKTrigger');
-      function triggerCmdK() {
-        window.dispatchEvent(new CustomEvent('open-cmdk'));
+      let cmdkSelectedIndex = 0;
+      let cmdkItems = [];
+      let searchDebounceTimer = null;
+
+      const staticCmdkActions = [
+        // Pages & Navigation
+        { group: "Navigation", title: "Dashboard", url: "{{ url_for('dashboard') }}", icon: "layout-dashboard" },
+        { group: "Navigation", title: "Inventory", url: "{{ url_for('inventory') }}", icon: "boxes" },
+        { group: "Navigation", title: "Purchases (Shipments)", url: "/purchases", icon: "truck" },
+        { group: "Navigation", title: "Transfers", url: "{{ url_for('inventory_transfers') }}", icon: "arrow-left-right" },
+        { group: "Navigation", title: "Suppliers & Brands", url: "{{ url_for('suppliers_page') }}", icon: "building-2" },
+        { group: "Navigation", title: "Warehouses", url: "{{ url_for('warehouses_list') }}", icon: "warehouse" },
+        { group: "Navigation", title: "Sales", url: "{{ url_for('sales') }}", icon: "receipt" },
+        { group: "Navigation", title: "Customers", url: "{{ url_for('customers') }}", icon: "users" },
+        { group: "Navigation", title: "Expenses", url: "/expenses", icon: "wallet" },
+        { group: "Navigation", title: "Users", url: "{{ url_for('users_list') }}", icon: "shield-check" },
+        { group: "Navigation", title: "Reports", url: "{{ url_for('reports') }}", icon: "line-chart" },
+        { group: "Navigation", title: "POS Catalogue", url: "{{ url_for('pos') }}", icon: "shopping-bag" },
+        { group: "Navigation", title: "Help Center", url: "{{ url_for('help_center') }}", icon: "help-circle" },
+
+        // Quick Actions
+        { group: "Quick Actions", title: "+ Record New Sale", url: "{{ url_for('sales') }}", icon: "plus-circle", badge: "Action" },
+        { group: "Quick Actions", title: "+ Receive Shipment", url: "/purchases/new", icon: "truck", badge: "Action" },
+        { group: "Quick Actions", title: "+ Transfer Inventory", url: "{{ url_for('inventory_transfer_new') }}", icon: "arrow-left-right", badge: "Action" },
+        { group: "Quick Actions", title: "Download Database Backup", url: "{{ url_for('backup_download') }}", icon: "hard-drive-download", badge: "Backup" },
+        { group: "Quick Actions", title: "Toggle Privacy Mode", action: "privacy", icon: "eye", badge: "View" },
+        { group: "Quick Actions", title: "Toggle Sidebar Collapse", action: "sidebar", icon: "panel-left", badge: "View" },
+        { group: "Quick Actions", title: "Start Product Tour (Walk Around)", action: "tour", icon: "compass", badge: "Tour" }
+      ];
+
+      function openCmdK() {
+        if (!cmdKModal) return;
+        cmdKModal.style.display = 'flex';
+        requestAnimationFrame(() => {
+          cmdKModal.classList.add('is-open');
+          cmdKModal.setAttribute('aria-hidden', 'false');
+          cmdKInput.value = '';
+          cmdKInput.focus();
+          renderCmdKResults('');
+        });
       }
-      if (cmdKBtn) {
-        cmdKBtn.addEventListener('click', triggerCmdK);
+
+      function closeCmdK() {
+        if (!cmdKModal) return;
+        cmdKModal.classList.remove('is-open');
+        cmdKModal.setAttribute('aria-hidden', 'true');
+        setTimeout(() => {
+          if (!cmdKModal.classList.contains('is-open')) {
+            cmdKModal.style.display = 'none';
+          }
+        }, 180);
       }
+
+      window.openCmdK = openCmdK;
+      window.closeCmdK = closeCmdK;
+
+      if (cmdKBtn) cmdKBtn.addEventListener('click', openCmdK);
+      window.addEventListener('open-cmdk', openCmdK);
+
+      if (cmdKModal) {
+        cmdKModal.addEventListener('click', (e) => {
+          if (e.target === cmdKModal) closeCmdK();
+        });
+      }
+
       document.addEventListener('keydown', (e) => {
+        // Cmd+K / Ctrl+K
         if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
           e.preventDefault();
-          triggerCmdK();
+          if (cmdKModal && cmdKModal.classList.contains('is-open')) {
+            closeCmdK();
+          } else {
+            openCmdK();
+          }
+          return;
+        }
+
+        // Escape closes Palette or Drawer
+        if (e.key === 'Escape') {
+          if (cmdKModal && cmdKModal.classList.contains('is-open')) {
+            closeCmdK();
+            return;
+          }
+          if (drawerEl && drawerEl.classList.contains('is-open')) {
+            window.closeDrawer();
+            return;
+          }
+        }
+
+        // Navigate Command Palette items with Arrow keys
+        if (cmdKModal && cmdKModal.classList.contains('is-open')) {
+          if (e.key === 'ArrowDown') {
+            e.preventDefault();
+            if (cmdkItems.length > 0) {
+              cmdkSelectedIndex = (cmdkSelectedIndex + 1) % cmdkItems.length;
+              updateCmdKHighlight();
+            }
+          } else if (e.key === 'ArrowUp') {
+            e.preventDefault();
+            if (cmdkItems.length > 0) {
+              cmdkSelectedIndex = (cmdkSelectedIndex - 1 + cmdkItems.length) % cmdkItems.length;
+              updateCmdKHighlight();
+            }
+          } else if (e.key === 'Enter') {
+            e.preventDefault();
+            if (cmdkItems[cmdkSelectedIndex]) {
+              executeCmdKItem(cmdkItems[cmdkSelectedIndex]);
+            }
+          }
         }
       });
+
+      function updateCmdKHighlight() {
+        const itemEls = cmdkResults.querySelectorAll('.cmdk-item');
+        itemEls.forEach((el, idx) => {
+          if (idx === cmdkSelectedIndex) {
+            el.classList.add('is-selected');
+            el.scrollIntoView({ block: 'nearest' });
+          } else {
+            el.classList.remove('is-selected');
+          }
+        });
+      }
+
+      function executeCmdKItem(item) {
+        closeCmdK();
+        if (item.url) {
+          window.location.href = item.url;
+        } else if (item.saleId) {
+          window.openInvoiceDrawer(item.saleId);
+        } else if (item.action === 'privacy') {
+          const btn = document.getElementById('privacyModeToggle');
+          if (btn) btn.click();
+        } else if (item.action === 'sidebar') {
+          const btn = document.getElementById('sidebarCollapseBtn');
+          if (btn) btn.click();
+        } else if (item.action === 'tour') {
+          if (window.startDashboardTour) {
+            window.startDashboardTour();
+          } else {
+            window.location.href = "{{ url_for('dashboard') }}?tour=1";
+          }
+        }
+      }
+
+      async function renderCmdKResults(query) {
+        query = query.trim().toLowerCase();
+        cmdkItems = [];
+        cmdkSelectedIndex = 0;
+
+        let filteredStatic = staticCmdkActions.filter(item => {
+          if (!query) return true;
+          return item.title.toLowerCase().includes(query) || item.group.toLowerCase().includes(query);
+        });
+
+        let asyncResults = [];
+        if (query.length >= 2) {
+          try {
+            // Live invoice search
+            const salesPromise = fetch(`/sales/data?search=${encodeURIComponent(query)}`)
+              .then(r => r.ok ? r.json() : [])
+              .then(data => {
+                const rows = Array.isArray(data) ? data : (data.sales || []);
+                return rows.slice(0, 5).map(s => ({
+                  group: "Invoices & Sales",
+                  title: `Invoice #${s.invoice_number} — ${s.customer_name || 'Walk-in'} ($${Number(s.grand_total || 0).toFixed(2)})`,
+                  saleId: s.id,
+                  icon: "receipt",
+                  badge: s.status ? s.status.toUpperCase() : "INVOICE"
+                }));
+              }).catch(() => []);
+
+            // Live products search
+            const productsPromise = fetch(`/products/search?q=${encodeURIComponent(query)}`)
+              .then(r => r.ok ? r.json() : [])
+              .then(rows => {
+                return (rows || []).slice(0, 4).map(p => ({
+                  group: "Products & Stock",
+                  title: `${p.name} (SKU: ${p.sku || '-'}) — Stock: ${p.stock_quantity ?? p.stock ?? '-'}`,
+                  url: `/inventory?search=${encodeURIComponent(p.name)}`,
+                  icon: "boxes",
+                  badge: "PRODUCT"
+                }));
+              }).catch(() => []);
+
+            const [salesRes, prodRes] = await Promise.all([salesPromise, productsPromise]);
+            asyncResults = [...salesRes, ...prodRes];
+          } catch(err) {
+            // ignore network errors
+          }
+        }
+
+        const allItems = [...filteredStatic, ...asyncResults];
+        cmdkItems = allItems;
+
+        if (allItems.length === 0) {
+          cmdkResults.innerHTML = `<div class="cmdk-empty">No commands or matches found for "${query}"</div>`;
+          return;
+        }
+
+        // Group items
+        const grouped = {};
+        allItems.forEach((item, index) => {
+          item._index = index;
+          if (!grouped[item.group]) grouped[item.group] = [];
+          grouped[item.group].push(item);
+        });
+
+        let html = '';
+        for (const [groupName, items] of Object.entries(grouped)) {
+          html += `<div class="cmdk-group"><div class="cmdk-group-title">${groupName}</div>`;
+          items.forEach(item => {
+            const isSelected = item._index === 0 ? 'is-selected' : '';
+            html += `
+              <div class="cmdk-item ${isSelected}" data-index="${item._index}">
+                <i data-lucide="${item.icon || 'arrow-right'}" class="cmdk-item-icon"></i>
+                <span class="cmdk-item-text">${item.title}</span>
+                ${item.badge ? `<span class="cmdk-item-badge">${item.badge}</span>` : ''}
+              </div>
+            `;
+          });
+          html += `</div>`;
+        }
+
+        cmdkResults.innerHTML = html;
+        if (window.lucide && typeof window.lucide.createIcons === 'function') {
+          window.lucide.createIcons({ root: cmdkResults });
+        }
+
+        // Click handlers on items
+        cmdkResults.querySelectorAll('.cmdk-item').forEach(el => {
+          el.addEventListener('click', () => {
+            const idx = parseInt(el.dataset.index, 10);
+            if (cmdkItems[idx]) {
+              executeCmdKItem(cmdkItems[idx]);
+            }
+          });
+          el.addEventListener('mouseenter', () => {
+            cmdkSelectedIndex = parseInt(el.dataset.index, 10);
+            updateCmdKHighlight();
+          });
+        });
+      }
+
+      if (cmdKInput) {
+        cmdKInput.addEventListener('input', (e) => {
+          clearTimeout(searchDebounceTimer);
+          searchDebounceTimer = setTimeout(() => {
+            renderCmdKResults(e.target.value);
+          }, 180);
+        });
+      }
 
       // 6. Ingest Server-Side Flash Messages into Toast System
       const flashData = document.getElementById('flashData');

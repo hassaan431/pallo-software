@@ -80,7 +80,7 @@
           {% if recent_sales %}
             {% for sale in recent_sales %}
             <tr>
-              <td>{{ sale.invoice_number }}</td>
+              <td><a href="javascript:void(0)" onclick="window.openInvoiceDrawer({{ sale.id }})" class="drawer-preview-link" title="Quick view invoice details">{{ sale.invoice_number }}</a></td>
               <td>{{ sale.customer_name }}</td>
               <td>{{ sale.invoice_date }}</td>
               <td class="sensitive-data">${{ "%.2f"|format(sale.grand_total) }}</td>
@@ -130,7 +130,7 @@
             {% for payment in upcoming_payments %}
             <tr>
               <td style="font-weight: 600; color: #dc2626;">{{ payment.due_date }}</td>
-              <td>{{ payment.invoice_number }}</td>
+              <td><a href="javascript:void(0)" onclick="window.openInvoiceDrawerByNumber('{{ payment.invoice_number }}')" class="drawer-preview-link" title="Quick view invoice details">{{ payment.invoice_number }}</a></td>
               <td>{{ payment.customer_name }}</td>
               <td>{{ payment.customer_phone or '-' }}</td>
               <td class="sensitive-data" style="font-weight: bold; color: #e8800a;">${{ "%.2f"|format(payment.remaining_amount) }}</td>
