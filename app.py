@@ -1431,7 +1431,10 @@ def inventory_transfers():
                 JOIN products p ON p.id = iti.product_id
                 WHERE iti.transfer_id = ?
             """, (t["id"],)).fetchall()
-            t_dict["items"] = [dict(i) for i in items_raw]
+            items_list = [dict(i) for i in items_raw]
+            t_dict["items"] = items_list
+            t_dict["total_items_count"] = len(items_list)
+            t_dict["total_units"] = sum(float(i.get("quantity") or 0) for i in items_list)
             transfers.append(t_dict)
             
         return render_template("inventory_transfers.html", transfers=transfers)
@@ -5270,7 +5273,17 @@ def users_edit(user_id):
 def warehouses_list():
     conn = get_connection()
     try:
-        warehouses = conn.execute("SELECT * FROM warehouses ORDER BY name").fetchall()
+        warehouses = conn.execute("""
+            SELECT w.*,
+                   COUNT(DISTINCT wi.product_id) as total_products,
+                   COALESCE(SUM(wi.stock_quantity), 0) as total_units,
+                   COALESCE(SUM(wi.stock_quantity * p.cost_price), 0) as total_inventory_value
+            FROM warehouses w
+            LEFT JOIN warehouse_inventory wi ON w.id = wi.warehouse_id
+            LEFT JOIN products p ON wi.product_id = p.id
+            GROUP BY w.id
+            ORDER BY w.name
+        """).fetchall()
         return render_template("warehouses.html", warehouses=[dict(w) for w in warehouses])
     finally:
         conn.close()

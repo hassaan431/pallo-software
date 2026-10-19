@@ -1,85 +1,155 @@
 {% extends "base.html" %}
-{% block title %}Transfer Inventory — AK Distributors{% endblock %}
-{% block page_heading %}Transfer Inventory{% endblock %}
+{% block title %}{% if edit_transfer %}Edit Transfer #{{ edit_transfer.id }}{% else %}Transfer Stock{% endif %} — AK Distributors{% endblock %}
+{% block page_heading %}{% if edit_transfer %}Edit Transfer #{{ edit_transfer.id }}{% else %}Transfer Stock{% endif %}{% endblock %}
 {% block content %}
-<div class="page-header" style="margin-bottom: 1.5rem;">
-  <h2 style="margin:0; font-size:1.25rem; font-weight:700;">{% if edit_transfer %}Edit Transfer #{{ edit_transfer.id }}{% else %}Transfer Inventory{% endif %}</h2>
-  <p style="color: var(--text-muted); margin-top: 0.25rem;">{% if edit_transfer %}Modify an existing inventory transfer.{% else %}Move multiple products from one warehouse to another.{% endif %}</p>
+
+<!-- TomSelect CSS & JS for searchable dropdowns -->
+<link href="https://cdn.jsdelivr.net/npm/tom-select@2.2.2/dist/css/tom-select.css" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/tom-select@2.2.2/dist/js/tom-select.complete.min.js"></script>
+<style>
+  .ts-control {
+    border-radius: 8px !important;
+    border: 1px solid var(--color-border) !important;
+    padding: 0.45rem 0.75rem !important;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.02) !important;
+    font-family: var(--font) !important;
+    font-size: 0.85rem !important;
+  }
+  .ts-control.focus {
+    border-color: var(--color-primary) !important;
+    box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1) !important;
+  }
+  .ts-dropdown {
+    border-radius: 8px !important;
+    border: 1px solid var(--color-border) !important;
+    box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1) !important;
+    font-family: var(--font) !important;
+    font-size: 0.85rem !important;
+    z-index: 1000 !important;
+  }
+  .ts-dropdown .active {
+    background-color: var(--color-primary) !important;
+    color: #ffffff !important;
+  }
+  .ts-dropdown .option {
+    padding: 0.5rem 0.75rem !important;
+  }
+  .ts-dropdown .ts-dropdown-content {
+    max-height: 350px !important;
+  }
+</style>
+
+<!-- Workstation Command Bar -->
+<div class="warehouses-header-bar">
+  <div class="warehouses-title-group">
+    <div style="width: 36px; height: 36px; border-radius: 10px; background: #eff6ff; color: #2563eb; display: flex; align-items: center; justify-content: center; box-shadow: 0 1px 3px rgba(37, 99, 235, 0.2);">
+      <i data-lucide="repeat" style="width: 20px; height: 20px;"></i>
+    </div>
+    <div>
+      <h2 style="margin:0; font-size:1.25rem; font-weight:700; color:var(--color-slate-900);">
+        {% if edit_transfer %}Edit Stock Transfer #{{ edit_transfer.id }}{% else %}Initiate Stock Transfer{% endif %}
+      </h2>
+      <p style="margin:0; font-size:0.775rem; color:var(--color-slate-500);">
+        {% if edit_transfer %}Modify manifested quantities and relocate stock between facilities.{% else %}Transfer catalog items from source facility to destination warehouse hub.{% endif %}
+      </p>
+    </div>
+  </div>
+  <div style="display: flex; gap: 0.5rem; align-items: center;">
+    <a href="{{ url_for('inventory_transfers') }}" class="btn btn-secondary" style="display: inline-flex; align-items: center; gap: 0.4rem; font-size: 0.825rem; font-weight: 600;">
+      <i data-lucide="arrow-left" style="width: 14px; height: 14px;"></i>
+      <span>Back to Transfers</span>
+    </a>
+  </div>
 </div>
 
-<div class="panel">
-  <div class="panel-body" style="padding: 2rem;">
-    <!-- TomSelect CSS & JS for searchable dropdowns -->
-    <link href="https://cdn.jsdelivr.net/npm/tom-select@2.2.2/dist/css/tom-select.css" rel="stylesheet">
-    <script src="https://cdn.jsdelivr.net/npm/tom-select@2.2.2/dist/js/tom-select.complete.min.js"></script>
-    <style>
-      .ts-control { border-radius: 8px; border: 1px solid var(--border-color); padding: 0.5rem 0.75rem; box-shadow: none; font-family: inherit; }
-      .ts-control.focus { border-color: var(--color-primary); box-shadow: 0 0 0 3px rgba(45, 106, 79, 0.1); }
-      .ts-dropdown { border-radius: 8px; border: 1px solid var(--border-color); box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06); font-family: inherit; z-index: 1000; }
-      .ts-dropdown .active { background-color: #f1f5f9; color: var(--color-text); }
-      .ts-dropdown .option { padding: 0.5rem 0.75rem; }
-      .ts-dropdown .ts-dropdown-content { max-height: 350px; }
-    </style>
-
-    <form id="transfer-form" onsubmit="submitTransfer(event)">
-      
-      <!-- Top Meta Info -->
-      <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem; margin-bottom: 2rem;">
+<form id="transfer-form" onsubmit="submitTransfer(event)">
+  <!-- Route & Facility Configuration Card -->
+  <section class="warehouses-section-card">
+    <div class="warehouses-section-header">
+      <div class="suppliers-section-title">
+        <i data-lucide="arrow-right-left" style="width: 16px; height: 16px; color: #2563eb;"></i>
+        <h3>Transfer Route & Reference</h3>
+      </div>
+    </div>
+    <div style="padding: 1.25rem;">
+      <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 1rem;">
         <div>
-          <label class="form-label" for="source_warehouse_id">From Warehouse <span style="color:var(--danger-text)">*</span></label>
-          <select id="source_warehouse_id" class="form-control" required onchange="fetchSourceInventory()">
-            <option value="" disabled {% if not edit_transfer %}selected{% endif %}>Select Source...</option>
+          <label class="field-label" for="source_warehouse_id" style="display:block; margin-bottom: 0.35rem; font-weight: 600; font-size: 0.8rem; color: var(--color-slate-700);">
+            Source Facility (From) <span style="color:#dc2626;">*</span>
+          </label>
+          <select id="source_warehouse_id" class="form-control" required onchange="fetchSourceInventory()" style="width:100%; height: 38px; border-radius: 8px;">
+            <option value="" disabled {% if not edit_transfer %}selected{% endif %}>Select Source Warehouse...</option>
             {% for w in warehouses %}
-            <option value="{{ w.id }}" {% if edit_transfer and edit_transfer.source_warehouse_id == w.id %}selected{% endif %}>{{ w.name }}</option>
+            <option value="{{ w.id }}" {% if edit_transfer and edit_transfer.source_warehouse_id == w.id %}selected{% endif %}>{{ w.name }} ({{ w.location or 'Default' }})</option>
             {% endfor %}
           </select>
         </div>
         
         <div>
-          <label class="form-label" for="destination_warehouse_id">To Warehouse <span style="color:var(--danger-text)">*</span></label>
-          <select id="destination_warehouse_id" class="form-control" required>
-            <option value="" disabled {% if not edit_transfer %}selected{% endif %}>Select Destination...</option>
+          <label class="field-label" for="destination_warehouse_id" style="display:block; margin-bottom: 0.35rem; font-weight: 600; font-size: 0.8rem; color: var(--color-slate-700);">
+            Destination Hub (To) <span style="color:#dc2626;">*</span>
+          </label>
+          <select id="destination_warehouse_id" class="form-control" required style="width:100%; height: 38px; border-radius: 8px;">
+            <option value="" disabled {% if not edit_transfer %}selected{% endif %}>Select Destination Warehouse...</option>
             {% for w in warehouses %}
-            <option value="{{ w.id }}" {% if edit_transfer and edit_transfer.destination_warehouse_id == w.id %}selected{% endif %}>{{ w.name }}</option>
+            <option value="{{ w.id }}" {% if edit_transfer and edit_transfer.destination_warehouse_id == w.id %}selected{% endif %}>{{ w.name }} ({{ w.location or 'Default' }})</option>
             {% endfor %}
           </select>
         </div>
 
         <div>
-          <label class="form-label" for="notes">Notes / Reference (Optional)</label>
-          <input type="text" id="notes" class="form-control" placeholder="e.g. Shipment #123" value="{{ edit_transfer.notes if edit_transfer else '' }}">
+          <label class="field-label" for="notes" style="display:block; margin-bottom: 0.35rem; font-weight: 600; font-size: 0.8rem; color: var(--color-slate-700);">
+            Notes / Manifest Ref (Optional)
+          </label>
+          <input type="text" id="notes" class="form-control" placeholder="e.g. Weekly Restock Van #3" value="{{ edit_transfer.notes if edit_transfer else '' }}" style="width:100%; height: 38px; border-radius: 8px;">
         </div>
       </div>
+    </div>
+  </section>
 
-      <!-- Items Table -->
-      <div class="table-wrap" style="margin-bottom: 2rem; border: 1px solid var(--border-color); border-radius: 8px; overflow: visible;">
-        <table class="data-table" id="transfer-items-table" style="margin: 0; width: 100%;">
-          <thead style="background-color: #f8fafc;">
-            <tr>
-              <th style="width: 45%; padding: 1rem;">Product</th>
-              <th style="width: 15%; padding: 1rem;">Price</th>
-              <th style="width: 18%; padding: 1rem;">Available Stock</th>
-              <th style="width: 15%; padding: 1rem;">Transfer Qty</th>
-              <th style="width: 7%; padding: 1rem; text-align: center;">Action</th>
-            </tr>
-          </thead>
-          <tbody id="items-tbody">
-            <!-- Rows added by JS -->
-          </tbody>
-        </table>
-        <div style="padding: 1rem; background-color: #f8fafc; border-top: 1px solid var(--border-color);">
-          <button type="button" class="btn btn-outline btn-sm" onclick="addTransferRow()">+ Add Row</button>
-        </div>
+  <!-- Items Manifest Table Card -->
+  <section class="warehouses-section-card">
+    <div class="warehouses-section-header">
+      <div class="suppliers-section-title">
+        <i data-lucide="package" style="width: 16px; height: 16px; color: #059669;"></i>
+        <h3>Transfer Items Manifest</h3>
       </div>
-
-      <div style="text-align: right; border-top: 1px solid var(--border-color); padding-top: 1.5rem;">
-        <a href="{{ url_for('inventory_transfers') }}" class="btn btn-outline" style="margin-right: 0.75rem;">Cancel</a>
-        <button type="submit" class="btn btn-primary" id="save-transfer-btn">{% if edit_transfer %}Update Transfer{% else %}Complete Transfer{% endif %}</button>
+      <button type="button" class="btn btn-secondary btn-sm" onclick="addTransferRow()" style="display: inline-flex; align-items: center; gap: 0.35rem; font-size: 0.8rem; font-weight: 600;">
+        <i data-lucide="plus" style="width: 13px; height: 13px;"></i>
+        <span>Add Row</span>
+      </button>
+    </div>
+    <div style="overflow-x: auto;">
+      <table class="data-table" id="transfer-items-table" style="margin: 0; width: 100%;">
+        <thead>
+          <tr>
+            <th style="width: 48%; padding: 10px 14px;">Product</th>
+            <th style="width: 15%; padding: 10px 14px; text-align: right;">Cost Price</th>
+            <th style="width: 17%; padding: 10px 14px; text-align: right;">Available at Source</th>
+            <th style="width: 13%; padding: 10px 14px; text-align: right;">Transfer Qty</th>
+            <th style="width: 7%; padding: 10px 14px; text-align: center;">Action</th>
+          </tr>
+        </thead>
+        <tbody id="items-tbody">
+          <!-- Rows added by JS -->
+        </tbody>
+      </table>
+    </div>
+    <div style="padding: 0.85rem 1.25rem; background: #fafafa; border-top: 1px solid var(--color-border); display: flex; justify-content: space-between; align-items: center;">
+      <button type="button" class="btn btn-secondary btn-sm" onclick="addTransferRow()" style="display: inline-flex; align-items: center; gap: 0.35rem; font-size: 0.8rem; font-weight: 600;">
+        <i data-lucide="plus" style="width: 13px; height: 13px;"></i>
+        <span>Add Another Item</span>
+      </button>
+      <div style="display: flex; gap: 0.5rem; align-items: center;">
+        <a href="{{ url_for('inventory_transfers') }}" class="btn btn-secondary" style="font-size: 0.85rem;">Cancel</a>
+        <button type="submit" class="btn btn-primary" id="save-transfer-btn" style="display: inline-flex; align-items: center; gap: 0.45rem; font-size: 0.85rem; font-weight: 600;">
+          <i data-lucide="check" style="width: 15px; height: 15px;"></i>
+          <span>{% if edit_transfer %}Update Transfer{% else %}Complete Transfer{% endif %}</span>
+        </button>
       </div>
-
-    </form>
-  </div>
-</div>
+    </div>
+  </section>
+</form>
 
 <script>
   const products = {{ products|tojson }};
@@ -87,10 +157,10 @@
   const editMode = {{ 'true' if edit_transfer else 'false' }};
   const editTransferId = {{ edit_transfer.id if edit_transfer else 'null' }};
   const editItems = {{ edit_items|tojson if edit_items else '[]' }};
-  let productStockMap = {}; // Maps product_id -> stock_quantity in source warehouse
+  let productStockMap = {};
   const productPriceMap = {};
   products.forEach(p => {
-    productPriceMap[p.id] = parseFloat(p.selling_price || p.cost_price || 0);
+    productPriceMap[p.id] = parseFloat(p.cost_price || p.selling_price || 0);
   });
 
   // Fetch inventory for the source warehouse when it changes
@@ -107,8 +177,6 @@
         productStockMap[p.id] = parseFloat(p.stock_quantity || 0);
       });
 
-      // If in edit mode, add the old quantities back to the source warehouse stock
-      // so the user can re-transfer them without hitting validation limits.
       if (editMode && editItems) {
         editItems.forEach(item => {
           if (productStockMap[item.product_id] !== undefined) {
@@ -117,7 +185,6 @@
         });
       }
 
-      // Update all existing rows with new stock data
       document.querySelectorAll('#items-tbody tr').forEach(tr => {
         const selectEl = tr.querySelector('.prod-select');
         updateRowStock(tr, selectEl.value);
@@ -132,9 +199,10 @@
     const priceSpan = tr.querySelector('.prod-price');
     if (productId && productStockMap[productId] !== undefined) {
       const val = productStockMap[productId];
-      stockSpan.textContent = Number.isInteger(val) ? val : parseFloat(val.toFixed(3));
+      const displayVal = Number.isInteger(val) ? val : parseFloat(val.toFixed(3));
+      stockSpan.innerHTML = `<span class="stock-pill in-stock" style="font-size:0.75rem; padding: 2px 7px;">${displayVal} units</span>`;
     } else {
-      stockSpan.textContent = '-';
+      stockSpan.innerHTML = '<span style="color:var(--color-slate-400);">-</span>';
     }
     if (productId && productPriceMap[productId] !== undefined) {
       priceSpan.textContent = '$' + productPriceMap[productId].toFixed(2);
@@ -148,30 +216,32 @@
   function addTransferRow(initialProductId = null, initialQty = 1) {
     const tr = document.createElement('tr');
     
-    let productOptions = '<option value="">-- Select Product --</option>';
+    let productOptions = '<option value="">-- Search & Select Product --</option>';
     products.forEach(p => {
       const isSelected = initialProductId && initialProductId == p.id ? 'selected' : '';
-      const priceVal = (parseFloat(p.selling_price || p.cost_price || 0)).toFixed(2);
+      const priceVal = (parseFloat(p.cost_price || p.selling_price || 0)).toFixed(2);
       productOptions += `<option value="${p.id}" ${isSelected}>${p.name} ${p.unit ? '(' + p.unit + ')' : ''} - $${priceVal}</option>`;
     });
 
     tr.innerHTML = `
-      <td style="padding: 1rem;">
+      <td style="padding: 8px 12px;">
         <select class="form-control prod-select" required>
           ${productOptions}
         </select>
       </td>
-      <td style="padding: 1rem; vertical-align: middle; color: #475569; font-weight: 500;">
+      <td style="padding: 8px 12px; text-align: right; vertical-align: middle; color: var(--color-slate-700); font-weight: 600; font-size: 0.825rem;">
         <span class="prod-price">-</span>
       </td>
-      <td style="padding: 1rem; vertical-align: middle; font-weight: 500;">
+      <td style="padding: 8px 12px; text-align: right; vertical-align: middle;">
         <span class="avail-stock">-</span>
       </td>
-      <td style="padding: 1rem;">
-        <input type="number" class="form-control qty-input" min="0.001" step="any" value="${initialQty}" required placeholder="0.00">
+      <td style="padding: 8px 12px; text-align: right;">
+        <input type="number" class="form-control qty-input" min="0.001" step="any" value="${initialQty}" required placeholder="0.00" style="text-align: right; font-weight: 700; height: 36px; border-radius: 6px;">
       </td>
-      <td style="padding: 1rem; text-align: center;">
-        <button type="button" class="btn btn-danger" style="padding: 0.25rem 0.5rem; line-height: 1; border-radius: 4px;" onclick="removeRow(this)">&times;</button>
+      <td style="padding: 8px 12px; text-align: center; vertical-align: middle;">
+        <button type="button" class="btn-delete-action" title="Remove Item" onclick="removeRow(this)">
+          <i data-lucide="trash-2"></i>
+        </button>
       </td>
     `;
     tbody.appendChild(tr);
@@ -193,6 +263,10 @@
     if (initialProductId) {
       updateRowStock(tr, initialProductId);
     }
+
+    if (window.lucide) {
+      window.lucide.createIcons();
+    }
   }
 
   function removeRow(btn) {
@@ -204,7 +278,6 @@
     editItems.forEach(item => {
       addTransferRow(item.product_id, item.quantity);
     });
-    // Trigger initial fetch
     fetchSourceInventory();
   } else if (preselectProductId) {
     addTransferRow(preselectProductId);
@@ -220,7 +293,7 @@
     const destWid = document.getElementById('destination_warehouse_id').value;
     
     if (sourceWid === destWid) {
-      alert("Source and Destination warehouses must be different.");
+      alert("Source and Destination warehouses must be different facilities.");
       return;
     }
 
@@ -241,7 +314,7 @@
       if (qty > (availStock + 0.0001)) {
         const prodName = tr.querySelector('.ts-control .item') ? tr.querySelector('.ts-control .item').textContent : 'Product';
         const displayAvail = Number.isInteger(availStock) ? availStock : parseFloat(availStock.toFixed(3));
-        alert(`Cannot transfer more than available stock for ${prodName}. Available: ${displayAvail}`);
+        alert(`Cannot transfer more than available stock for ${prodName}. Available at source: ${displayAvail}`);
         valid = false;
         return;
       }
@@ -264,7 +337,7 @@
 
     const btn = document.getElementById('save-transfer-btn');
     btn.disabled = true;
-    btn.textContent = 'Processing...';
+    btn.innerHTML = '<span>Processing...</span>';
 
     try {
       let url = '/inventory/transfer';
@@ -283,13 +356,21 @@
       } else {
         alert(data.error || "Failed to process transfer");
         btn.disabled = false;
-        btn.textContent = 'Complete Transfer';
+        btn.innerHTML = '<i data-lucide="check" style="width: 15px; height: 15px;"></i><span>Complete Transfer</span>';
+        if (window.lucide) window.lucide.createIcons();
       }
     } catch (err) {
       alert("Network error. Please try again.");
       btn.disabled = false;
-      btn.textContent = 'Complete Transfer';
+      btn.innerHTML = '<i data-lucide="check" style="width: 15px; height: 15px;"></i><span>Complete Transfer</span>';
+      if (window.lucide) window.lucide.createIcons();
     }
   }
+
+  document.addEventListener('DOMContentLoaded', () => {
+    if (window.lucide) {
+      window.lucide.createIcons();
+    }
+  });
 </script>
 {% endblock %}

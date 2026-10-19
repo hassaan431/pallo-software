@@ -1,142 +1,284 @@
 {% extends "base.html" %}
-
-{% block title %}Manage Warehouses — AK Distributors{% endblock %}
-{% block page_heading %}Manage Warehouses{% endblock %}
-
+{% block title %}Warehouses & Storage Facilities — AK Distributors{% endblock %}
+{% block page_heading %}Warehouses & Storage Facilities{% endblock %}
 {% block content %}
-<section class="panel">
-  <div class="panel-header">
-    <h2>Warehouses</h2>
-    <div style="display: flex; gap: 0.5rem; align-items: center;">
-      <button class="btn btn-primary" data-open-modal="addWarehouseModal">+ Add Warehouse</button>
+
+<!-- Workstation Command Bar -->
+<div class="warehouses-header-bar">
+  <div class="warehouses-title-group">
+    <div style="width: 36px; height: 36px; border-radius: 10px; background: #eff6ff; color: #2563eb; display: flex; align-items: center; justify-content: center; box-shadow: 0 1px 3px rgba(37, 99, 235, 0.2);">
+      <i data-lucide="warehouse" style="width: 20px; height: 20px;"></i>
+    </div>
+    <div>
+      <h2 style="margin:0; font-size:1.25rem; font-weight:700; color:var(--color-slate-900);">Warehouses & Storage Facilities</h2>
+      <p style="margin:0; font-size:0.775rem; color:var(--color-slate-500);">Multi-location inventory tracking, stock distribution & warehouse analytics</p>
     </div>
   </div>
-  <div class="panel-body">
-    <div class="table-wrap">
-      <table class="data-table">
-        <thead>
-          <tr>
-            <th>ID</th>
-            <th>Name</th>
-            <th>Location</th>
-            <th>Commission Applies</th>
-            <th>Actions</th>
-          </tr>
-        </thead>
-        <tbody>
-          {% for w in warehouses %}
-          <tr>
-            <td>{{ w.id }}</td>
-            <td style="font-weight: 500;">{{ w.name }}</td>
-            <td>{{ w.location or 'N/A' }}</td>
-            <td>
-              {% if w.commission_applies %}
-                <span class="badge" style="background:#10b981; color:white; padding:2px 8px; border-radius:12px;">Yes</span>
-              {% else %}
-                <span class="badge" style="background:#6c757d; color:white; padding:2px 8px; border-radius:12px;">No</span>
-              {% endif %}
-            </td>
-            <td>
-              <button class="btn btn-secondary btn-sm" onclick="openEditWarehouse({{ w.id }}, '{{ w.name|e }}', '{{ w.location|e }}', '{{ w.commission_applies or 0 }}')">Edit</button>
-            </td>
-          </tr>
-          {% else %}
-          <tr>
-            <td colspan="5" class="text-center">No warehouses found.</td>
-          </tr>
-          {% endfor %}
-        </tbody>
-      </table>
+  <div style="display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap;">
+    <a href="/inventory/transfers" class="btn btn-secondary" style="display: inline-flex; align-items: center; gap: 0.4rem; font-size: 0.825rem; font-weight: 600;">
+      <i data-lucide="arrow-right-left" style="width: 14px; height: 14px;"></i>
+      <span>Stock Transfers</span>
+    </a>
+    <a href="/inventory/transfer/new" class="btn btn-secondary" style="display: inline-flex; align-items: center; gap: 0.4rem; font-size: 0.825rem; font-weight: 600;">
+      <i data-lucide="repeat" style="width: 14px; height: 14px;"></i>
+      <span>Transfer Stock</span>
+    </a>
+  </div>
+</div>
+
+<!-- Financial & Facility Metric Overview (3 Cards) -->
+{% set total_stock_units = namespace(value=0.0) %}
+{% set total_catalog_val = namespace(value=0.0) %}
+{% for w in warehouses %}
+  {% set total_stock_units.value = total_stock_units.value + (w.total_units|default(0)|float) %}
+  {% set total_catalog_val.value = total_catalog_val.value + (w.total_inventory_value|default(0)|float) %}
+{% endfor %}
+
+<div class="warehouses-stats-grid">
+  <article class="warehouses-stat-card">
+    <div class="warehouses-stat-content">
+      <h3>Active Facilities</h3>
+      <p class="warehouses-stat-value">{{ warehouses|length }}</p>
+      <p class="warehouses-stat-note">Configured storage locations</p>
     </div>
+    <div class="warehouses-stat-icon blue">
+      <i data-lucide="building-2"></i>
+    </div>
+  </article>
+
+  <article class="warehouses-stat-card">
+    <div class="warehouses-stat-content">
+      <h3>Housed Stock Units</h3>
+      <p class="warehouses-stat-value">
+        {{ "%.1f"|format(total_stock_units.value) if (total_stock_units.value % 1 != 0) else total_stock_units.value|int }}
+      </p>
+      <p class="warehouses-stat-note">Total physical inventory units</p>
+    </div>
+    <div class="warehouses-stat-icon emerald">
+      <i data-lucide="package"></i>
+    </div>
+  </article>
+
+  <article class="warehouses-stat-card">
+    <div class="warehouses-stat-content">
+      <h3>Total Facility Valuation</h3>
+      <p class="warehouses-stat-value">
+        <span class="sensitive-data">${{ "%.2f"|format(total_catalog_val.value) }}</span>
+      </p>
+      <p class="warehouses-stat-note">Cumulative inventory cost value</p>
+    </div>
+    <div class="warehouses-stat-icon amber">
+      <i data-lucide="dollar-sign"></i>
+    </div>
+  </article>
+</div>
+
+<!-- Facilities Directory Table -->
+<section class="warehouses-section-card">
+  <div class="warehouses-section-header">
+    <div class="suppliers-section-title">
+      <i data-lucide="warehouse" style="width: 16px; height: 16px; color: #2563eb;"></i>
+      <h3>Facilities Directory & Balances</h3>
+      <span class="suppliers-count-badge">{{ warehouses|length }} locations</span>
+    </div>
+    <button type="button" class="btn btn-primary btn-sm" onclick="openModal('addWarehouseModal')" style="display: inline-flex; align-items: center; gap: 0.35rem; font-size: 0.8rem; font-weight: 600;">
+      <i data-lucide="plus" style="width: 13px; height: 13px;"></i>
+      <span>Add Warehouse</span>
+    </button>
+  </div>
+  <div class="warehouses-table-wrap">
+    <table class="data-table">
+      <thead>
+        <tr>
+          <th style="width: 60px;">ID</th>
+          <th>Warehouse Name</th>
+          <th>Location</th>
+          <th style="text-align: center; width: 140px;">Commission Applies</th>
+          <th style="text-align: center; width: 120px;">SKUs Stored</th>
+          <th style="text-align: right; width: 130px;">Units in Stock</th>
+          <th style="text-align: right; width: 150px;">Valuation</th>
+          <th style="width: 180px; text-align: right;">Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for w in warehouses %}
+        <tr>
+          <td><span class="row-id-chip">#{{ w.id }}</span></td>
+          <td style="font-weight: 600; color: var(--color-slate-900);">
+            <div style="display: flex; align-items: center; gap: 0.5rem;">
+              <div style="width: 26px; height: 26px; border-radius: 6px; background: #eff6ff; color: #2563eb; display: flex; align-items: center; justify-content: center; flex-shrink: 0;">
+                <i data-lucide="warehouse" style="width: 14px; height: 14px;"></i>
+              </div>
+              <span>{{ w.name }}</span>
+            </div>
+          </td>
+          <td>
+            {% if w.location %}
+            <span style="display:inline-flex; align-items:center; gap:0.35rem; color:var(--color-slate-700);">
+              <i data-lucide="map-pin" style="width:13px; height:13px; color:var(--color-slate-400);"></i>
+              {{ w.location }}
+            </span>
+            {% else %}
+            <span style="color:var(--color-slate-400);">N/A</span>
+            {% endif %}
+          </td>
+          <td style="text-align: center;">
+            {% if w.commission_applies %}
+              <span class="stock-pill in-stock" style="font-size: 0.75rem; padding: 2px 8px;">
+                <i data-lucide="check" style="width: 12px; height: 12px;"></i>
+                Yes ({{ w.commission_rate or 0 }}%)
+              </span>
+            {% else %}
+              <span class="stock-pill in-stock" style="background: #f1f5f9; color: #475569; border: 1px solid #e2e8f0; font-size: 0.75rem; padding: 2px 8px;">
+                No
+              </span>
+            {% endif %}
+          </td>
+          <td style="text-align: center;">
+            <span class="suppliers-count-badge" style="font-size: 0.75rem;">{{ w.total_products or 0 }} SKUs</span>
+          </td>
+          <td style="text-align: right; font-weight: 600; color: var(--color-slate-800);">
+            {{ "%.1f"|format(w.total_units) if (w.total_units % 1 != 0) else (w.total_units|default(0)|int) }} units
+          </td>
+          <td style="text-align: right; font-weight: 700; color: #059669;">
+            <span class="sensitive-data">${{ "%.2f"|format(w.total_inventory_value or 0) }}</span>
+          </td>
+          <td style="text-align: right;">
+            <div style="display: flex; gap: 0.35rem; justify-content: flex-end; align-items: center;">
+              <button type="button" class="btn-history-action" onclick="inspectWarehouse({{ w.id }})" title="Inspect Facility Inventory">
+                <i data-lucide="scan"></i>
+                <span>Inspect</span>
+              </button>
+              <button type="button" class="btn-edit-action" onclick="openEditWarehouse({{ w.id }}, '{{ w.name|e }}', '{{ w.location|e }}', '{{ w.commission_applies or 0 }}')" title="Edit Facility">
+                <i data-lucide="pencil"></i>
+                <span>Edit</span>
+              </button>
+            </div>
+          </td>
+        </tr>
+        {% else %}
+        <tr>
+          <td colspan="8" style="text-align: center; padding: 2.5rem 1rem; color: var(--color-slate-400);">No warehouses found.</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
   </div>
 </section>
 
-<div class="panel-header" style="justify-content: flex-start; gap: 1rem; margin-top: 3rem; background: var(--bg-card); padding: 1rem 1.5rem; border-radius: var(--radius); box-shadow: var(--shadow-sm);">
-  <label for="globalWarehouseFilter" style="font-weight: bold; white-space: nowrap;">Filter By Warehouse:</label>
-  <select id="globalWarehouseFilter" class="form-control" style="max-width: 300px;">
-    <option value="">-- Select a Warehouse --</option>
-    {% for w in warehouses %}
-      <option value="{{ w.id }}">{{ w.name }}</option>
-    {% endfor %}
-  </select>
+<!-- Facility Live Inspection Workspace -->
+<div class="facility-filter-bar">
+  <div style="display: flex; align-items: center; gap: 0.65rem;">
+    <div style="width: 32px; height: 32px; border-radius: 8px; background: #f5f3ff; color: #7c3aed; display: flex; align-items: center; justify-content: center;">
+      <i data-lucide="layers" style="width: 16px; height: 16px;"></i>
+    </div>
+    <div>
+      <h3 style="margin:0; font-size: 0.95rem; font-weight: 700; color: var(--color-slate-900);">Facility Live Inspection Workspace</h3>
+      <p style="margin:0; font-size: 0.725rem; color: var(--color-slate-500);">Switch between storage facilities to audit live stocks & dispatched invoices</p>
+    </div>
+  </div>
+  <div style="display: flex; align-items: center; gap: 0.5rem;">
+    <label for="globalWarehouseFilter" style="font-size: 0.8rem; font-weight: 600; color: var(--color-slate-700); white-space: nowrap;">Active Facility:</label>
+    <select id="globalWarehouseFilter" class="form-control" style="min-width: 240px; font-weight: 600; height: 36px; border-radius: 8px;">
+      <option value="">-- Select a Warehouse --</option>
+      {% for w in warehouses %}
+        <option value="{{ w.id }}">{{ w.name }} ({{ w.location or 'Default' }})</option>
+      {% endfor %}
+    </select>
+  </div>
 </div>
 
-<section class="panel" style="margin-top: 1.5rem;">
-  <div class="panel-header">
-    <h2>Recent Sales (Last 5)</h2>
-  </div>
-  <div class="panel-body">
-    <div class="table-wrap">
+<div class="warehouses-inspection-grid">
+  <!-- Recent Sales Dispatched -->
+  <section class="warehouses-section-card" style="margin-bottom: 0;">
+    <div class="warehouses-section-header">
+      <div class="suppliers-section-title">
+        <i data-lucide="shopping-cart" style="width: 15px; height: 15px; color: #2563eb;"></i>
+        <h3 style="font-size: 0.9rem;">Recent Sales Dispatched (Last 5)</h3>
+      </div>
+    </div>
+    <div class="warehouses-table-wrap" style="max-height: 380px;">
       <table class="data-table">
         <thead>
           <tr>
             <th>Invoice</th>
             <th>Date</th>
             <th>Customer</th>
-            <th>Total</th>
-            <th>Status</th>
+            <th style="text-align: right;">Total</th>
+            <th style="text-align: center;">Status</th>
           </tr>
         </thead>
         <tbody id="recentSalesTbody">
-          <tr><td colspan="5" class="text-center text-muted">Select a warehouse to view recent sales.</td></tr>
+          <tr><td colspan="5" style="text-align:center; padding: 2.5rem 1rem; color: var(--color-slate-400);">Select a warehouse to view recent sales.</td></tr>
         </tbody>
       </table>
     </div>
-  </div>
-</section>
+  </section>
 
-<section class="panel" style="margin-top: 1.5rem;">
-  <div class="panel-header" style="display: flex; justify-content: space-between; align-items: center;">
-    <h2>Product Inventory & Value</h2>
-    <input type="text" id="inventorySearch" class="form-control" placeholder="Search products..." style="max-width: 300px;">
-  </div>
-  <div class="panel-body">
-    <div class="table-wrap">
+  <!-- Facility Inventory & Value -->
+  <section class="warehouses-section-card" style="margin-bottom: 0;">
+    <div class="warehouses-section-header">
+      <div class="suppliers-section-title">
+        <i data-lucide="boxes" style="width: 15px; height: 15px; color: #059669;"></i>
+        <h3 style="font-size: 0.9rem;">Facility Inventory & Valuation</h3>
+      </div>
+      <div class="suppliers-search-box">
+        <i data-lucide="search"></i>
+        <input type="text" id="inventorySearch" class="suppliers-search-input" placeholder="Search inventory..." autocomplete="off">
+      </div>
+    </div>
+    <div class="warehouses-table-wrap" style="max-height: 380px;">
       <table class="data-table">
         <thead>
           <tr>
-            <th>Product</th>
+            <th>Product Name</th>
             <th>Brand</th>
-            <th>Inventory</th>
-            <th>Total Value</th>
+            <th style="text-align: right;">In Stock</th>
+            <th style="text-align: right;">Total Value</th>
           </tr>
         </thead>
         <tbody id="inventoryTbody">
-          <tr><td colspan="4" class="text-center text-muted">Select a warehouse to view inventory.</td></tr>
+          <tr><td colspan="4" style="text-align:center; padding: 2.5rem 1rem; color: var(--color-slate-400);">Select a warehouse to view inventory.</td></tr>
         </tbody>
       </table>
     </div>
-  </div>
-</section>
+  </section>
+</div>
 
 <!-- Add Warehouse Modal -->
 <div id="addWarehouseModal" class="modal-backdrop" aria-hidden="true">
-  <div class="modal" role="dialog" aria-modal="true" aria-label="Add Warehouse">
+  <div class="modal" role="dialog" aria-modal="true" style="max-width: 440px;">
     <div class="modal-header">
-      <h3>Add New Warehouse</h3>
+      <div style="display: flex; align-items: center; gap: 0.5rem;">
+        <i data-lucide="warehouse" style="width: 18px; height: 18px; color: #2563eb;"></i>
+        <h3 style="margin:0; font-size: 1.1rem; font-weight: 700;">Add New Warehouse</h3>
+      </div>
       <button type="button" class="modal-close" data-close-modal="addWarehouseModal" aria-label="Close">&times;</button>
     </div>
-    <div class="modal-body">
+    <div class="modal-body" style="padding: 1.25rem;">
       <form action="{{ url_for('warehouses_add') }}" method="POST">
-        <div class="modal-field">
-          <label for="newName">Name</label>
-          <input type="text" class="form-control" id="newName" name="name" required>
+        <div class="form-group" style="margin-bottom: 0.85rem;">
+          <label class="field-label" for="newName" style="display:block; margin-bottom: 0.3rem; font-weight: 600; font-size: 0.8rem; color: var(--color-slate-700);">Facility Name *</label>
+          <input type="text" class="form-control" id="newName" name="name" required style="width:100%;" placeholder="e.g. Central Depo">
         </div>
-        <div class="modal-field">
-          <label for="newLocation">Location</label>
-          <input type="text" class="form-control" id="newLocation" name="location">
+        <div class="form-group" style="margin-bottom: 0.85rem;">
+          <label class="field-label" for="newLocation" style="display:block; margin-bottom: 0.3rem; font-weight: 600; font-size: 0.8rem; color: var(--color-slate-700);">Location / City</label>
+          <input type="text" class="form-control" id="newLocation" name="location" style="width:100%;" placeholder="e.g. Sacramento, CA">
         </div>
-        <div class="modal-field">
-          <label for="newCommissionApplies">Commission Applies?</label>
-          <select class="form-control" id="newCommissionApplies" name="commission_applies">
-            <option value="0">No</option>
-            <option value="1">Yes</option>
+        <div class="form-group" style="margin-bottom: 1.25rem;">
+          <label class="field-label" for="newCommissionApplies" style="display:block; margin-bottom: 0.3rem; font-weight: 600; font-size: 0.8rem; color: var(--color-slate-700);">Commission Applies?</label>
+          <select class="form-control" id="newCommissionApplies" name="commission_applies" style="width:100%;">
+            <option value="0">No (Standard Facility)</option>
+            <option value="1">Yes (Commission Hub)</option>
           </select>
         </div>
         
-        <div class="modal-actions" style="margin-top: 1.5rem; display: flex; justify-content: flex-end; gap: 0.75rem;">
+        <div style="display: flex; justify-content: flex-end; gap: 0.5rem;">
           <button type="button" class="btn btn-secondary" data-close-modal="addWarehouseModal">Cancel</button>
-          <button type="submit" class="btn btn-primary">Create Warehouse</button>
+          <button type="submit" class="btn btn-primary" style="display: inline-flex; align-items: center; gap: 0.4rem;">
+            <i data-lucide="check" style="width: 14px; height: 14px;"></i>
+            <span>Create Warehouse</span>
+          </button>
         </div>
       </form>
     </div>
@@ -145,78 +287,87 @@
 
 <!-- Edit Warehouse Modal -->
 <div id="editWarehouseModal" class="modal-backdrop" aria-hidden="true">
-  <div class="modal" role="dialog" aria-modal="true" aria-label="Edit Warehouse">
+  <div class="modal" role="dialog" aria-modal="true" style="max-width: 440px;">
     <div class="modal-header">
-      <h3>Edit Warehouse</h3>
+      <div style="display: flex; align-items: center; gap: 0.5rem;">
+        <i data-lucide="pencil" style="width: 18px; height: 18px; color: #2563eb;"></i>
+        <h3 style="margin:0; font-size: 1.1rem; font-weight: 700;">Edit Warehouse</h3>
+      </div>
       <button type="button" class="modal-close" data-close-modal="editWarehouseModal" aria-label="Close">&times;</button>
     </div>
-    <div class="modal-body">
+    <div class="modal-body" style="padding: 1.25rem;">
       <form id="editWarehouseForm" method="POST">
-        <div class="modal-field">
-          <label for="editName">Name</label>
-          <input type="text" class="form-control" id="editName" name="name" required>
+        <div class="form-group" style="margin-bottom: 0.85rem;">
+          <label class="field-label" for="editName" style="display:block; margin-bottom: 0.3rem; font-weight: 600; font-size: 0.8rem; color: var(--color-slate-700);">Facility Name *</label>
+          <input type="text" class="form-control" id="editName" name="name" required style="width:100%;">
         </div>
-        <div class="modal-field">
-          <label for="editLocation">Location</label>
-          <input type="text" class="form-control" id="editLocation" name="location">
+        <div class="form-group" style="margin-bottom: 0.85rem;">
+          <label class="field-label" for="editLocation" style="display:block; margin-bottom: 0.3rem; font-weight: 600; font-size: 0.8rem; color: var(--color-slate-700);">Location / City</label>
+          <input type="text" class="form-control" id="editLocation" name="location" style="width:100%;">
         </div>
-        <div class="modal-field">
-          <label for="editCommissionApplies">Commission Applies?</label>
-          <select class="form-control" id="editCommissionApplies" name="commission_applies">
-            <option value="0">No</option>
-            <option value="1">Yes</option>
+        <div class="form-group" style="margin-bottom: 1.25rem;">
+          <label class="field-label" for="editCommissionApplies" style="display:block; margin-bottom: 0.3rem; font-weight: 600; font-size: 0.8rem; color: var(--color-slate-700);">Commission Applies?</label>
+          <select class="form-control" id="editCommissionApplies" name="commission_applies" style="width:100%;">
+            <option value="0">No (Standard Facility)</option>
+            <option value="1">Yes (Commission Hub)</option>
           </select>
         </div>
         
-        <div class="modal-actions" style="margin-top: 1.5rem; display: flex; justify-content: flex-end; gap: 0.75rem;">
+        <div style="display: flex; justify-content: flex-end; gap: 0.5rem;">
           <button type="button" class="btn btn-secondary" data-close-modal="editWarehouseModal">Cancel</button>
-          <button type="submit" class="btn btn-primary">Save Changes</button>
+          <button type="submit" class="btn btn-primary" style="display: inline-flex; align-items: center; gap: 0.4rem;">
+            <i data-lucide="check" style="width: 14px; height: 14px;"></i>
+            <span>Save Changes</span>
+          </button>
         </div>
       </form>
     </div>
   </div>
 </div>
 
-<!-- History Modal -->
+<!-- Product History Modal -->
 <div id="historyModal" class="modal-backdrop" aria-hidden="true">
-  <div class="modal" role="dialog" aria-modal="true" style="max-width: 800px; width: 90%;">
+  <div class="modal" role="dialog" aria-modal="true" style="max-width: 820px; width: 92%;">
     <div class="modal-header">
-      <h3 id="historyModalTitle">Product History</h3>
+      <div style="display: flex; align-items: center; gap: 0.5rem;">
+        <i data-lucide="history" style="width: 18px; height: 18px; color: #4f46e5;"></i>
+        <h3 id="historyModalTitle" style="margin:0; font-size: 1.1rem; font-weight: 700;">Product History</h3>
+      </div>
       <button type="button" class="modal-close" data-close-modal="historyModal" aria-label="Close">&times;</button>
     </div>
-    <div class="modal-body">
-      <div class="table-wrap" style="max-height: 400px; overflow-y: auto;">
-        <table class="data-table">
-          <thead>
-            <tr>
-              <th>Date</th>
-              <th>Type</th>
-              <th>Change</th>
-              <th>Prev</th>
-              <th>New</th>
-              <th>Ref</th>
-              <th>Supplier</th>
-            </tr>
-          </thead>
-          <tbody id="historyTbody">
-          </tbody>
-        </table>
-      </div>
+    <div class="modal-body" style="padding: 0; max-height: 60vh; overflow-y: auto;">
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th style="padding: 8px 12px;">Date</th>
+            <th style="padding: 8px 12px; text-align: center;">Type</th>
+            <th style="padding: 8px 12px; text-align: right;">Change</th>
+            <th style="padding: 8px 12px; text-align: right;">Prev Stock</th>
+            <th style="padding: 8px 12px; text-align: right;">New Stock</th>
+            <th style="padding: 8px 12px;">Reference</th>
+            <th style="padding: 8px 12px;">Supplier</th>
+          </tr>
+        </thead>
+        <tbody id="historyTbody">
+          <tr><td colspan="7" style="text-align:center; padding: 2.5rem 1rem; color: var(--color-slate-400);">Loading...</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="modal-footer" style="padding: 0.85rem 1.25rem; border-top: 1px solid var(--color-border); display: flex; justify-content: flex-end; background: #fafafa;">
+      <button type="button" class="btn btn-secondary" data-close-modal="historyModal">Close</button>
     </div>
   </div>
 </div>
 
 <script>
-  // Modal Handling
-  const modals = document.querySelectorAll('.modal-backdrop');
-  const openButtons = document.querySelectorAll('[data-open-modal]');
-  const closeButtons = document.querySelectorAll('[data-close-modal]');
-
   function openModal(id) {
     const modal = document.getElementById(id);
     if (modal) {
       modal.classList.add('is-open');
       modal.setAttribute('aria-hidden', 'false');
+      if (window.lucide) {
+        window.lucide.createIcons();
+      }
     }
   }
 
@@ -228,15 +379,15 @@
     }
   }
 
-  openButtons.forEach(btn => {
+  document.querySelectorAll('[data-open-modal]').forEach(btn => {
     btn.addEventListener('click', () => openModal(btn.dataset.openModal));
   });
 
-  closeButtons.forEach(btn => {
+  document.querySelectorAll('[data-close-modal]').forEach(btn => {
     btn.addEventListener('click', () => closeModal(btn.dataset.closeModal));
   });
 
-  modals.forEach(modal => {
+  document.querySelectorAll('.modal-backdrop').forEach(modal => {
     modal.addEventListener('click', (e) => {
       if (e.target === modal) {
         closeModal(modal.id);
@@ -252,6 +403,13 @@
     openModal('editWarehouseModal');
   }
 
+  function inspectWarehouse(id) {
+    const warehouseFilter = document.getElementById('globalWarehouseFilter');
+    warehouseFilter.value = id;
+    warehouseFilter.dispatchEvent(new Event('change'));
+    warehouseFilter.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }
+
   // Global Warehouse Filter Logic
   const warehouseFilter = document.getElementById('globalWarehouseFilter');
   const recentSalesTbody = document.getElementById('recentSalesTbody');
@@ -259,31 +417,38 @@
   const historyModalTitle = document.getElementById('historyModalTitle');
   const historyTbody = document.getElementById('historyTbody');
 
-  warehouseFilter.addEventListener('change', (e) => {
-    const wid = e.target.value;
+  function loadWarehouseData(wid) {
     if (!wid) {
-      recentSalesTbody.innerHTML = '<tr><td colspan="5" class="text-center text-muted">Select a warehouse to view recent sales.</td></tr>';
-      inventoryTbody.innerHTML = '<tr><td colspan="4" class="text-center text-muted">Select a warehouse to view inventory.</td></tr>';
+      recentSalesTbody.innerHTML = '<tr><td colspan="5" style="text-align:center; padding: 2.5rem 1rem; color: var(--color-slate-400);">Select a warehouse to view recent sales.</td></tr>';
+      inventoryTbody.innerHTML = '<tr><td colspan="4" style="text-align:center; padding: 2.5rem 1rem; color: var(--color-slate-400);">Select a warehouse to view inventory.</td></tr>';
       return;
     }
+
+    recentSalesTbody.innerHTML = '<tr><td colspan="5" style="text-align:center; padding: 2rem 1rem; color: var(--color-slate-400);">Loading sales records...</td></tr>';
+    inventoryTbody.innerHTML = '<tr><td colspan="4" style="text-align:center; padding: 2rem 1rem; color: var(--color-slate-400);">Loading facility inventory...</td></tr>';
 
     // Fetch Recent Sales
     fetch(`/api/warehouse/recent_sales?warehouse_id=${wid}`)
       .then(res => res.json())
       .then(sales => {
         if (!sales || sales.length === 0) {
-          recentSalesTbody.innerHTML = '<tr><td colspan="5" class="text-center text-muted">No recent sales found for this warehouse.</td></tr>';
+          recentSalesTbody.innerHTML = '<tr><td colspan="5" style="text-align:center; padding: 2.5rem 1rem; color: var(--color-slate-400);">No recent sales found for this warehouse.</td></tr>';
           return;
         }
         recentSalesTbody.innerHTML = sales.map(s => `
           <tr>
-            <td>${s.invoice_number}</td>
-            <td>${s.invoice_date}</td>
-            <td>${s.customer_name || 'N/A'}</td>
-            <td>$${parseFloat(s.grand_total).toFixed(2)}</td>
-            <td><span class="badge" style="background:var(--color-primary); color:white;">${s.status.toUpperCase()}</span></td>
+            <td><span class="row-id-chip">${s.invoice_number}</span></td>
+            <td style="font-size: 0.825rem; color: var(--color-slate-600);">${s.invoice_date}</td>
+            <td style="font-weight: 600; color: var(--color-slate-900); font-size: 0.825rem;">${s.customer_name || 'Walk-in'}</td>
+            <td style="text-align: right; font-weight: 700; color: var(--color-slate-900); font-size: 0.825rem;"><span class="sensitive-data">$${parseFloat(s.grand_total).toFixed(2)}</span></td>
+            <td style="text-align: center;">
+              <span class="stock-pill in-stock" style="font-size: 0.725rem; padding: 2px 7px;">${(s.status || 'paid').toUpperCase()}</span>
+            </td>
           </tr>
         `).join('');
+      })
+      .catch(() => {
+        recentSalesTbody.innerHTML = '<tr><td colspan="5" style="text-align:center; padding: 2.5rem 1rem; color: #dc2626;">Failed to load sales.</td></tr>';
       });
 
     // Fetch Inventory
@@ -291,25 +456,40 @@
       .then(res => res.json())
       .then(inventory => {
         if (!inventory || inventory.length === 0) {
-          inventoryTbody.innerHTML = '<tr><td colspan="4" class="text-center text-muted">No inventory found for this warehouse.</td></tr>';
+          inventoryTbody.innerHTML = '<tr><td colspan="4" style="text-align:center; padding: 2.5rem 1rem; color: var(--color-slate-400);">No inventory recorded in this warehouse.</td></tr>';
           return;
         }
         inventoryTbody.innerHTML = inventory.map(p => `
-          <tr style="cursor: pointer;" onclick="openHistory(${p.product_id}, '${p.name.replace(/'/g, "\\'")}')">
-            <td style="font-weight: 500; color: var(--color-primary);">${p.name}</td>
-            <td>${p.brand || ''}</td>
-            <td>${p.stock_quantity}</td>
-            <td>$${parseFloat(p.total_value).toFixed(2)}</td>
+          <tr style="cursor: pointer;" onclick="openHistory(${p.product_id}, '${p.name.replace(/'/g, "\\'")}')" title="Click to view transaction audit log">
+            <td style="font-weight: 600; color: #2563eb; font-size: 0.825rem;">
+              <div style="display:flex; align-items:center; gap:0.4rem;">
+                <i data-lucide="package" style="width:13px; height:13px; color:#2563eb;"></i>
+                <span>${p.name}</span>
+              </div>
+            </td>
+            <td style="font-size: 0.825rem; color: var(--color-slate-600);">${p.brand || '-'}</td>
+            <td style="text-align: right; font-weight: 700; color: var(--color-slate-800); font-size: 0.825rem;">${p.stock_quantity}</td>
+            <td style="text-align: right; font-weight: 700; color: #059669; font-size: 0.825rem;"><span class="sensitive-data">$${parseFloat(p.total_value).toFixed(2)}</span></td>
           </tr>
         `).join('');
+        if (window.lucide) {
+          window.lucide.createIcons();
+        }
+      })
+      .catch(() => {
+        inventoryTbody.innerHTML = '<tr><td colspan="4" style="text-align:center; padding: 2.5rem 1rem; color: #dc2626;">Failed to load inventory.</td></tr>';
       });
+  }
+
+  warehouseFilter.addEventListener('change', (e) => {
+    loadWarehouseData(e.target.value);
   });
 
   // Open History Modal
   window.openHistory = function(productId, productName) {
     const wid = warehouseFilter.value;
     historyModalTitle.textContent = `History: ${productName}`;
-    historyTbody.innerHTML = '<tr><td colspan="7" class="text-center text-muted">Loading...</td></tr>';
+    historyTbody.innerHTML = '<tr><td colspan="7" style="text-align:center; padding: 2.5rem 1rem; color: var(--color-slate-400);">Loading history log...</td></tr>';
     openModal('historyModal');
 
     let url = `/api/inventory_history/${productId}`;
@@ -323,47 +503,59 @@
         if (data.ok && data.history.length > 0) {
           historyTbody.innerHTML = data.history.map(h => {
             const dateStr = new Date(h.created_at).toLocaleString();
-            let color = h.transaction_type === 'IN' ? 'green' : 'red';
+            let isIncoming = h.transaction_type === 'IN';
+            let pillClass = isIncoming ? 'in-stock' : 'out-of-stock';
             let changePrefix = h.quantity_change > 0 ? '+' : '';
             return `
               <tr>
-                <td>${dateStr}</td>
-                <td style="font-weight:bold; color:${color}">${h.transaction_type}</td>
-                <td>${changePrefix}${h.quantity_change}</td>
-                <td>${h.previous_stock}</td>
-                <td>${h.new_stock}</td>
-                <td>${h.reference || '-'}</td>
-                <td>${h.supplier_name || '-'}</td>
+                <td style="padding: 8px 12px; font-size: 0.825rem;">${dateStr}</td>
+                <td style="padding: 8px 12px; text-align: center;">
+                  <span class="stock-pill ${pillClass}" style="font-size: 0.725rem; padding: 2px 7px;">${h.transaction_type}</span>
+                </td>
+                <td style="padding: 8px 12px; text-align: right; font-weight: 700; color: ${isIncoming ? '#059669' : '#dc2626'}; font-size: 0.825rem;">${changePrefix}${h.quantity_change}</td>
+                <td style="padding: 8px 12px; text-align: right; color: var(--color-slate-500); font-size: 0.825rem;">${h.previous_stock}</td>
+                <td style="padding: 8px 12px; text-align: right; font-weight: 600; color: var(--color-slate-900); font-size: 0.825rem;">${h.new_stock}</td>
+                <td style="padding: 8px 12px; font-size: 0.825rem; color: var(--color-slate-600);">${h.reference || '-'}</td>
+                <td style="padding: 8px 12px; font-size: 0.825rem; color: var(--color-slate-600);">${h.supplier_name || '-'}</td>
               </tr>
             `;
           }).join('');
         } else {
-          historyTbody.innerHTML = '<tr><td colspan="7" class="text-center text-muted">No history found for this product in this warehouse.</td></tr>';
+          historyTbody.innerHTML = '<tr><td colspan="7" style="text-align:center; padding: 2.5rem 1rem; color: var(--color-slate-400);">No history records found for this product.</td></tr>';
         }
       })
       .catch(err => {
-        historyTbody.innerHTML = '<tr><td colspan="7" class="text-center text-danger">Error loading history.</td></tr>';
+        historyTbody.innerHTML = '<tr><td colspan="7" style="text-align:center; padding: 2.5rem 1rem; color: #dc2626;">Error loading movement history.</td></tr>';
       });
   };
 
   // Inventory Search Logic
   const inventorySearch = document.getElementById('inventorySearch');
-  inventorySearch.addEventListener('keyup', (e) => {
-    const term = e.target.value.toLowerCase();
+  inventorySearch.addEventListener('input', (e) => {
+    const term = e.target.value.toLowerCase().trim();
     const rows = inventoryTbody.querySelectorAll('tr');
     rows.forEach(row => {
-      // Skip the placeholder row
-      if (row.querySelector('td.text-muted')) return;
-      
+      if (row.querySelector('td[colspan]')) return;
       const productName = row.cells[0]?.textContent.toLowerCase() || '';
       const brandName = row.cells[1]?.textContent.toLowerCase() || '';
-      
-      if (productName.includes(term) || brandName.includes(term)) {
+      if (!term || productName.includes(term) || brandName.includes(term)) {
         row.style.display = '';
       } else {
         row.style.display = 'none';
       }
     });
+  });
+
+  // Auto-select first warehouse on load if available
+  document.addEventListener('DOMContentLoaded', () => {
+    if (window.lucide) {
+      window.lucide.createIcons();
+    }
+    const select = document.getElementById('globalWarehouseFilter');
+    if (select && select.options.length > 1) {
+      select.selectedIndex = 1;
+      loadWarehouseData(select.value);
+    }
   });
 </script>
 {% endblock %}

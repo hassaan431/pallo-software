@@ -1,71 +1,188 @@
 {% extends "base.html" %}
-{% block title %}Inventory Transfers — AK Distributors{% endblock %}
-{% block page_heading %}Inventory Transfers{% endblock %}
+{% block title %}Stock Transfers — AK Distributors{% endblock %}
+{% block page_heading %}Stock Transfers{% endblock %}
 {% block content %}
-<div class="page-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem;">
-  <h2 style="margin:0; font-size:1.25rem; font-weight:700;">Transfer History</h2>
-  <div style="display: flex; gap: 0.5rem;">
-    <a href="/inventory/transfer/new" class="btn btn-primary">New Transfer</a>
+
+<!-- Workstation Command Bar -->
+<div class="warehouses-header-bar">
+  <div class="warehouses-title-group">
+    <div style="width: 36px; height: 36px; border-radius: 10px; background: #eff6ff; color: #2563eb; display: flex; align-items: center; justify-content: center; box-shadow: 0 1px 3px rgba(37, 99, 235, 0.2);">
+      <i data-lucide="arrow-right-left" style="width: 20px; height: 20px;"></i>
+    </div>
+    <div>
+      <h2 style="margin:0; font-size:1.25rem; font-weight:700; color:var(--color-slate-900);">Stock Transfers & Movements</h2>
+      <p style="margin:0; font-size:0.775rem; color:var(--color-slate-500);">Inter-warehouse inventory relocation logs & facility balance records</p>
+    </div>
+  </div>
+  <div style="display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap;">
+    <a href="/warehouses" class="btn btn-secondary" style="display: inline-flex; align-items: center; gap: 0.4rem; font-size: 0.825rem; font-weight: 600;">
+      <i data-lucide="warehouse" style="width: 14px; height: 14px;"></i>
+      <span>Warehouses Hub</span>
+    </a>
+    <a href="/inventory/transfer/new" class="btn btn-primary" style="display: inline-flex; align-items: center; gap: 0.4rem; font-size: 0.825rem; font-weight: 600;">
+      <i data-lucide="plus" style="width: 14px; height: 14px;"></i>
+      <span>New Stock Transfer</span>
+    </a>
   </div>
 </div>
 
-<section class="panel">
-  <div class="panel-body">
-    <div class="table-wrap">
-      <table class="data-table">
-        <thead>
-          <tr>
-            <th>ID</th>
-            <th>Date</th>
-            <th>Source</th>
-            <th>Destination</th>
-            <th>Notes</th>
-            <th style="text-align: right;">Actions</th>
-          </tr>
-        </thead>
-        <tbody>
-          {% for t in transfers %}
-          <tr style="cursor: pointer;" onclick="toggleDetails({{ t.id }})">
-            <td>
-              <svg id="icon-{{ t.id }}" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: middle; margin-right: 4px; transition: transform 0.2s;"><polyline points="9 18 15 12 9 6"></polyline></svg>
-              {{ t.id }}
-            </td>
-            <td>{{ t.transfer_date }}</td>
-            <td style="font-weight: 500; color: var(--danger-text);">{{ t.source_warehouse or 'Unknown' }}</td>
-            <td style="font-weight: 500; color: var(--success-text);">{{ t.destination_warehouse or 'Unknown' }}</td>
-            <td style="color: #6b7280; font-size: 0.9em;">{{ t.notes }}</td>
-            <td style="text-align: right; white-space: nowrap;" onclick="event.stopPropagation();">
-              <a href="{{ url_for('edit_inventory_transfer', transfer_id=t.id) }}" class="btn btn-sm btn-secondary" title="Edit Transfer" style="margin-right: 4px;">Edit</a>
-              <button type="button" class="btn btn-sm btn-danger" title="Delete Transfer" onclick="deleteTransfer({{ t.id }})">Delete</button>
-            </td>
-          </tr>
-          <tr id="details-{{ t.id }}" style="display: none; background-color: var(--surface-bg);">
-            <td colspan="6" style="padding: 1rem 2rem;">
-              <div style="font-size: 0.9rem;">
-                <strong style="display: block; margin-bottom: 0.5rem; color: var(--text-muted);">Transferred Items:</strong>
-                {% if t['items'] %}
-                <ul style="list-style: none; padding: 0; margin: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 0.5rem;">
-                  {% for item in t['items'] %}
-                  <li style="background: var(--bg-color); padding: 0.5rem; border-radius: 4px; border: 1px solid var(--border-color);">
-                    <span style="font-weight: 500;">{{ item.product_name }}</span> 
-                    <span style="color: var(--text-muted); float: right;">x {{ item.quantity|format_qty }}</span>
-                  </li>
-                  {% endfor %}
-                </ul>
-                {% else %}
-                <p style="color: var(--text-muted);">No items recorded.</p>
-                {% endif %}
-              </div>
-            </td>
-          </tr>
-          {% else %}
-          <tr>
-            <td colspan="6" style="text-align: center; color: var(--text-muted); padding: 2rem;">No transfers found.</td>
-          </tr>
-          {% endfor %}
-        </tbody>
-      </table>
+<!-- Financial & Transfer Metric Overview (3 Cards) -->
+{% set total_transfer_units = namespace(value=0.0) %}
+{% set total_items_count = namespace(value=0) %}
+{% for t in transfers %}
+  {% set total_transfer_units.value = total_transfer_units.value + (t.total_units|default(0)|float) %}
+  {% set total_items_count.value = total_items_count.value + (t.total_items_count|default(0)|int) %}
+{% endfor %}
+
+<div class="warehouses-stats-grid">
+  <article class="warehouses-stat-card">
+    <div class="warehouses-stat-content">
+      <h3>Total Transfers Logged</h3>
+      <p class="warehouses-stat-value">{{ transfers|length }}</p>
+      <p class="warehouses-stat-note">Completed movement manifests</p>
     </div>
+    <div class="warehouses-stat-icon blue">
+      <i data-lucide="arrow-right-left"></i>
+    </div>
+  </article>
+
+  <article class="warehouses-stat-card">
+    <div class="warehouses-stat-content">
+      <h3>Units Shifted</h3>
+      <p class="warehouses-stat-value">
+        {{ "%.1f"|format(total_transfer_units.value) if (total_transfer_units.value % 1 != 0) else total_transfer_units.value|int }}
+      </p>
+      <p class="warehouses-stat-note">Total physical inventory moved</p>
+    </div>
+    <div class="warehouses-stat-icon emerald">
+      <i data-lucide="package"></i>
+    </div>
+  </article>
+
+  <article class="warehouses-stat-card">
+    <div class="warehouses-stat-content">
+      <h3>Manifested Line Items</h3>
+      <p class="warehouses-stat-value">{{ total_items_count.value }}</p>
+      <p class="warehouses-stat-note">Individual SKU transfers</p>
+    </div>
+    <div class="warehouses-stat-icon purple">
+      <i data-lucide="boxes"></i>
+    </div>
+  </article>
+</div>
+
+<!-- Transfers Directory Table -->
+<section class="warehouses-section-card">
+  <div class="warehouses-section-header">
+    <div class="suppliers-section-title">
+      <i data-lucide="history" style="width: 16px; height: 16px; color: #2563eb;"></i>
+      <h3>Inter-Warehouse Transfer Manifests</h3>
+      <span class="suppliers-count-badge">{{ transfers|length }} transfers</span>
+    </div>
+    <a href="/inventory/transfer/new" class="btn btn-primary btn-sm" style="display: inline-flex; align-items: center; gap: 0.35rem; font-size: 0.8rem; font-weight: 600;">
+      <i data-lucide="plus" style="width: 13px; height: 13px;"></i>
+      <span>New Transfer</span>
+    </a>
+  </div>
+  <div class="warehouses-table-wrap">
+    <table class="data-table">
+      <thead>
+        <tr>
+          <th style="width: 90px;">Transfer ID</th>
+          <th style="width: 160px;">Date & Time</th>
+          <th>Source Facility (From)</th>
+          <th>Destination (To)</th>
+          <th style="text-align: center; width: 140px;">Items Manifested</th>
+          <th>Notes & Ref</th>
+          <th style="width: 150px; text-align: right;">Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for t in transfers %}
+        <tr style="cursor: pointer;" onclick="toggleDetails({{ t.id }})">
+          <td>
+            <div style="display: flex; align-items: center; gap: 0.35rem;">
+              <i data-lucide="chevron-right" id="icon-{{ t.id }}" class="chevron-indicator" style="width: 14px; height: 14px; color: var(--color-slate-400);"></i>
+              <span class="row-id-chip">#{{ t.id }}</span>
+            </div>
+          </td>
+          <td style="font-size: 0.825rem; color: var(--color-slate-700); font-weight: 500;">
+            <div style="display: flex; align-items: center; gap: 0.35rem;">
+              <i data-lucide="calendar" style="width: 13px; height: 13px; color: var(--color-slate-400);"></i>
+              <span>{{ t.transfer_date }}</span>
+            </div>
+          </td>
+          <td>
+            <span class="transfer-wh-pill source">
+              <i data-lucide="upload" style="width: 11px; height: 11px;"></i>
+              {{ t.source_warehouse or 'Unknown' }}
+            </span>
+          </td>
+          <td>
+            <span class="transfer-wh-pill destination">
+              <i data-lucide="download" style="width: 11px; height: 11px;"></i>
+              {{ t.destination_warehouse or 'Unknown' }}
+            </span>
+          </td>
+          <td style="text-align: center;">
+            <span class="stock-pill in-stock" style="font-size: 0.75rem; padding: 2px 8px;">
+              {{ t.total_items_count or t['items']|length }} SKUs ({{ "%.1f"|format(t.total_units) if (t.total_units % 1 != 0) else (t.total_units|default(0)|int) }} units)
+            </span>
+          </td>
+          <td style="color: var(--color-slate-600); font-size: 0.825rem; max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
+            {{ t.notes or '-' }}
+          </td>
+          <td style="text-align: right; white-space: nowrap;" onclick="event.stopPropagation();">
+            <div style="display: flex; gap: 0.35rem; justify-content: flex-end; align-items: center;">
+              <a href="{{ url_for('edit_inventory_transfer', transfer_id=t.id) }}" class="btn-edit-action" title="Edit Transfer">
+                <i data-lucide="pencil"></i>
+                <span>Edit</span>
+              </a>
+              <button type="button" class="btn-delete-action" title="Delete Transfer" onclick="deleteTransfer({{ t.id }})">
+                <i data-lucide="trash-2"></i>
+                <span>Delete</span>
+              </button>
+            </div>
+          </td>
+        </tr>
+        <tr id="details-{{ t.id }}" style="display: none; background: #fafafa;">
+          <td colspan="7" style="padding: 0; border-bottom: 2px solid var(--color-border);">
+            <div style="padding: 0.85rem 1.25rem;">
+              <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.65rem;">
+                <span style="font-size: 0.8rem; font-weight: 700; color: var(--color-slate-800); text-transform: uppercase; letter-spacing: 0.04em;">
+                  Transfer Manifest Items (#{{ t.id }})
+                </span>
+                <span style="font-size: 0.775rem; color: var(--color-slate-500);">
+                  Moving from <strong>{{ t.source_warehouse }}</strong> &rarr; <strong>{{ t.destination_warehouse }}</strong>
+                </span>
+              </div>
+              {% if t['items'] %}
+              <div class="transfer-items-grid">
+                {% for item in t['items'] %}
+                <div class="transfer-item-chip">
+                  <div style="display: flex; align-items: center; gap: 0.45rem;">
+                    <i data-lucide="package" style="width: 13px; height: 13px; color: #2563eb;"></i>
+                    <span style="font-weight: 600; font-size: 0.825rem; color: var(--color-slate-900);">{{ item.product_name }}</span>
+                  </div>
+                  <span class="stock-pill in-stock" style="font-size: 0.75rem; padding: 2px 7px;">
+                    x {{ item.quantity|format_qty }}
+                  </span>
+                </div>
+                {% endfor %}
+              </div>
+              {% else %}
+              <p style="color: var(--color-slate-400); margin: 0; font-size: 0.825rem;">No line items recorded for this transfer.</p>
+              {% endif %}
+            </div>
+          </td>
+        </tr>
+        {% else %}
+        <tr>
+          <td colspan="7" style="text-align: center; padding: 2.5rem 1rem; color: var(--color-slate-400);">No stock transfers recorded yet.</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
   </div>
 </section>
 
@@ -73,12 +190,15 @@
 function toggleDetails(id) {
   const row = document.getElementById('details-' + id);
   const icon = document.getElementById('icon-' + id);
-  if (row.style.display === 'none') {
-    row.style.display = 'table-row';
-    icon.style.transform = 'rotate(90deg)';
-  } else {
-    row.style.display = 'none';
-    icon.style.transform = 'rotate(0deg)';
+  if (!row) return;
+  const isHidden = row.style.display === 'none';
+  row.style.display = isHidden ? 'table-row' : 'none';
+  if (icon) {
+    if (isHidden) {
+      icon.classList.add('expanded');
+    } else {
+      icon.classList.remove('expanded');
+    }
   }
 }
 
@@ -96,8 +216,14 @@ async function deleteTransfer(id) {
       alert("Error: " + data.error);
     }
   } catch (err) {
-    alert("Request failed");
+    alert("Request failed. Please try again.");
   }
 }
+
+document.addEventListener('DOMContentLoaded', () => {
+  if (window.lucide) {
+    window.lucide.createIcons();
+  }
+});
 </script>
 {% endblock %}

@@ -3727,6 +3727,246 @@ tr.row-low-stock:hover td {
   height: 14px;
 }
 
+/* ==========================================================================
+   PHASE 8: Warehouse Management & Stock Transfers Workstation (PC-First)
+   ========================================================================== */
+
+.warehouses-header-bar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0.85rem;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+}
+
+.warehouses-title-group {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+}
+
+.warehouses-title-group h2 {
+  margin: 0;
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: var(--color-slate-900);
+  letter-spacing: -0.02em;
+}
+
+.warehouses-stats-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0.85rem;
+  margin-bottom: 1rem;
+}
+
+@media (max-width: 900px) {
+  .warehouses-stats-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.warehouses-stat-card {
+  background: #ffffff;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  padding: 0.75rem 1rem;
+  box-shadow: var(--shadow-sm);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.warehouses-stat-card:hover {
+  box-shadow: var(--shadow-md);
+  border-color: var(--color-border-hover);
+}
+
+.warehouses-stat-content h3 {
+  margin: 0 0 0.2rem 0;
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--color-slate-500);
+}
+
+.warehouses-stat-value {
+  margin: 0;
+  font-size: 1.45rem;
+  font-weight: 800;
+  color: var(--color-slate-900);
+  line-height: 1.2;
+}
+
+.warehouses-stat-note {
+  margin: 0.15rem 0 0 0;
+  font-size: 0.725rem;
+  color: var(--color-slate-400);
+  font-weight: 500;
+}
+
+.warehouses-stat-icon {
+  width: 38px;
+  height: 38px;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.warehouses-stat-icon svg,
+.warehouses-stat-icon i {
+  width: 18px;
+  height: 18px;
+}
+
+.warehouses-stat-icon.blue {
+  background: #eff6ff;
+  color: #2563eb;
+}
+
+.warehouses-stat-icon.emerald {
+  background: #ecfdf5;
+  color: #059669;
+}
+
+.warehouses-stat-icon.purple {
+  background: #f5f3ff;
+  color: #7c3aed;
+}
+
+.warehouses-stat-icon.amber {
+  background: #fffbeb;
+  color: #d97706;
+}
+
+.warehouses-section-card {
+  background: #ffffff;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-sm);
+  margin-bottom: 1.25rem;
+  overflow: hidden;
+}
+
+.warehouses-section-header {
+  padding: 0.75rem 1rem;
+  border-bottom: 1px solid var(--color-border);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  background: #fafafa;
+}
+
+.warehouses-table-wrap {
+  position: relative;
+  max-height: 440px;
+  overflow: auto;
+  background: #ffffff;
+}
+
+.warehouses-table-wrap table thead th {
+  position: sticky;
+  top: 0;
+  background: #f8fafc;
+  z-index: 5;
+  box-shadow: 0 1px 0 var(--color-border);
+  padding: 8px 10px !important;
+  font-size: 0.8rem !important;
+  white-space: nowrap;
+}
+
+.warehouses-table-wrap table tbody tr td {
+  padding: 8px 10px !important;
+  font-size: 0.825rem !important;
+  vertical-align: middle !important;
+  white-space: nowrap;
+}
+
+.warehouses-inspection-grid {
+  display: grid;
+  grid-template-columns: 1fr 1.35fr;
+  gap: 1.25rem;
+  margin-top: 1rem;
+}
+
+@media (max-width: 1024px) {
+  .warehouses-inspection-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.facility-filter-bar {
+  background: #ffffff;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  padding: 0.85rem 1.15rem;
+  box-shadow: var(--shadow-sm);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 1rem;
+  margin-bottom: 1rem;
+}
+
+.transfer-direction-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+
+.transfer-wh-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 2px 8px;
+  border-radius: 6px;
+  font-size: 0.775rem;
+  font-weight: 600;
+}
+
+.transfer-wh-pill.source {
+  background: #fef2f2;
+  color: #b91c1c;
+  border: 1px solid #fecaca;
+}
+
+.transfer-wh-pill.destination {
+  background: #ecfdf5;
+  color: #047857;
+  border: 1px solid #a7f3d0;
+}
+
+.transfer-items-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 0.6rem;
+  padding: 0.85rem 1rem;
+  background: #f8fafc;
+  border-top: 1px dashed var(--color-border);
+}
+
+.transfer-item-chip {
+  background: #ffffff;
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  padding: 0.5rem 0.75rem;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.5rem;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.02);
+}
+
+
 
 
 
