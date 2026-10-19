@@ -139,10 +139,6 @@
           <div class="sidebar-nav-icon"><i data-lucide="hard-drive-download"></i></div>
           <span class="nav-label">Download Backup</span>
         </a>
-        <button id="sidebarFooterToggleBtn" class="sidebar-footer-toggle-btn" type="button" title="Toggle Sidebar">
-          <div class="sidebar-nav-icon"><i data-lucide="panel-left"></i></div>
-          <span class="nav-label">Collapse Menu</span>
-        </button>
       </div>
     </aside>
 
@@ -406,9 +402,8 @@
         overlay.addEventListener('click', toggleMobileMenu);
       }
 
-      // 2. Desktop Collapsible Sidebar (With 2-way expand & persistent button)
+      // 2. Desktop Collapsible Sidebar (With persistent button next to logo)
       const collapseBtn = document.getElementById('sidebarCollapseBtn');
-      const footerToggleBtn = document.getElementById('sidebarFooterToggleBtn');
 
       function setSidebarCollapsed(collapsed) {
         document.body.classList.toggle('sidebar-collapsed', collapsed);
@@ -419,11 +414,6 @@
           collapseBtn.innerHTML = collapsed 
             ? '<i data-lucide="panel-left-open"></i>' 
             : '<i data-lucide="panel-left-close"></i>';
-        }
-        if (footerToggleBtn) {
-          footerToggleBtn.title = collapsed ? "Expand sidebar" : "Collapse sidebar";
-          const label = footerToggleBtn.querySelector('.nav-label');
-          if (label) label.textContent = collapsed ? "Expand" : "Collapse Menu";
         }
         if (window.lucide && typeof window.lucide.createIcons === 'function') {
           window.lucide.createIcons();
@@ -438,13 +428,6 @@
 
       if (collapseBtn) {
         collapseBtn.addEventListener('click', () => {
-          const isNowCollapsed = !document.body.classList.contains('sidebar-collapsed');
-          setSidebarCollapsed(isNowCollapsed);
-        });
-      }
-
-      if (footerToggleBtn) {
-        footerToggleBtn.addEventListener('click', () => {
           const isNowCollapsed = !document.body.classList.contains('sidebar-collapsed');
           setSidebarCollapsed(isNowCollapsed);
         });
@@ -728,7 +711,16 @@
       let searchDebounceTimer = null;
 
       const staticCmdkActions = [
-        // Pages & Navigation
+        // Quick Actions (Priority 1)
+        { group: "Quick Actions", title: "+ Record New Sale", url: "{{ url_for('sales') }}", icon: "plus-circle", badge: "Action" },
+        { group: "Quick Actions", title: "+ Receive Shipment", url: "/purchases/new", icon: "truck", badge: "Action" },
+        { group: "Quick Actions", title: "+ Transfer Inventory", url: "{{ url_for('new_inventory_transfer') }}", icon: "arrow-left-right", badge: "Action" },
+        { group: "Quick Actions", title: "Download Database Backup", url: "{{ url_for('backup_download') }}", icon: "hard-drive-download", badge: "Backup" },
+        { group: "Quick Actions", title: "Toggle Privacy Mode", action: "privacy", icon: "eye", badge: "View" },
+        { group: "Quick Actions", title: "Toggle Sidebar Collapse", action: "sidebar", icon: "panel-left", badge: "View" },
+        { group: "Quick Actions", title: "Start Product Tour (Walk Around)", action: "tour", icon: "compass", badge: "Tour" },
+
+        // Navigation Pages (Priority 2)
         { group: "Navigation", title: "Dashboard", url: "{{ url_for('dashboard') }}", icon: "layout-dashboard" },
         { group: "Navigation", title: "Inventory", url: "{{ url_for('inventory') }}", icon: "boxes" },
         { group: "Navigation", title: "Purchases (Shipments)", url: "/purchases", icon: "truck" },
@@ -741,16 +733,7 @@
         { group: "Navigation", title: "Users", url: "{{ url_for('users_list') }}", icon: "shield-check" },
         { group: "Navigation", title: "Reports", url: "{{ url_for('reports') }}", icon: "line-chart" },
         { group: "Navigation", title: "POS Catalogue", url: "{{ url_for('pos') }}", icon: "shopping-bag" },
-        { group: "Navigation", title: "Help Center", url: "{{ url_for('help_center') }}", icon: "help-circle" },
-
-        // Quick Actions
-        { group: "Quick Actions", title: "+ Record New Sale", url: "{{ url_for('sales') }}", icon: "plus-circle", badge: "Action" },
-        { group: "Quick Actions", title: "+ Receive Shipment", url: "/purchases/new", icon: "truck", badge: "Action" },
-        { group: "Quick Actions", title: "+ Transfer Inventory", url: "{{ url_for('inventory_transfer_new') }}", icon: "arrow-left-right", badge: "Action" },
-        { group: "Quick Actions", title: "Download Database Backup", url: "{{ url_for('backup_download') }}", icon: "hard-drive-download", badge: "Backup" },
-        { group: "Quick Actions", title: "Toggle Privacy Mode", action: "privacy", icon: "eye", badge: "View" },
-        { group: "Quick Actions", title: "Toggle Sidebar Collapse", action: "sidebar", icon: "panel-left", badge: "View" },
-        { group: "Quick Actions", title: "Start Product Tour (Walk Around)", action: "tour", icon: "compass", badge: "Tour" }
+        { group: "Navigation", title: "Help Center", url: "{{ url_for('help_center') }}", icon: "help-circle" }
       ];
 
       function openCmdK() {
@@ -932,7 +915,25 @@
         });
 
         let html = '';
-        for (const [groupName, items] of Object.entries(grouped)) {
+        const priorityOrder = ["Quick Actions", "Invoices & Sales", "Products & Stock", "Navigation"];
+        const sortedGroups = Object.entries(grouped).sort(([a], [b]) => {
+          let iA = priorityOrder.indexOf(a);
+          let iB = priorityOrder.indexOf(b);
+          if (iA === -1) iA = 99;
+          if (iB === -1) iB = 99;
+          return iA - iB;
+        });
+
+        // Re-index cmdkItems in sorted visual order for flawless keyboard navigation
+        cmdkItems = [];
+        sortedGroups.forEach(([_, items]) => {
+          items.forEach(it => {
+            it._index = cmdkItems.length;
+            cmdkItems.push(it);
+          });
+        });
+
+        for (const [groupName, items] of sortedGroups) {
           html += `<div class="cmdk-group"><div class="cmdk-group-title">${groupName}</div>`;
           items.forEach(item => {
             const isSelected = item._index === 0 ? 'is-selected' : '';

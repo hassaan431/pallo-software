@@ -2,70 +2,205 @@
 {% block title %}Dashboard — AK Distributors{% endblock %}
 {% block page_heading %}Dashboard{% endblock %}
 {% block content %}
+
 {% if current_user.role == 'admin' %}
-<div style="display: flex; justify-content: flex-start; margin-bottom: 20px;">
-  <form method="get" action="{{ url_for('dashboard') }}" style="display: flex; gap: 10px; align-items: center;">
-    <label for="warehouse_id" style="font-weight: 600; font-size: 14px; margin-bottom: 0;">Warehouse:</label>
-    <select name="warehouse_id" id="warehouse_id" class="form-control" style="width: auto; padding: 4px 10px;" onchange="this.form.submit()">
-      <option value="">All Warehouses</option>
-      {% for w in warehouses %}
-        <option value="{{ w.id }}" {% if current_warehouse_id == w.id %}selected{% endif %}>{{ w.name }}</option>
-      {% endfor %}
-    </select>
-  </form>
+<div class="dashboard-filter-bar">
+  <div class="dashboard-filter-group">
+    <span class="filter-icon-label">
+      <i data-lucide="building-2"></i>
+      <span>Warehouse Scope:</span>
+    </span>
+    <form method="get" action="{{ url_for('dashboard') }}" style="margin: 0; display: inline-flex;">
+      <select name="warehouse_id" id="warehouse_id" class="dashboard-select" onchange="this.form.submit()">
+        <option value="">All Warehouses</option>
+        {% for w in warehouses %}
+          <option value="{{ w.id }}" {% if current_warehouse_id == w.id %}selected{% endif %}>{{ w.name }}</option>
+        {% endfor %}
+      </select>
+    </form>
+  </div>
+  <div class="filter-icon-label" style="font-size: 0.8rem; color: var(--color-slate-500);">
+    <i data-lucide="calendar" style="width: 15px; height: 15px;"></i>
+    <span>Real-time operations & analytics</span>
+  </div>
 </div>
 {% endif %}
-<div class="card-grid">
-  <article class="stat-card">
-    <h3>Daily Sale Amount</h3>
-    <p class="stat-value sensitive-data">${{ "%.2f"|format(daily_revenue) }}</p>
-    <p class="stat-note">Sales amount for today</p>
-  </article>
-  <article class="stat-card">
-    <h3>Daily Gross Profit</h3>
-    <p class="stat-value sensitive-data" style="color: {% if daily_profit < 0 %}var(--color-danger){% else %}var(--color-success){% endif %};">${{ "%.0f"|format(daily_profit) }}</p>
-    <p class="stat-note">Revenue minus cost of goods</p>
-  </article>
-  <article class="stat-card">
-    <h3>Daily Net Profit</h3>
-    <p class="stat-value sensitive-data" style="color: {% if daily_net_profit < 0 %}var(--color-danger){% else %}var(--color-success){% endif %};">${{ "%.0f"|format(daily_net_profit) }}</p>
-    <p class="stat-note">Gross profit minus expenses</p>
-  </article>
-  <article class="stat-card">
-    <h3>Monthly Sales</h3>
-    <p class="stat-value sensitive-data">${{ "%.2f"|format(monthly_revenue) }}</p>
-    <p class="stat-note">Current month to date</p>
-  </article>
-  <article class="stat-card">
-    <h3>Monthly Gross Profit</h3>
-    <p class="stat-value sensitive-data" style="color: {% if monthly_profit < 0 %}var(--color-danger){% else %}var(--color-success){% endif %};">${{ "%.0f"|format(monthly_profit) }}</p>
-    <p class="stat-note">Current month to date</p>
-  </article>
-  <article class="stat-card" style="border: 2px solid {% if monthly_net_profit >= 0 %}var(--color-accent){% else %}var(--color-danger){% endif %};">
-    <h3>Monthly Net Profit</h3>
-    <p class="stat-value sensitive-data" style="color: {% if monthly_net_profit < 0 %}var(--color-danger){% else %}var(--color-success){% endif %};">${{ "%.0f"|format(monthly_net_profit) }}</p>
-    <p class="stat-note">After all expenses &nbsp;<strong>{{ monthly_net_margin }}%</strong> margin</p>
-  </article>
+
+<!-- Compact Dual-Column Financial KPIs -->
+<div class="kpi-dual-row">
+  <!-- Today's Financials -->
+  <div class="kpi-group-box" id="today-kpis">
+    <div class="kpi-section-header">
+      <div class="kpi-section-title">
+        <i data-lucide="sun-medium" style="width: 15px; height: 15px; color: #f59e0b;"></i>
+        <span>Today's Performance</span>
+      </div>
+      <span class="kpi-section-badge">Today</span>
+    </div>
+    <div class="kpi-subgrid card-grid">
+      <!-- Daily Revenue -->
+      <article class="kpi-card stat-card">
+        <div class="kpi-card-header">
+          <span class="kpi-title" title="Daily Sales">Daily Sales</span>
+          <div class="kpi-icon-wrap emerald">
+            <i data-lucide="receipt"></i>
+          </div>
+        </div>
+        <div class="kpi-value stat-value sensitive-data">${{ "%.2f"|format(daily_revenue) }}</div>
+        <div class="kpi-footer stat-note">
+          <span class="kpi-pill positive">
+            <i data-lucide="arrow-up-right"></i>
+            <span>Gross</span>
+          </span>
+          <span>Today's orders</span>
+        </div>
+      </article>
+
+      <!-- Daily Gross Profit -->
+      <article class="kpi-card stat-card">
+        <div class="kpi-card-header">
+          <span class="kpi-title" title="Daily Gross Profit">Daily Gross</span>
+          <div class="kpi-icon-wrap indigo">
+            <i data-lucide="trending-up"></i>
+          </div>
+        </div>
+        <div class="kpi-value stat-value sensitive-data {% if daily_profit < 0 %}negative{% else %}positive{% endif %}">
+          ${{ "%.0f"|format(daily_profit) }}
+        </div>
+        <div class="kpi-footer stat-note">
+          <span class="kpi-pill {% if daily_profit < 0 %}negative{% else %}positive{% endif %}">
+            {% if daily_profit < 0 %}Deficit{% else %}Profit{% endif %}
+          </span>
+          <span>Revenue - cost</span>
+        </div>
+      </article>
+
+      <!-- Daily Net Profit -->
+      <article class="kpi-card stat-card {% if daily_net_profit >= 0 %}highlight{% else %}highlight-danger{% endif %}">
+        <div class="kpi-card-header">
+          <span class="kpi-title" title="Daily Net Profit">Daily Net</span>
+          <div class="kpi-icon-wrap purple">
+            <i data-lucide="wallet"></i>
+          </div>
+        </div>
+        <div class="kpi-value stat-value sensitive-data {% if daily_net_profit < 0 %}negative{% else %}positive{% endif %}">
+          ${{ "%.0f"|format(daily_net_profit) }}
+        </div>
+        <div class="kpi-footer stat-note">
+          <span class="kpi-pill neutral sensitive-data">
+            Overhead: ${{ "%.0f"|format(daily_expenses) }}
+          </span>
+          <span>After expenses</span>
+        </div>
+      </article>
+    </div>
+  </div>
+
+  <!-- Month-to-Date Financials -->
+  <div class="kpi-group-box" id="monthly-kpis">
+    <div class="kpi-section-header">
+      <div class="kpi-section-title">
+        <i data-lucide="calendar-range" style="width: 15px; height: 15px; color: #4f46e5;"></i>
+        <span>Month-To-Date Overview</span>
+      </div>
+      <span class="kpi-section-badge">Current Month</span>
+    </div>
+    <div class="kpi-subgrid card-grid">
+      <!-- Monthly Revenue -->
+      <article class="kpi-card stat-card">
+        <div class="kpi-card-header">
+          <span class="kpi-title" title="Monthly Sales">Monthly Sales</span>
+          <div class="kpi-icon-wrap emerald">
+            <i data-lucide="bar-chart-3"></i>
+          </div>
+        </div>
+        <div class="kpi-value stat-value sensitive-data">${{ "%.2f"|format(monthly_revenue) }}</div>
+        <div class="kpi-footer stat-note">
+          <span class="kpi-pill positive">
+            <i data-lucide="arrow-up-right"></i>
+            <span>Billed</span>
+          </span>
+          <span>Month to date</span>
+        </div>
+      </article>
+
+      <!-- Monthly Gross Profit -->
+      <article class="kpi-card stat-card">
+        <div class="kpi-card-header">
+          <span class="kpi-title" title="Monthly Gross Profit">Monthly Gross</span>
+          <div class="kpi-icon-wrap indigo">
+            <i data-lucide="pie-chart"></i>
+          </div>
+        </div>
+        <div class="kpi-value stat-value sensitive-data {% if monthly_profit < 0 %}negative{% else %}positive{% endif %}">
+          ${{ "%.0f"|format(monthly_profit) }}
+        </div>
+        <div class="kpi-footer stat-note">
+          <span class="kpi-pill {% if monthly_margin < 0 %}negative{% else %}positive{% endif %}">
+            {{ monthly_margin }}% Margin
+          </span>
+          <span>Before expenses</span>
+        </div>
+      </article>
+
+      <!-- Monthly Net Profit -->
+      <article class="kpi-card stat-card {% if monthly_net_profit >= 0 %}highlight{% else %}highlight-danger{% endif %}">
+        <div class="kpi-card-header">
+          <span class="kpi-title" title="Monthly Net Profit">Monthly Net</span>
+          <div class="kpi-icon-wrap purple">
+            <i data-lucide="award"></i>
+          </div>
+        </div>
+        <div class="kpi-value stat-value sensitive-data {% if monthly_net_profit < 0 %}negative{% else %}positive{% endif %}">
+          ${{ "%.0f"|format(monthly_net_profit) }}
+        </div>
+        <div class="kpi-footer stat-note">
+          <span class="kpi-pill {% if monthly_net_margin < 0 %}negative{% else %}positive{% endif %}">
+            <strong>{{ monthly_net_margin }}%</strong> Net
+          </span>
+          <span class="sensitive-data">Overhead: ${{ "%.0f"|format(monthly_expenses) }}</span>
+        </div>
+      </article>
+    </div>
+  </div>
 </div>
 
-<section class="panel" style="margin-bottom: 1.75rem;">
-  <div class="panel-header">
-    <h2>Daily Sales (Last 30 Days)</h2>
+<!-- Interactive Sales Chart -->
+<section class="chart-panel" style="margin-bottom: 2rem;">
+  <div class="chart-panel-header">
+    <div class="chart-panel-title">
+      <i data-lucide="trending-up"></i>
+      <span>Daily Sales Trend (Last 30 Days)</span>
+    </div>
+    <div class="chart-meta-badge sensitive-data">
+      <i data-lucide="sparkles" style="width: 14px; height: 14px;"></i>
+      <span>30d Total: <strong id="chart30dTotal">Calculating...</strong></span>
+    </div>
   </div>
-  <div class="panel-body" style="padding: 1.5rem;">
-    <canvas id="salesChart" height="80" class="sensitive-data"></canvas>
+  <div class="chart-canvas-container">
+    <canvas id="salesChart" class="sensitive-data"></canvas>
   </div>
 </section>
-<section class="panel">
+
+<!-- Recent Sales -->
+<section class="panel" style="margin-bottom: 2rem;">
   <div class="panel-header">
-    <h2>Recent Sales</h2>
+    <div style="display: flex; align-items: center; gap: 0.6rem;">
+      <i data-lucide="receipt" style="color: var(--color-primary); width: 20px; height: 20px;"></i>
+      <h2 style="margin: 0; font-size: 1.05rem; font-weight: 700;">Recent Sales</h2>
+      <span class="kpi-section-badge">Last 5 Orders</span>
+    </div>
+    <a href="/sales" style="font-size: 0.85rem; font-weight: 600; color: var(--color-primary); text-decoration: none; display: inline-flex; align-items: center; gap: 0.3rem;">
+      <span>View All Sales</span>
+      <i data-lucide="arrow-right" style="width: 14px; height: 14px;"></i>
+    </a>
   </div>
   <div class="panel-body">
     <div class="table-wrap">
       <table class="data-table">
         <thead>
           <tr>
-            <th>Invoice#</th>
+            <th>Invoice #</th>
             <th>Customer</th>
             <th>Date</th>
             <th>Grand Total</th>
@@ -73,33 +208,48 @@
             <th>Profit</th>
             <th>Payment Type</th>
             <th>Status</th>
-            <th>Actions</th>
+            <th style="text-align: right;">Action</th>
           </tr>
         </thead>
         <tbody>
           {% if recent_sales %}
             {% for sale in recent_sales %}
             <tr>
-              <td><a href="javascript:void(0)" onclick="window.openInvoiceDrawer({{ sale.id }})" class="drawer-preview-link" title="Quick view invoice details">{{ sale.invoice_number }}</a></td>
-              <td>{{ sale.customer_name }}</td>
-              <td>{{ sale.invoice_date }}</td>
-              <td class="sensitive-data">${{ "%.2f"|format(sale.grand_total) }}</td>
-              <td class="sensitive-data" style="color: {{ '#dc2626' if sale.profit_margin < 0 else '#16a34a' }}; font-weight: 600;">{{ "%.0f"|format(sale.profit_margin) }}%</td>
-              <td class="sensitive-data" style="color: {{ '#dc2626' if sale.profit_amount < 0 else '#16a34a' }}; font-weight: 600;">${{ "%.2f"|format(sale.profit_amount) }}</td>
-              <td style="text-transform: capitalize;">{{ sale.payment_type }}</td>
+              <td>
+                <a href="javascript:void(0)" onclick="window.openInvoiceDrawer({{ sale.id }})" class="drawer-preview-link" title="Click to view full invoice slide-over">
+                  <i data-lucide="file-text" style="width: 14px; height: 14px;"></i>
+                  <span>{{ sale.invoice_number }}</span>
+                </a>
+              </td>
+              <td style="font-weight: 500;">{{ sale.customer_name }}</td>
+              <td style="color: var(--color-slate-500); font-size: 0.85rem;">{{ sale.invoice_date }}</td>
+              <td class="sensitive-data" style="font-weight: 700;">${{ "%.2f"|format(sale.grand_total) }}</td>
+              <td class="sensitive-data" style="color: {{ '#dc2626' if sale.profit_margin < 0 else '#059669' }}; font-weight: 600;">{{ "%.0f"|format(sale.profit_margin) }}%</td>
+              <td class="sensitive-data" style="color: {{ '#dc2626' if sale.profit_amount < 0 else '#059669' }}; font-weight: 600;">${{ "%.2f"|format(sale.profit_amount) }}</td>
+              <td>
+                <span style="display: inline-block; padding: 0.2rem 0.5rem; background: var(--color-slate-100); border-radius: 6px; font-size: 0.75rem; text-transform: capitalize; color: var(--color-slate-700); font-weight: 500;">
+                  {{ sale.payment_type }}
+                </span>
+              </td>
               <td>
                 <span class="status-badge {{ sale.status }}">
                   {{ sale.status }}
                 </span>
               </td>
-              <td>
-                <a href="/sales/{{ sale.id }}/invoice/pdf" class="btn btn-pdf" target="_blank">Invoice</a>
+              <td style="text-align: right;">
+                <a href="/sales/{{ sale.id }}/invoice/pdf" class="btn-pdf-action" target="_blank" title="Download Official Invoice PDF">
+                  <i data-lucide="file-down"></i>
+                  <span>PDF</span>
+                </a>
               </td>
             </tr>
             {% endfor %}
           {% else %}
             <tr>
-              <td colspan="9" class="empty-state">No recent sales to display.</td>
+              <td colspan="9" class="empty-state">
+                <i data-lucide="inbox" style="width: 32px; height: 32px; stroke-width: 1.5; color: var(--color-slate-400); margin-bottom: 0.5rem; display: block; margin-left: auto; margin-right: auto;"></i>
+                No recent sales to display.
+              </td>
             </tr>
           {% endif %}
         </tbody>
@@ -108,9 +258,18 @@
   </div>
 </section>
 
-<section class="panel" style="margin-top: 1.5rem;">
+<!-- Upcoming & Overdue Payments -->
+<section class="panel">
   <div class="panel-header">
-    <h2>Upcoming & Overdue Payments (Top 10)</h2>
+    <div style="display: flex; align-items: center; gap: 0.6rem;">
+      <i data-lucide="alert-circle" style="color: #ef4444; width: 20px; height: 20px;"></i>
+      <h2 style="margin: 0; font-size: 1.05rem; font-weight: 700;">Upcoming & Overdue Payments</h2>
+      <span class="kpi-section-badge" style="background: #fee2e2; color: #991b1b; border-color: #fecaca;">Action Required</span>
+    </div>
+    <a href="/sales?filter=unpaid" style="font-size: 0.85rem; font-weight: 600; color: var(--color-primary); text-decoration: none; display: inline-flex; align-items: center; gap: 0.3rem;">
+      <span>Manage Receivables</span>
+      <i data-lucide="arrow-right" style="width: 14px; height: 14px;"></i>
+    </a>
   </div>
   <div class="panel-body">
     <div class="table-wrap">
@@ -118,30 +277,54 @@
         <thead>
           <tr>
             <th>Due Date</th>
-            <th>Invoice#</th>
+            <th>Invoice #</th>
             <th>Customer</th>
             <th>Phone</th>
             <th>Remaining Balance</th>
-            <th>Action</th>
+            <th style="text-align: right;">Action</th>
           </tr>
         </thead>
         <tbody>
           {% if upcoming_payments %}
             {% for payment in upcoming_payments %}
             <tr>
-              <td style="font-weight: 600; color: #dc2626;">{{ payment.due_date }}</td>
-              <td><a href="javascript:void(0)" onclick="window.openInvoiceDrawerByNumber('{{ payment.invoice_number }}')" class="drawer-preview-link" title="Quick view invoice details">{{ payment.invoice_number }}</a></td>
-              <td>{{ payment.customer_name }}</td>
-              <td>{{ payment.customer_phone or '-' }}</td>
-              <td class="sensitive-data" style="font-weight: bold; color: #e8800a;">${{ "%.2f"|format(payment.remaining_amount) }}</td>
               <td>
-                <a href="/sales" class="btn btn-primary" style="padding: 4px 10px; font-size: 12px; text-decoration: none;">Go to Sales</a>
+                <span class="overdue-date payment-due-cell" data-due="{{ payment.due_date }}">
+                  <i data-lucide="calendar-clock" style="width: 14px; height: 14px;"></i>
+                  <span>{{ payment.due_date or 'No date set' }}</span>
+                </span>
+              </td>
+              <td>
+                <a href="javascript:void(0)" onclick="window.openInvoiceDrawerByNumber('{{ payment.invoice_number }}')" class="drawer-preview-link" title="Click to view full invoice slide-over">
+                  <i data-lucide="file-text" style="width: 14px; height: 14px;"></i>
+                  <span>{{ payment.invoice_number }}</span>
+                </a>
+              </td>
+              <td style="font-weight: 500;">{{ payment.customer_name }}</td>
+              <td style="color: var(--color-slate-600); font-size: 0.85rem;">{{ payment.customer_phone or '-' }}</td>
+              <td class="sensitive-data" style="font-weight: 800; color: #d97706; font-size: 0.95rem;">
+                ${{ "%.2f"|format(payment.remaining_amount) }}
+              </td>
+              <td style="text-align: right;">
+                <div style="display: inline-flex; gap: 0.4rem; justify-content: flex-end;">
+                  <button type="button" class="btn-pdf-action" onclick="window.openInvoiceDrawerByNumber('{{ payment.invoice_number }}')" title="Quick Preview">
+                    <i data-lucide="eye"></i>
+                    <span>Preview</span>
+                  </button>
+                  <a href="/sales" class="btn-pdf-action" style="background: var(--color-primary-light); color: var(--color-primary-hover); border-color: rgba(16,185,129,0.3);" title="Open in Sales Record">
+                    <i data-lucide="arrow-up-right"></i>
+                    <span>Sales</span>
+                  </a>
+                </div>
               </td>
             </tr>
             {% endfor %}
           {% else %}
             <tr>
-              <td colspan="6" class="empty-state" style="color: #16a34a;">No upcoming or overdue payments!</td>
+              <td colspan="6" class="empty-state" style="color: #059669;">
+                <i data-lucide="check-circle-2" style="width: 32px; height: 32px; stroke-width: 1.5; color: #10b981; margin-bottom: 0.5rem; display: block; margin-left: auto; margin-right: auto;"></i>
+                All invoices are fully settled. No overdue payments!
+              </td>
             </tr>
           {% endif %}
         </tbody>
@@ -150,128 +333,156 @@
   </div>
 </section>
 
-<style>
-  .status-badge {
-    display: inline-block;
-    padding: 0.2rem 0.5rem;
-    border-radius: 12px;
-    font-size: 0.75rem;
-    font-weight: 600;
-  }
-  
-  .status-badge.paid {
-    background: #10b981;
-    color: white;
-  }
-  
-  .status-badge.partial {
-    background: #e8800a;
-    color: white;
-  }
-
-  .status-badge.unpaid {
-    background: #ef4444;
-    color: white;
-  }
-  
-  .btn-pdf {
-    background: var(--color-accent);
-    color: #fff;
-    border-radius: 8px;
-    padding: 0.25rem 0.5rem;
-    text-decoration: none;
-    font-size: 0.8rem;
-  }
-  
-  .btn-pdf:hover {
-    background: var(--color-accent-hover);
-    color: #fff;
-  }
-</style>
-
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script>
   document.addEventListener('DOMContentLoaded', function() {
-    const ctx = document.getElementById('salesChart').getContext('2d');
-    
-    // Parse data passed from Flask
-    const labels = {{ daily_sales_labels | tojson | safe }};
-    const data = {{ daily_sales_data | tojson | safe }};
-    
-    new Chart(ctx, {
-      type: 'line',
-      data: {
-        labels: labels,
-        datasets: [{
-          label: 'Total Sales ($)',
-          data: data,
-          borderColor: '#10b981', // Emerald Green
-          backgroundColor: 'rgba(16, 185, 129, 0.1)',
-          borderWidth: 2,
-          tension: 0.3,
-          fill: true,
-          pointBackgroundColor: '#10b981',
-          pointBorderColor: '#fff',
-          pointBorderWidth: 2,
-          pointRadius: 4,
-          pointHoverRadius: 6
-        }]
-      },
-      options: {
-        responsive: true,
-        plugins: {
-          legend: {
-            display: false
+    // 1. Initialize Chart.js with modern aesthetics
+    const chartCanvas = document.getElementById('salesChart');
+    if (chartCanvas) {
+      const ctx = chartCanvas.getContext('2d');
+      const labels = {{ daily_sales_labels | tojson | safe }};
+      const rawData = {{ daily_sales_data | tojson | safe }};
+      
+      // Calculate 30d total for header badge
+      const total30d = rawData.reduce((acc, curr) => acc + (Number(curr) || 0), 0);
+      const totalBadge = document.getElementById('chart30dTotal');
+      if (totalBadge) {
+        totalBadge.textContent = '$' + total30d.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+      }
+
+      // Create vertical emerald gradient fill
+      const gradient = ctx.createLinearGradient(0, 0, 0, 260);
+      gradient.addColorStop(0, 'rgba(16, 185, 129, 0.22)');
+      gradient.addColorStop(1, 'rgba(16, 185, 129, 0.00)');
+
+      new Chart(ctx, {
+        type: 'line',
+        data: {
+          labels: labels,
+          datasets: [{
+            label: 'Daily Sales',
+            data: rawData,
+            borderColor: '#10b981',
+            backgroundColor: gradient,
+            borderWidth: 2.5,
+            tension: 0.35,
+            fill: true,
+            pointBackgroundColor: '#10b981',
+            pointBorderColor: '#ffffff',
+            pointBorderWidth: 2,
+            pointRadius: 3.5,
+            pointHoverRadius: 6,
+            pointHoverBackgroundColor: '#059669',
+            pointHoverBorderColor: '#ffffff',
+            pointHoverBorderWidth: 2
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          interaction: {
+            mode: 'index',
+            intersect: false
           },
-          tooltip: {
-            callbacks: {
-              label: function(context) {
-                let label = context.dataset.label || '';
-                if (label) {
-                  label += ': ';
+          plugins: {
+            legend: {
+              display: false
+            },
+            tooltip: {
+              backgroundColor: '#0f172a',
+              titleColor: '#94a3b8',
+              titleFont: { family: 'Inter, sans-serif', size: 11, weight: '600' },
+              bodyColor: '#ffffff',
+              bodyFont: { family: 'Inter, sans-serif', size: 13, weight: '700' },
+              borderColor: '#334155',
+              borderWidth: 1,
+              padding: 10,
+              cornerRadius: 8,
+              displayColors: false,
+              callbacks: {
+                label: function(context) {
+                  const val = context.parsed.y !== null ? context.parsed.y : 0;
+                  return 'Total Sales: $' + Number(val).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
                 }
-                if (context.parsed.y !== null) {
-                  label += new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(context.parsed.y);
-                }
-                return label;
               }
             }
-          }
-        },
-        scales: {
-          y: {
-            beginAtZero: true,
-            ticks: {
-              callback: function(value) {
-                return '$' + value;
+          },
+          scales: {
+            y: {
+              beginAtZero: true,
+              ticks: {
+                color: '#64748b',
+                font: { family: 'Inter, sans-serif', size: 11 },
+                callback: function(value) {
+                  if (value >= 1000) {
+                    return '$' + (value / 1000).toFixed(1) + 'k';
+                  }
+                  return '$' + value;
+                }
+              },
+              grid: {
+                color: '#f1f5f9',
+                drawBorder: false
               }
             },
-            grid: {
-              color: '#f1f5f9'
-            }
-          },
-          x: {
-            grid: {
-              display: false
+            x: {
+              ticks: {
+                color: '#64748b',
+                font: { family: 'Inter, sans-serif', size: 11 },
+                maxRotation: 0,
+                autoSkip: true,
+                maxTicksLimit: 12
+              },
+              grid: {
+                display: false,
+                drawBorder: false
+              }
             }
           }
+        }
+      });
+    }
+
+    // 2. Overdue indicators tag addition
+    const todayStr = new Date().toISOString().split('T')[0];
+    document.querySelectorAll('.payment-due-cell').forEach(cell => {
+      const dueDate = cell.getAttribute('data-due');
+      if (dueDate && dueDate !== 'None' && dueDate !== '') {
+        if (dueDate < todayStr) {
+          const tag = document.createElement('span');
+          tag.className = 'overdue-tag';
+          tag.textContent = 'OVERDUE';
+          cell.appendChild(tag);
+        } else if (dueDate === todayStr) {
+          const tag = document.createElement('span');
+          tag.className = 'overdue-tag';
+          tag.style.background = '#fef3c7';
+          tag.style.color = '#92400e';
+          tag.textContent = 'DUE TODAY';
+          cell.appendChild(tag);
         }
       }
     });
 
-    // Driver.js Walkaround Tour setup
+    // 3. Render any newly added Lucide icons
+    if (window.lucide && window.lucide.createIcons) {
+      window.lucide.createIcons();
+    }
+
+    // 4. Driver.js Walkaround Tour setup
     if (window.driver && window.driver.js && window.driver.js.driver) {
       const driver = window.driver.js.driver;
       
       const driverObj = driver({
         showProgress: true,
         steps: [
-          { popover: { title: 'Welcome to AK Distributors', description: 'This is your main dashboard where you can see a quick overview of your business.' } },
-          { element: '.sidebar', popover: { title: 'Navigation Menu', description: 'Use this sidebar to navigate between products, sales, customers, and reports.', side: "right", align: 'start' } },
-          { element: '.card-grid', popover: { title: 'Key Metrics', description: 'At a glance, see your daily and monthly revenue and profit margins.', side: "bottom", align: 'start' } },
-          { element: '#salesChart', popover: { title: 'Sales Trend', description: 'This chart shows your daily sales over the last 30 days to help you spot trends.', side: "top", align: 'start' } },
-          { element: '.data-table', popover: { title: 'Recent Activity', description: 'Here are your most recent sales. You can directly view invoices from here.', side: "top", align: 'start' } },
-          { element: '#userMenuBtn', popover: { title: 'Need help?', description: 'You can restart this tour anytime from your user profile menu in the top right.', side: "bottom", align: 'end' } }
+          { popover: { title: 'Welcome to AK Distributors', description: 'This is your centralized command center for monitoring daily revenue, margins, and orders in real time.' } },
+          { element: '.sidebar', popover: { title: 'Streamlined Navigation', description: 'Use the left sidebar to access inventory, sales, customers, transfers, and ledger reports.', side: "right", align: 'start' } },
+          { element: '#today-kpis', popover: { title: "Today's Performance", description: 'Real-time daily sales, gross margins, and net profit calculated after expenses.', side: "bottom", align: 'start' } },
+          { element: '#monthly-kpis', popover: { title: 'Monthly Financials', description: 'Track month-to-date targets and net profit margins at a glance.', side: "bottom", align: 'start' } },
+          { element: '.chart-panel', popover: { title: 'Sales Trend (30 Days)', description: 'Interactive volume curve. Hover over any date to inspect historical performance.', side: "top", align: 'start' } },
+          { element: '.data-table', popover: { title: 'Recent Activity & Slide-Over Drawer', description: 'Click any invoice number to open the instant slide-over preview without leaving this page.', side: "top", align: 'start' } },
+          { element: '#userMenuBtn', popover: { title: 'Need Assistance?', description: 'You can restart this guided walkthrough anytime from your user menu in the top right.', side: "bottom", align: 'end' } }
         ]
       });
       
@@ -279,19 +490,10 @@
         if (driverObj) driverObj.drive();
       };
 
-      const startBtn = document.getElementById('start-tour-btn');
-      if (startBtn) {
-        startBtn.addEventListener('click', () => {
-          driverObj.drive();
-        });
-      }
-
-      // Check URL query parameter for tour
       const urlParams = new URLSearchParams(window.location.search);
       if (urlParams.get('tour') === '1') {
         setTimeout(() => driverObj.drive(), 300);
       } else if (!localStorage.getItem('dashboardTourSeen')) {
-        // Auto-start for first-time users
         driverObj.drive();
         localStorage.setItem('dashboardTourSeen', 'true');
       }
