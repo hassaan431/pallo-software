@@ -1008,9 +1008,10 @@
       }
     });
 
-    // Dynamic browser tab title manager for modals (Preserved)
+    // Dynamic browser tab title manager for modals
     (function() {
-      let basePageTitle = document.title;
+      const originalPageTitle = document.title;
+      let basePageTitle = originalPageTitle;
 
       function cleanTitleText(el) {
         if (!el) return '';
@@ -1021,10 +1022,15 @@
 
       function getModalTitle(modal) {
         if (!modal) return null;
+        if (modal.id === 'universalDrawer') {
+          const dt = modal.querySelector('#drawerTitle');
+          const text = dt ? dt.textContent.trim() : '';
+          return (text && text !== 'Details') ? text : 'Details';
+        }
         if (modal.dataset && modal.dataset.tabTitle) return modal.dataset.tabTitle.trim();
 
         const aria = modal.getAttribute('aria-label') || modal.querySelector('[role="dialog"]')?.getAttribute('aria-label');
-        if (aria && aria.trim()) return aria.trim();
+        if (aria && aria.trim() && aria.trim() !== 'Details Drawer') return aria.trim();
 
         const heading = modal.querySelector('h1, h2, h3, .modal-title, .panel-title');
         if (heading) {
@@ -1036,13 +1042,36 @@
 
       function isModalVisible(el) {
         if (!el) return false;
-        if (el.classList.contains('is-open')) return true;
-        if (el.getAttribute('aria-hidden') === 'false') return true;
-        if (el.style && el.style.display && el.style.display !== 'none') return true;
+        // Never consider hidden off-screen elements with aria-hidden="true" as visible
+        if (el.getAttribute('aria-hidden') === 'true') return false;
+
+        // Slide drawer: only visible when .is-open is present
+        if (el.classList.contains('slide-drawer')) {
+          return el.classList.contains('is-open');
+        }
+
+        // Computed style check
         const style = window.getComputedStyle(el);
-        if (style.display === 'none' || style.visibility === 'hidden') return false;
-        const isOverlay = style.position === 'fixed' || style.position === 'absolute' || el.classList.contains('modal-backdrop');
-        return isOverlay;
+        if (style.display === 'none' || style.visibility === 'hidden' || style.opacity === '0') {
+          return false;
+        }
+
+        // Active class indicator on overlays/dialogs
+        if (el.classList.contains('is-open') || el.classList.contains('show') || el.classList.contains('active')) {
+          return true;
+        }
+
+        // Explicit inline display set to visible
+        if (el.style && (el.style.display === 'block' || el.style.display === 'flex')) {
+          return true;
+        }
+
+        // If aria-hidden is explicitly 'false'
+        if (el.getAttribute('aria-hidden') === 'false') {
+          return true;
+        }
+
+        return false;
       }
 
       function updateTabTitleForModals() {
@@ -1070,7 +1099,9 @@
       }
 
       window.addEventListener('DOMContentLoaded', () => {
-        basePageTitle = document.title;
+        if (!basePageTitle || basePageTitle === 'Details Drawer — AK Distributors') {
+          basePageTitle = document.title;
+        }
         updateTabTitleForModals();
 
         const observer = new MutationObserver(() => {
