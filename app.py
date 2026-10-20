@@ -5209,9 +5209,30 @@ def reports_export(type: str):
 def users_list():
     conn = get_connection()
     try:
-        users = conn.execute("SELECT u.id, u.username, u.role, u.is_active, u.warehouse_id, w.name as warehouse_name FROM users u LEFT JOIN warehouses w ON u.warehouse_id = w.id").fetchall()
+        users = conn.execute("""
+            SELECT u.id, u.username, u.role, u.is_active, u.warehouse_id, w.name as warehouse_name,
+                   (SELECT COUNT(*) FROM sales WHERE salesman_id = u.id) as sales_count,
+                   (SELECT COALESCE(SUM(grand_total), 0) FROM sales WHERE salesman_id = u.id) as sales_volume
+            FROM users u 
+            LEFT JOIN warehouses w ON u.warehouse_id = w.id
+            ORDER BY u.id ASC
+        """).fetchall()
         warehouses = conn.execute("SELECT id, name FROM warehouses ORDER BY name").fetchall()
-        return render_template("users.html", users=[dict(u) for u in users], warehouses=[dict(w) for w in warehouses])
+        user_dicts = [dict(u) for u in users]
+        total_users = len(user_dicts)
+        active_users = sum(1 for u in user_dicts if u.get('is_active') == 1)
+        salesmen_count = sum(1 for u in user_dicts if u.get('role') == 'salesman')
+        admins_count = sum(1 for u in user_dicts if u.get('role') == 'admin')
+
+        return render_template(
+            "users.html",
+            users=user_dicts,
+            warehouses=[dict(w) for w in warehouses],
+            total_users=total_users,
+            active_users=active_users,
+            salesmen_count=salesmen_count,
+            admins_count=admins_count
+        )
     finally:
         conn.close()
 

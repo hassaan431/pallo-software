@@ -1,116 +1,376 @@
 {% extends "base.html" %}
 
-{% block title %}Manage Users — AK Distributors{% endblock %}
+{% block title %}User Accounts & Security — AK Distributors{% endblock %}
 {% block page_heading %}Manage Users{% endblock %}
 
 {% block content %}
-<section class="panel">
-  <div class="panel-header">
-    <h2>User Accounts</h2>
-    <div style="display: flex; gap: 0.5rem; align-items: center;">
-      <button class="btn btn-primary" data-open-modal="addUserModal">+ Add User</button>
+<!-- Flash Messages -->
+{% with messages = get_flashed_messages(with_categories=true) %}
+  {% if messages %}
+    <div style="margin-bottom: 1rem;">
+      {% for cat, msg in messages %}
+        <div class="alert alert-{{ cat }}" style="margin-bottom: 0.5rem;">{{ msg }}</div>
+      {% endfor %}
+    </div>
+  {% endif %}
+{% endwith %}
+
+<!-- PHASE 11: Command Bar -->
+<div class="users-header-bar">
+  <div class="users-title-group">
+    <div>
+      <h2>User Accounts &amp; Security</h2>
+      <div style="font-size: 0.8rem; color: var(--color-slate-500); margin-top: 2px;">
+        Role-based access permissions, assigned branches/warehouses, and security credentials
+      </div>
     </div>
   </div>
-  <div class="panel-body">
-    <div class="table-wrap">
-      <table class="data-table">
-        <thead>
-          <tr>
-            <th>ID</th>
-            <th>Username</th>
-            <th>Role</th>
-            <th>Warehouse</th>
-            <th>Status</th>
-            <th>Actions</th>
-          </tr>
-        </thead>
-        <tbody>
-          {% for u in users %}
-          <tr>
-            <td>{{ u.id }}</td>
-            <td style="font-weight: 500;">{{ u.username }}</td>
-            <td>
-              {% if u.role == 'admin' %}
-                <span class="status-badge status-paid">Admin</span>
-              {% else %}
-                <span class="status-badge status-partial">Salesman</span>
-              {% endif %}
-            </td>
-            <td>
-              {{ u.warehouse_name or 'All (Admin)' }}
-            </td>
-            <td>
-              {% if u.is_active == 1 %}
-                <span class="status-badge status-paid">Active</span>
-              {% else %}
-                <span class="status-badge status-overdue">Disabled</span>
-              {% endif %}
-            </td>
-            <td>
-              <button class="btn btn-secondary btn-sm" onclick="openEditUser({{ u.id }}, '{{ u.username }}', '{{ u.role }}', '{{ u.warehouse_id or '' }}')">Edit User</button>
-              <button class="btn btn-outline btn-sm" onclick="openResetPassword({{ u.id }}, '{{ u.username }}')" style="margin-left: 8px;">Reset Password</button>
-              
+  <div style="display: flex; gap: 0.5rem; align-items: center;">
+    <button
+      type="button"
+      class="btn btn-primary"
+      data-open-modal="addUserModal"
+      style="display: inline-flex; align-items: center; gap: 0.4rem; padding: 0.45rem 0.85rem; font-size: 0.825rem; font-weight: 600;"
+    >
+      <i data-lucide="user-plus" style="width: 15px; height: 15px;"></i>
+      <span>+ Add User</span>
+    </button>
+  </div>
+</div>
+
+<!-- 3-Card KPI Overview -->
+<div class="users-stats-grid">
+  <!-- Card 1: Total User Accounts -->
+  <div class="users-stat-card">
+    <div class="users-stat-content">
+      <h3>Total System Users</h3>
+      <p class="users-stat-value" style="color: #2563eb;">{{ total_users }}</p>
+      <div class="users-stat-note">Configured login accounts</div>
+    </div>
+    <div class="users-stat-icon blue">
+      <i data-lucide="users"></i>
+    </div>
+  </div>
+
+  <!-- Card 2: Active Accounts -->
+  <div class="users-stat-card">
+    <div class="users-stat-content">
+      <h3>Active Accounts</h3>
+      <p class="users-stat-value" style="color: #059669;">{{ active_users }}</p>
+      <div class="users-stat-note">Authorized login status</div>
+    </div>
+    <div class="users-stat-icon emerald">
+      <i data-lucide="shield-check"></i>
+    </div>
+  </div>
+
+  <!-- Card 3: Field Sales Representatives -->
+  <div class="users-stat-card">
+    <div class="users-stat-content">
+      <h3>Sales Representatives</h3>
+      <p class="users-stat-value" style="color: #9333ea;">{{ salesmen_count }}</p>
+      <div class="users-stat-note">{{ admins_count }} Administrator{% if admins_count != 1 %}s{% endif %}</div>
+    </div>
+    <div class="users-stat-icon purple">
+      <i data-lucide="briefcase"></i>
+    </div>
+  </div>
+</div>
+
+<!-- Main Section Card: User Directory Table -->
+<section class="users-section-card">
+  <div class="users-section-header">
+    <div style="display: flex; align-items: center; gap: 0.65rem;">
+      <span style="font-weight: 700; font-size: 0.9rem; color: var(--color-slate-800);">System Users Directory</span>
+      <span class="suppliers-count-badge" id="userRowCountBadge">{{ total_users }} Users</span>
+    </div>
+
+    <!-- Live Client-Side Quick Search -->
+    <div class="suppliers-search-box">
+      <i data-lucide="search"></i>
+      <input
+        type="text"
+        id="userSearch"
+        class="suppliers-search-input"
+        placeholder="Quick search users..."
+      >
+    </div>
+  </div>
+
+  <div class="users-table-wrap">
+    <table class="data-table" id="usersTable">
+      <thead>
+        <tr>
+          <th style="width: 60px;">ID</th>
+          <th>User Account</th>
+          <th style="width: 140px;">Role</th>
+          <th style="width: 180px;">Assigned Branch</th>
+          <th style="width: 120px; text-align: center;">Sales Activity</th>
+          <th style="width: 110px;">Status</th>
+          <th style="text-align: right; width: 220px;">Actions</th>
+        </tr>
+      </thead>
+      <tbody id="usersTableBody">
+        {% for u in users %}
+        <tr
+          class="user-row"
+          data-search-text="{{ (u.id ~ ' ' ~ u.username ~ ' ' ~ u.role ~ ' ' ~ (u.warehouse_name or '')) | lower }}"
+        >
+          <td style="font-family: monospace; font-size: 0.8rem; color: var(--color-slate-500); font-weight: 600;">
+            #{{ u.id }}
+          </td>
+          <td>
+            <div style="display: flex; align-items: center; gap: 0.65rem;">
+              <div class="user-avatar-badge">
+                {{ u.username[:2] }}
+              </div>
+              <div>
+                <div style="font-weight: 700; color: var(--color-slate-900); font-size: 0.85rem;">
+                  {{ u.username }}
+                  {% if current_user.id == u.id %}
+                    <span style="font-size: 0.7rem; color: #2563eb; background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 4px; padding: 1px 5px; font-weight: 600; margin-left: 4px;">You</span>
+                  {% endif %}
+                </div>
+              </div>
+            </div>
+          </td>
+          <td>
+            {% if u.role == 'admin' %}
+              <span class="role-badge-admin">
+                <i data-lucide="shield" style="width: 12px; height: 12px;"></i>
+                Admin (Full)
+              </span>
+            {% else %}
+              <span class="role-badge-salesman">
+                <i data-lucide="user" style="width: 12px; height: 12px;"></i>
+                Salesman
+              </span>
+            {% endif %}
+          </td>
+          <td>
+            {% if u.warehouse_name %}
+              <span style="display: inline-flex; align-items: center; gap: 0.35rem; font-weight: 600; color: var(--color-slate-700); font-size: 0.8rem;">
+                <i data-lucide="warehouse" style="width: 13px; height: 13px; color: var(--color-slate-400);"></i>
+                {{ u.warehouse_name }}
+              </span>
+            {% else %}
+              <span style="color: var(--color-slate-500); font-size: 0.775rem; font-style: italic;">
+                All Branches (Admin)
+              </span>
+            {% endif %}
+          </td>
+          <td style="text-align: center;">
+            <span class="stock-pill in-stock" style="font-size: 0.75rem; padding: 2px 8px;">
+              {{ u.sales_count or 0 }} orders
+            </span>
+          </td>
+          <td>
+            {% if u.is_active == 1 %}
+              <span class="status-badge status-paid" style="display: inline-flex; align-items: center; gap: 0.25rem;">
+                <i data-lucide="check-circle" style="width: 11px; height: 11px;"></i>
+                Active
+              </span>
+            {% else %}
+              <span class="status-badge status-overdue" style="display: inline-flex; align-items: center; gap: 0.25rem;">
+                <i data-lucide="slash" style="width: 11px; height: 11px;"></i>
+                Disabled
+              </span>
+            {% endif %}
+          </td>
+          <td style="text-align: right;">
+            <div style="display: flex; gap: 0.35rem; justify-content: flex-end; align-items: center;">
+              <!-- Edit Role/Warehouse -->
+              <button
+                type="button"
+                class="btn-edit-action"
+                onclick="openEditUser({{ u.id }}, '{{ u.username | e }}', '{{ u.role }}', '{{ u.warehouse_id or '' }}')"
+                title="Edit Role & Branch"
+              >
+                <i data-lucide="pencil"></i>
+                <span>Edit</span>
+              </button>
+
+              <!-- Reset Password -->
+              <button
+                type="button"
+                class="btn-key-action"
+                onclick="openResetPassword({{ u.id }}, '{{ u.username | e }}')"
+                title="Reset User Password"
+              >
+                <i data-lucide="key-round"></i>
+                <span>Password</span>
+              </button>
+
+              <!-- Enable/Disable Toggle -->
               {% if current_user.id != u.id %}
-              <form action="{{ url_for('users_toggle_active', user_id=u.id) }}" method="POST" style="display: inline-block; margin-left: 8px;">
+              <form action="{{ url_for('users_toggle_active', user_id=u.id) }}" method="POST" style="display: inline; margin: 0;">
                 {% if u.is_active == 1 %}
-                  <button type="submit" class="btn btn-danger btn-sm" onclick="return confirm('Are you sure you want to disable this user?');">Disable</button>
+                  <button
+                    type="submit"
+                    class="btn-delete-action"
+                    title="Disable Account"
+                    onclick="return confirm('Disable login access for user {{ u.username }}?');"
+                  >
+                    <i data-lucide="user-x"></i>
+                    <span>Disable</span>
+                  </button>
                 {% else %}
-                  <button type="submit" class="btn btn-primary btn-sm">Enable</button>
+                  <button
+                    type="submit"
+                    class="btn-edit-action"
+                    style="color: #059669; border-color: #a7f3d0; background: #ffffff;"
+                    title="Enable Account"
+                  >
+                    <i data-lucide="user-check"></i>
+                    <span>Enable</span>
+                  </button>
                 {% endif %}
               </form>
               {% endif %}
-            </td>
-          </tr>
-          {% else %}
-          <tr>
-            <td colspan="5" class="text-center">No users found.</td>
-          </tr>
-          {% endfor %}
-        </tbody>
-      </table>
-    </div>
+            </div>
+          </td>
+        </tr>
+        {% else %}
+        <tr>
+          <td colspan="7" style="text-align: center; color: var(--color-slate-400); padding: 2.5rem 1rem;">
+            No user accounts configured.
+          </td>
+        </tr>
+        {% endfor %}
+        <tr id="userEmptySearchRow" style="display: none;">
+          <td colspan="7" style="text-align: center; color: var(--color-slate-400); padding: 2.5rem 1rem;">
+            No users matching your search query.
+          </td>
+        </tr>
+      </tbody>
+    </table>
   </div>
 </section>
 
 <!-- Add User Modal -->
 <div id="addUserModal" class="modal-backdrop" aria-hidden="true">
-  <div class="modal" role="dialog" aria-modal="true" aria-label="Add User">
+  <div class="modal" role="dialog" aria-modal="true" aria-label="Add User" style="max-width: 480px; width: 95%;">
     <div class="modal-header">
-      <h3>Add New User</h3>
+      <div style="display: flex; align-items: center; gap: 0.5rem;">
+        <div class="users-stat-icon blue" style="width: 30px; height: 30px; border-radius: 8px;">
+          <i data-lucide="user-plus" style="width: 15px; height: 15px;"></i>
+        </div>
+        <h3 style="margin: 0; font-size: 1rem; font-weight: 700;">Add New User Account</h3>
+      </div>
       <button type="button" class="modal-close" data-close-modal="addUserModal" aria-label="Close">&times;</button>
     </div>
     <div class="modal-body">
       <form id="addUserForm">
-        <div class="modal-field">
-          <label for="newUsername">Username</label>
-          <input type="text" class="form-control" id="newUsername" name="username" required>
+        <div class="form-group" style="margin-bottom: 0.85rem;">
+          <label for="newUsername" style="font-weight: 600; font-size: 0.775rem; color: var(--color-slate-700); display: block; margin-bottom: 0.35rem;">
+            Username <span style="color: #dc2626;">*</span>
+          </label>
+          <input
+            type="text"
+            class="form-control"
+            id="newUsername"
+            name="username"
+            required
+            placeholder="e.g. jdoe"
+            style="width: 100%; height: 36px;"
+          >
         </div>
-        <div class="modal-field">
-          <label for="newPassword">Password</label>
-          <input type="password" class="form-control" id="newPassword" name="password" required>
+
+        <div class="form-group" style="margin-bottom: 0.85rem;">
+          <label for="newPassword" style="font-weight: 600; font-size: 0.775rem; color: var(--color-slate-700); display: block; margin-bottom: 0.35rem;">
+            Initial Password <span style="color: #dc2626;">*</span>
+          </label>
+          <input
+            type="password"
+            class="form-control"
+            id="newPassword"
+            name="password"
+            required
+            placeholder="••••••••"
+            style="width: 100%; height: 36px;"
+          >
         </div>
-        <div class="modal-field">
-          <label for="newRole">Role</label>
-          <select class="form-control" id="newRole" name="role" required>
-            <option value="salesman">Salesman (POS Only)</option>
-            <option value="admin">Admin (Full Access)</option>
+
+        <div class="form-group" style="margin-bottom: 0.85rem;">
+          <label for="newRole" style="font-weight: 600; font-size: 0.775rem; color: var(--color-slate-700); display: block; margin-bottom: 0.35rem;">
+            Account Role <span style="color: #dc2626;">*</span>
+          </label>
+          <select class="form-control" id="newRole" name="role" required style="width: 100%; height: 36px;">
+            <option value="salesman">Salesman (Invoicing &amp; Orders Only)</option>
+            <option value="admin">Admin (Full Administrative Access)</option>
           </select>
         </div>
-        <div class="modal-field">
-          <label for="newWarehouse">Assigned Warehouse</label>
-          <select class="form-control" id="newWarehouse" name="warehouse_id">
-            <option value="">-- None / All (Admin) --</option>
+
+        <div class="form-group" style="margin-bottom: 1rem;">
+          <label for="newWarehouse" style="font-weight: 600; font-size: 0.775rem; color: var(--color-slate-700); display: block; margin-bottom: 0.35rem;">
+            Assigned Warehouse Branch
+          </label>
+          <select class="form-control" id="newWarehouse" name="warehouse_id" style="width: 100%; height: 36px;">
+            <option value="">-- None / All Branches (Admin) --</option>
             {% for w in warehouses %}
             <option value="{{ w.id }}">{{ w.name }}</option>
             {% endfor %}
           </select>
         </div>
         
-        <div class="error-banner" id="addUserError" style="display:none; margin-top: 1rem;"></div>
+        <div class="alert alert-danger" id="addUserError" style="display: none; margin-bottom: 1rem; font-size: 0.8rem; padding: 0.5rem 0.75rem;"></div>
         
-        <div class="modal-actions" style="margin-top: 1.5rem; display: flex; justify-content: flex-end; gap: 0.75rem;">
-          <button type="button" class="btn btn-secondary" data-close-modal="addUserModal">Cancel</button>
-          <button type="submit" class="btn btn-primary">Create User</button>
+        <div style="display: flex; justify-content: flex-end; gap: 0.5rem;">
+          <button type="button" class="btn btn-outline" data-close-modal="addUserModal" style="padding: 0.45rem 0.85rem; font-size: 0.825rem;">
+            Cancel
+          </button>
+          <button type="submit" class="btn btn-primary" style="padding: 0.45rem 1rem; font-size: 0.825rem; font-weight: 600;">
+            Create User
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<!-- Edit User Modal -->
+<div id="editUserModal" class="modal-backdrop" aria-hidden="true">
+  <div class="modal" role="dialog" aria-modal="true" aria-label="Edit User" style="max-width: 480px; width: 95%;">
+    <div class="modal-header">
+      <div style="display: flex; align-items: center; gap: 0.5rem;">
+        <div class="users-stat-icon purple" style="width: 30px; height: 30px; border-radius: 8px;">
+          <i data-lucide="user-cog" style="width: 15px; height: 15px;"></i>
+        </div>
+        <h3 style="margin: 0; font-size: 1rem; font-weight: 700;">Edit User: <span id="editUserTitle"></span></h3>
+      </div>
+      <button type="button" class="modal-close" data-close-modal="editUserModal" aria-label="Close">&times;</button>
+    </div>
+    <div class="modal-body">
+      <form id="editUserForm" method="POST">
+        <div class="form-group" style="margin-bottom: 0.85rem;">
+          <label for="editRole" style="font-weight: 600; font-size: 0.775rem; color: var(--color-slate-700); display: block; margin-bottom: 0.35rem;">
+            Account Role <span style="color: #dc2626;">*</span>
+          </label>
+          <select class="form-control" id="editRole" name="role" required style="width: 100%; height: 36px;">
+            <option value="salesman">Salesman (Invoicing &amp; Orders Only)</option>
+            <option value="admin">Admin (Full Administrative Access)</option>
+          </select>
+        </div>
+
+        <div class="form-group" style="margin-bottom: 1.25rem;">
+          <label for="editWarehouse" style="font-weight: 600; font-size: 0.775rem; color: var(--color-slate-700); display: block; margin-bottom: 0.35rem;">
+            Assigned Warehouse Branch
+          </label>
+          <select class="form-control" id="editWarehouse" name="warehouse_id" style="width: 100%; height: 36px;">
+            <option value="">-- None / All Branches (Admin) --</option>
+            {% for w in warehouses %}
+            <option value="{{ w.id }}">{{ w.name }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        
+        <div style="display: flex; justify-content: flex-end; gap: 0.5rem;">
+          <button type="button" class="btn btn-outline" data-close-modal="editUserModal" style="padding: 0.45rem 0.85rem; font-size: 0.825rem;">
+            Cancel
+          </button>
+          <button type="submit" class="btn btn-primary" style="padding: 0.45rem 1rem; font-size: 0.825rem; font-weight: 600;">
+            Save Changes
+          </button>
         </div>
       </form>
     </div>
@@ -119,87 +379,90 @@
 
 <!-- Reset Password Modal -->
 <div id="resetPasswordModal" class="modal-backdrop" aria-hidden="true">
-  <div class="modal" role="dialog" aria-modal="true" aria-label="Reset Password">
+  <div class="modal" role="dialog" aria-modal="true" aria-label="Reset Password" style="max-width: 440px; width: 95%;">
     <div class="modal-header">
-      <h3>Change Password for <span id="resetPasswordUsername"></span></h3>
+      <div style="display: flex; align-items: center; gap: 0.5rem;">
+        <div class="users-stat-icon emerald" style="width: 30px; height: 30px; border-radius: 8px;">
+          <i data-lucide="key-round" style="width: 15px; height: 15px;"></i>
+        </div>
+        <h3 style="margin: 0; font-size: 1rem; font-weight: 700;">Password: <span id="resetPasswordUsername"></span></h3>
+      </div>
       <button type="button" class="modal-close" data-close-modal="resetPasswordModal" aria-label="Close">&times;</button>
     </div>
     <div class="modal-body">
       <form id="resetPasswordForm">
         <input type="hidden" id="resetUserId" name="user_id">
-        <div class="modal-field">
-          <label for="resetNewPassword">New Password</label>
-          <input type="password" class="form-control" id="resetNewPassword" name="new_password" required>
+        <div class="form-group" style="margin-bottom: 1rem;">
+          <label for="resetNewPassword" style="font-weight: 600; font-size: 0.775rem; color: var(--color-slate-700); display: block; margin-bottom: 0.35rem;">
+            New Password <span style="color: #dc2626;">*</span>
+          </label>
+          <input
+            type="password"
+            class="form-control"
+            id="resetNewPassword"
+            name="new_password"
+            required
+            placeholder="Enter new password"
+            style="width: 100%; height: 36px;"
+          >
         </div>
         
-        <div class="error-banner" id="resetPasswordError" style="display:none; margin-top: 1rem;"></div>
+        <div class="alert alert-danger" id="resetPasswordError" style="display: none; margin-bottom: 1rem; font-size: 0.8rem; padding: 0.5rem 0.75rem;"></div>
         
-        <div class="modal-actions" style="margin-top: 1.5rem; display: flex; justify-content: flex-end; gap: 0.75rem;">
-          <button type="button" class="btn btn-secondary" data-close-modal="resetPasswordModal">Cancel</button>
-          <button type="submit" class="btn btn-primary">Update Password</button>
+        <div style="display: flex; justify-content: flex-end; gap: 0.5rem;">
+          <button type="button" class="btn btn-outline" data-close-modal="resetPasswordModal" style="padding: 0.45rem 0.85rem; font-size: 0.825rem;">
+            Cancel
+          </button>
+          <button type="submit" class="btn btn-primary" style="padding: 0.45rem 1rem; font-size: 0.825rem; font-weight: 600;">
+            Update Password
+          </button>
         </div>
       </form>
     </div>
   </div>
 </div>
 
-  <!-- Edit User Modal (Simplified for Role/Warehouse changes) -->
-  <div id="editUserModal" class="modal-backdrop" aria-hidden="true">
-    <div class="modal" role="dialog" aria-modal="true" aria-label="Edit User">
-      <div class="modal-header">
-        <h3>Edit User: <span id="editUserTitle"></span></h3>
-        <button type="button" class="modal-close" data-close-modal="editUserModal" aria-label="Close">&times;</button>
-      </div>
-      <div class="modal-body">
-        <form id="editUserForm" method="POST">
-          <div class="modal-field">
-            <label for="editRole">Role</label>
-            <select class="form-control" id="editRole" name="role" required>
-              <option value="salesman">Salesman (POS Only)</option>
-              <option value="admin">Admin (Full Access)</option>
-            </select>
-          </div>
-          <div class="modal-field">
-            <label for="editWarehouse">Assigned Warehouse</label>
-            <select class="form-control" id="editWarehouse" name="warehouse_id">
-              <option value="">-- None / All (Admin) --</option>
-              {% for w in warehouses %}
-              <option value="{{ w.id }}">{{ w.name }}</option>
-              {% endfor %}
-            </select>
-          </div>
-          
-          <div class="modal-actions" style="margin-top: 1.5rem; display: flex; justify-content: flex-end; gap: 0.75rem;">
-            <button type="button" class="btn btn-secondary" data-close-modal="editUserModal">Cancel</button>
-            <button type="submit" class="btn btn-primary">Save Changes</button>
-          </div>
-        </form>
-      </div>
-    </div>
-  </div>
-
-  <script>
+<script>
 function openResetPassword(userId, username) {
   document.getElementById('resetUserId').value = userId;
   document.getElementById('resetPasswordUsername').textContent = username;
   document.getElementById('resetNewPassword').value = '';
   document.getElementById('resetPasswordError').style.display = 'none';
   
-  const m = document.getElementById('resetPasswordModal');
-  m.setAttribute('aria-hidden', 'false');
-  m.classList.add('is-open');
+  openModal('resetPasswordModal');
+}
+
+function openEditUser(id, username, role, warehouse_id) {
+  document.getElementById('editUserTitle').textContent = username;
+  document.getElementById('editRole').value = role;
+  document.getElementById('editWarehouse').value = warehouse_id;
+  document.getElementById('editUserForm').action = `/users/edit/${id}`;
+  openModal('editUserModal');
 }
 
 function openModal(modalId) {
   const m = document.getElementById(modalId);
-  if(m) {
+  if (m) {
     m.setAttribute('aria-hidden', 'false');
     m.classList.add('is-open');
+    if (window.lucide) lucide.createIcons();
+  }
+}
+
+function closeModal(modalId) {
+  const m = document.getElementById(modalId);
+  if (m) {
+    m.setAttribute('aria-hidden', 'true');
+    m.classList.remove('is-open');
   }
 }
 
 document.addEventListener('DOMContentLoaded', () => {
-  // Modal toggles
+  if (window.lucide) {
+    lucide.createIcons();
+  }
+
+  // Modal open buttons
   document.querySelectorAll('[data-open-modal]').forEach(btn => {
     btn.addEventListener('click', (e) => {
       e.preventDefault();
@@ -208,21 +471,34 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   });
 
+  // Modal close buttons
   document.querySelectorAll('[data-close-modal]').forEach(btn => {
     btn.addEventListener('click', (e) => {
       e.preventDefault();
       const modalId = btn.getAttribute('data-close-modal');
-      const m = document.getElementById(modalId);
-      if(m) {
-        m.setAttribute('aria-hidden', 'true');
-        m.classList.remove('is-open');
-      }
+      closeModal(modalId);
     });
+  });
+
+  // Backdrop click & Escape key
+  ['addUserModal', 'editUserModal', 'resetPasswordModal'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) {
+      el.addEventListener('click', (e) => {
+        if (e.target === el) closeModal(id);
+      });
+    }
+  });
+
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') {
+      ['addUserModal', 'editUserModal', 'resetPasswordModal'].forEach(id => closeModal(id));
+    }
   });
 
   // Handle User creation
   const addUserForm = document.getElementById('addUserForm');
-  if(addUserForm) {
+  if (addUserForm) {
     addUserForm.addEventListener('submit', async (e) => {
       e.preventDefault();
       const errorBanner = document.getElementById('addUserError');
@@ -236,7 +512,7 @@ document.addEventListener('DOMContentLoaded', () => {
           body: formData
         });
         const data = await res.json();
-        if(res.ok && data.ok) {
+        if (res.ok && data.ok) {
           window.location.reload();
         } else {
           errorBanner.textContent = data.error || 'Failed to add user.';
@@ -249,9 +525,10 @@ document.addEventListener('DOMContentLoaded', () => {
       }
     });
   }
+
   // Handle Password Reset
   const resetPasswordForm = document.getElementById('resetPasswordForm');
-  if(resetPasswordForm) {
+  if (resetPasswordForm) {
     resetPasswordForm.addEventListener('submit', async (e) => {
       e.preventDefault();
       const errorBanner = document.getElementById('resetPasswordError');
@@ -265,9 +542,9 @@ document.addEventListener('DOMContentLoaded', () => {
           body: formData
         });
         const data = await res.json();
-        if(res.ok && data.ok) {
+        if (res.ok && data.ok) {
           alert('Password successfully updated!');
-          document.getElementById('resetPasswordModal').classList.remove('is-open');
+          closeModal('resetPasswordModal');
         } else {
           errorBanner.textContent = data.error || 'Failed to update password.';
           errorBanner.style.display = 'block';
@@ -279,14 +556,37 @@ document.addEventListener('DOMContentLoaded', () => {
       }
     });
   }
-});
 
-function openEditUser(id, username, role, warehouse_id) {
-  document.getElementById('editUserTitle').textContent = username;
-  document.getElementById('editRole').value = role;
-  document.getElementById('editWarehouse').value = warehouse_id;
-  document.getElementById('editUserForm').action = `/users/edit/${id}`;
-  openModal('editUserModal');
-}
+  // Client-Side Live Filter on Table Rows
+  const userSearch = document.getElementById('userSearch');
+  const rows = document.querySelectorAll('.user-row');
+  const emptyRow = document.getElementById('userEmptySearchRow');
+  const rowCountBadge = document.getElementById('userRowCountBadge');
+
+  if (userSearch) {
+    userSearch.addEventListener('input', function() {
+      const query = this.value.trim().toLowerCase();
+      let visibleCount = 0;
+
+      rows.forEach((row) => {
+        const text = row.getAttribute('data-search-text') || '';
+        if (!query || text.includes(query)) {
+          row.style.display = '';
+          visibleCount++;
+        } else {
+          row.style.display = 'none';
+        }
+      });
+
+      if (emptyRow) {
+        emptyRow.style.display = (visibleCount === 0 && rows.length > 0) ? '' : 'none';
+      }
+
+      if (rowCountBadge) {
+        rowCountBadge.textContent = visibleCount + ' Users';
+      }
+    });
+  }
+});
 </script>
 {% endblock %}
