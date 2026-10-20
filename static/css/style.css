@@ -4141,10 +4141,224 @@ tr.row-low-stock:hover td {
   flex-shrink: 0;
   border: 1px solid var(--color-border);
 }
+/* ==========================================================================
+   PHASE 10: Expenses & Financial Outflows Workstation (PC-First)
+   ========================================================================== */
 
+.expenses-header-bar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0.85rem;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+}
 
+.expenses-title-group {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+}
 
+.expenses-title-group h2 {
+  margin: 0;
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: var(--color-slate-900);
+  letter-spacing: -0.02em;
+}
 
+.expenses-stats-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0.85rem;
+  margin-bottom: 1rem;
+}
+
+@media (max-width: 900px) {
+  .expenses-stats-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.expenses-stat-card {
+  background: #ffffff;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  padding: 0.75rem 1rem;
+  box-shadow: var(--shadow-sm);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.expenses-stat-card:hover {
+  box-shadow: var(--shadow-md);
+  border-color: var(--color-border-hover);
+}
+
+.expenses-stat-content h3 {
+  margin: 0 0 0.2rem 0;
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--color-slate-500);
+}
+
+.expenses-stat-value {
+  margin: 0;
+  font-size: 1.45rem;
+  font-weight: 800;
+  color: var(--color-slate-900);
+  line-height: 1.2;
+}
+
+.expenses-stat-note {
+  margin: 0.15rem 0 0 0;
+  font-size: 0.725rem;
+  color: var(--color-slate-400);
+  font-weight: 500;
+}
+
+.expenses-stat-icon {
+  width: 38px;
+  height: 38px;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.expenses-stat-icon svg,
+.expenses-stat-icon i {
+  width: 18px;
+  height: 18px;
+}
+
+.expenses-stat-icon.rose {
+  background: #fef2f2;
+  color: #dc2626;
+}
+
+.expenses-stat-icon.amber {
+  background: #fffbeb;
+  color: #d97706;
+}
+
+.expenses-stat-icon.indigo {
+  background: #eef2ff;
+  color: #4f46e5;
+}
+
+.expenses-section-card {
+  background: #ffffff;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-sm);
+  margin-bottom: 1.25rem;
+  overflow: hidden;
+}
+
+.expenses-filter-bar {
+  padding: 0.75rem 1rem;
+  background: #f8fafc;
+  border-bottom: 1px solid var(--color-border);
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  align-items: flex-end;
+}
+
+.expenses-filter-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.expenses-filter-field label {
+  font-size: 0.725rem;
+  font-weight: 600;
+  color: var(--color-slate-600);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.expenses-filter-input {
+  height: 34px !important;
+  padding: 0.35rem 0.65rem !important;
+  font-size: 0.825rem !important;
+  border: 1px solid var(--color-border) !important;
+  border-radius: 6px !important;
+  background: #ffffff !important;
+  color: var(--color-slate-800) !important;
+  font-family: var(--font) !important;
+  box-sizing: border-box;
+}
+
+.expenses-filter-input:focus {
+  border-color: var(--color-primary) !important;
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1) !important;
+}
+
+.expenses-section-header {
+  padding: 0.65rem 1rem;
+  background: #ffffff;
+  border-bottom: 1px solid var(--color-border);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.expenses-table-wrap {
+  position: relative;
+  max-height: 540px;
+  overflow: auto;
+  background: #ffffff;
+}
+
+.expenses-table-wrap table thead th {
+  position: sticky;
+  top: 0;
+  background: #f8fafc;
+  z-index: 5;
+  box-shadow: 0 1px 0 var(--color-border);
+  padding: 8px 10px !important;
+  font-size: 0.8rem !important;
+  white-space: nowrap;
+}
+
+.expenses-table-wrap table tbody tr td {
+  padding: 8px 10px !important;
+  font-size: 0.825rem !important;
+  vertical-align: middle !important;
+  white-space: nowrap;
+}
+
+.expense-category-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.2rem 0.6rem;
+  background: #f1f5f9;
+  color: #334155;
+  border: 1px solid var(--color-border);
+  border-radius: 99px;
+  font-size: 0.775rem;
+  font-weight: 600;
+}
+
+.expense-user-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  font-size: 0.75rem;
+  color: var(--color-slate-500);
+}
 
 
 

@@ -1,206 +1,418 @@
 {% extends "base.html" %}
-{% block title %}Expenses — AK Distributors{% endblock %}
+{% block title %}Expenses & Outflows — AK Distributors{% endblock %}
 {% block page_heading %}Expenses{% endblock %}
+
 {% block content %}
-<style>
-  .section-header {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 1rem;
-    margin-bottom: 1.5rem;
-  }
-  .modal-field {
-    margin-bottom: 16px;
-  }
-  .modal-field label {
-    font-weight: bold;
-    font-size: 13px;
-    color: #374151;
-    display: block;
-    margin-bottom: 4px;
-  }
-  .modal-field .form-control {
-    width: 100%;
-    padding: 10px 12px;
-    border-radius: 6px;
-    border: 1px solid #d1d5db;
-    font-size: 14px;
-  }
-  .modal-field .form-control:focus {
-    outline: none;
-    border-color: #3b82f6;
-    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
-  }
-  .required {
-    color: #dc2626;
-  }
-</style>
-
-<div class="section-header">
-  <h2 style="margin:0; font-size:1.25rem; font-weight:700;">Expense Ledger</h2>
-  <div>
-    <button type="button" class="btn btn-primary" id="openAddExpenseModal">+ Add Expense</button>
-  </div>
-</div>
-
-<section class="panel" style="margin-bottom: 1.5rem;">
-  <div class="panel-body" style="padding: 1rem 1.5rem;">
-    <form method="GET" action="/expenses" style="display: flex; gap: 1rem; flex-wrap: wrap; align-items: flex-end;">
-      <div style="flex: 1; min-width: 200px;">
-        <label class="form-label">Search</label>
-        <input type="text" name="search" class="form-control" placeholder="Keyword in description or category..." value="{{ filters.search }}">
-      </div>
-      <div style="flex: 1; min-width: 200px;">
-        <label class="form-label">Category</label>
-        <select name="category" class="form-control">
-          <option value="">All Categories</option>
-          {% for c in categories %}
-          <option value="{{ c }}" {% if filters.category == c %}selected{% endif %}>{{ c }}</option>
-          {% endfor %}
-        </select>
-      </div>
-      <div style="flex: 1; min-width: 150px;">
-        <label class="form-label">From Date</label>
-        <input type="date" name="start_date" class="form-control" value="{{ filters.start_date }}">
-      </div>
-      <div style="flex: 1; min-width: 150px;">
-        <label class="form-label">To Date</label>
-        <input type="date" name="end_date" class="form-control" value="{{ filters.end_date }}">
-      </div>
-      <div>
-        <button type="submit" class="btn btn-primary">Filter</button>
-        <a href="/expenses" class="btn btn-outline" style="margin-left: 0.5rem;">Clear</a>
-      </div>
-    </form>
-  </div>
-</section>
-
+<!-- Flash Messages -->
 {% with messages = get_flashed_messages(with_categories=true) %}
   {% if messages %}
-    {% for cat, msg in messages %}
-      <div class="alert alert-{{ cat }}" style="margin-bottom:1rem;">{{ msg }}</div>
-    {% endfor %}
+    <div style="margin-bottom: 1rem;">
+      {% for cat, msg in messages %}
+        <div class="alert alert-{{ cat }}" style="margin-bottom: 0.5rem;">{{ msg }}</div>
+      {% endfor %}
+    </div>
   {% endif %}
 {% endwith %}
 
-<section class="panel">
-  <div class="panel-body">
-    <div class="table-wrap">
-      <table class="data-table">
-        <thead>
-          <tr>
-            <th>Date</th>
-            <th>Category</th>
-            <th>Description</th>
-            <th style="text-align:right;">Amount ($)</th>
-            <th style="text-align:right;">Actions</th>
-          </tr>
-        </thead>
-        <tbody>
-          {% if expenses %}
-            {% for e in expenses %}
-            <tr style="cursor: pointer;" onclick="if(!event.target.closest('form') && !event.target.closest('button')){ document.getElementById('edit-btn-{{ e.id }}').click(); }">
-              <td>{{ e.date }}</td>
-              <td>
-                <span style="background:var(--color-bg-muted); padding:2px 8px; border-radius:99px; font-size:0.85rem; border:1px solid var(--color-border);">
-                  {{ e.category }}
-                </span>
-              </td>
-              <td style="color:var(--text-muted); max-width: 250px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="{{ e.description }}">{{ e.description or '—' }}</td>
-              <td style="text-align:right; font-weight:600;">{{ "{:,.0f}".format(e.amount) }}</td>
-              <td style="text-align:right; white-space:nowrap;">
-                <button type="button" id="edit-btn-{{ e.id }}" class="btn btn-sm btn-outline" data-action="edit-expense" 
-                        data-expense='{{ {"id": e.id, "date": e.date, "category": e.category, "description": (e.description or ""), "amount": e.amount} | tojson | forceescape }}'>Edit</button>
-                <form method="POST" action="/expenses/delete/{{ e.id }}" style="display:inline;"
-                      onsubmit="return confirm('Delete this expense?')">
-                  <button type="submit" class="btn btn-sm btn-danger">Delete</button>
-                </form>
-              </td>
-            </tr>
-            {% endfor %}
-          {% else %}
-            <tr><td colspan="5" style="text-align:center; color:var(--text-muted); padding:2rem;">No expenses found.</td></tr>
-          {% endif %}
-        </tbody>
-        <tfoot>
-          <tr style="font-weight:700; font-size:1.15rem; border-top:3px solid var(--color-border);">
-            <td colspan="3" style="text-align:right; padding:1.25rem 1rem 1.25rem 0;">Total:</td>
-            <td style="text-align:right; color:var(--color-danger); padding:1.25rem 1rem 1.25rem 0;">{{ "{:,.0f}".format(total) }}</td>
-            <td></td>
-          </tr>
-        </tfoot>
-      </table>
+<!-- PHASE 10: Command Bar -->
+<div class="expenses-header-bar">
+  <div class="expenses-title-group">
+    <div>
+      <h2>Expenses &amp; Financial Outflows</h2>
+      <div style="font-size: 0.8rem; color: var(--color-slate-500); margin-top: 2px;">
+        Operational expense ledger, category cost breakdown, and transaction logging
+      </div>
     </div>
+  </div>
+  <div style="display: flex; gap: 0.5rem; align-items: center;">
+    <button type="button" class="btn btn-primary" id="openAddExpenseModal" style="display: inline-flex; align-items: center; gap: 0.4rem; padding: 0.45rem 0.85rem; font-size: 0.825rem; font-weight: 600;">
+      <i data-lucide="plus" style="width: 15px; height: 15px;"></i>
+      <span>+ Add Expense</span>
+    </button>
+  </div>
+</div>
+
+<!-- 3-Card KPI Overview -->
+<div class="expenses-stats-grid">
+  <!-- Card 1: Total Outflow in View -->
+  <div class="expenses-stat-card">
+    <div class="expenses-stat-content">
+      <h3>Total Outflow (In View)</h3>
+      <p class="expenses-stat-value" style="color: #dc2626;">
+        <span class="sensitive-data">${{ "{:,.2f}".format(total) }}</span>
+      </p>
+      <div class="expenses-stat-note">{{ count }} recorded transactions</div>
+    </div>
+    <div class="expenses-stat-icon rose">
+      <i data-lucide="receipt"></i>
+    </div>
+  </div>
+
+  <!-- Card 2: This Month's Spending -->
+  <div class="expenses-stat-card">
+    <div class="expenses-stat-content">
+      <h3>This Month's Spending</h3>
+      <p class="expenses-stat-value" style="color: #d97706;">
+        <span class="sensitive-data">${{ "{:,.2f}".format(this_month_total) }}</span>
+      </p>
+      <div class="expenses-stat-note">Current calendar month</div>
+    </div>
+    <div class="expenses-stat-icon amber">
+      <i data-lucide="calendar"></i>
+    </div>
+  </div>
+
+  <!-- Card 3: Top Spending Category -->
+  <div class="expenses-stat-card">
+    <div class="expenses-stat-content">
+      <h3>Top Spending Sector</h3>
+      <p class="expenses-stat-value" style="color: #4f46e5; font-size: 1.25rem;">
+        {{ top_category }}
+      </p>
+      <div class="expenses-stat-note">Highest cost category in ledger</div>
+    </div>
+    <div class="expenses-stat-icon indigo">
+      <i data-lucide="pie-chart"></i>
+    </div>
+  </div>
+</div>
+
+<!-- Main Section Card: Filter Bar + Table -->
+<section class="expenses-section-card">
+  <!-- Server-side Range & Category Filter Form -->
+  <form method="GET" action="/expenses" class="expenses-filter-bar">
+    <div class="expenses-filter-field" style="flex: 1.5; min-width: 180px;">
+      <label>Keyword Search</label>
+      <input
+        type="text"
+        name="search"
+        class="expenses-filter-input"
+        placeholder="Search description or category..."
+        value="{{ filters.search }}"
+      >
+    </div>
+
+    <div class="expenses-filter-field" style="flex: 1; min-width: 160px;">
+      <label>Category</label>
+      <select name="category" class="expenses-filter-input">
+        <option value="">All Categories</option>
+        {% for c in categories %}
+        <option value="{{ c }}" {% if filters.category == c %}selected{% endif %}>{{ c }}</option>
+        {% endfor %}
+      </select>
+    </div>
+
+    <div class="expenses-filter-field" style="min-width: 130px;">
+      <label>From Date</label>
+      <input
+        type="date"
+        name="start_date"
+        class="expenses-filter-input"
+        value="{{ filters.start_date }}"
+      >
+    </div>
+
+    <div class="expenses-filter-field" style="min-width: 130px;">
+      <label>To Date</label>
+      <input
+        type="date"
+        name="end_date"
+        class="expenses-filter-input"
+        value="{{ filters.end_date }}"
+      >
+    </div>
+
+    <div style="display: flex; gap: 0.4rem; align-items: flex-end;">
+      <button type="submit" class="btn btn-primary" style="height: 34px; padding: 0 0.85rem; font-size: 0.8rem; font-weight: 600;">
+        Filter
+      </button>
+      <a href="/expenses" class="btn btn-outline" style="height: 34px; line-height: 32px; padding: 0 0.75rem; font-size: 0.8rem; text-decoration: none;">
+        Clear
+      </a>
+    </div>
+  </form>
+
+  <!-- Section Table Header -->
+  <div class="expenses-section-header">
+    <div style="display: flex; align-items: center; gap: 0.65rem;">
+      <span style="font-weight: 700; font-size: 0.9rem; color: var(--color-slate-800);">Transaction Ledger</span>
+      <span class="suppliers-count-badge" id="expenseRowCountBadge">{{ count }} Records</span>
+    </div>
+
+    <!-- Live Client-Side Table Filter -->
+    <div class="suppliers-search-box">
+      <i data-lucide="search"></i>
+      <input
+        type="text"
+        id="expenseSearch"
+        class="suppliers-search-input"
+        placeholder="Quick search in table..."
+      >
+    </div>
+  </div>
+
+  <!-- Table Wrap with Sticky Header -->
+  <div class="expenses-table-wrap">
+    <table class="data-table" id="expensesTable">
+      <thead>
+        <tr>
+          <th style="width: 110px;">Date</th>
+          <th style="width: 150px;">Category</th>
+          <th>Description</th>
+          <th style="width: 130px;">Logged By</th>
+          <th style="text-align: right; width: 140px;">Amount ($)</th>
+          <th style="text-align: right; width: 140px;">Actions</th>
+        </tr>
+      </thead>
+      <tbody id="expensesTableBody">
+        {% if expenses %}
+          {% for e in expenses %}
+          <tr
+            class="expense-row"
+            data-search-text="{{ (e.date ~ ' ' ~ e.category ~ ' ' ~ (e.description or '') ~ ' ' ~ (e.added_by_name or '')) | lower }}"
+          >
+            <td style="font-weight: 600; color: var(--color-slate-700); font-family: monospace; font-size: 0.8rem;">
+              {{ e.date }}
+            </td>
+            <td>
+              <span class="expense-category-badge">
+                <i data-lucide="tag" style="width: 11px; height: 11px; color: var(--color-slate-400);"></i>
+                {{ e.category }}
+              </span>
+            </td>
+            <td>
+              {% if e.description %}
+              <span style="color: var(--color-slate-700); font-weight: 500;" title="{{ e.description }}">
+                {{ e.description }}
+              </span>
+              {% else %}
+              <span style="color: var(--color-slate-400); font-style: italic;">No description provided</span>
+              {% endif %}
+            </td>
+            <td>
+              <span class="expense-user-badge">
+                <i data-lucide="user" style="width: 12px; height: 12px;"></i>
+                {{ e.added_by_name or 'Admin' }}
+              </span>
+            </td>
+            <td style="text-align: right; font-weight: 700; color: #b91c1c;">
+              <span class="sensitive-data">${{ "{:,.2f}".format(e.amount) }}</span>
+            </td>
+            <td style="text-align: right;">
+              <div style="display: flex; gap: 0.35rem; justify-content: flex-end; align-items: center;">
+                <button
+                  type="button"
+                  id="edit-btn-{{ e.id }}"
+                  class="btn-edit-action"
+                  data-action="edit-expense"
+                  data-expense='{{ {"id": e.id, "date": e.date, "category": e.category, "description": (e.description or ""), "amount": e.amount} | tojson | forceescape }}'
+                  title="Edit Expense"
+                >
+                  <i data-lucide="pencil"></i>
+                  <span>Edit</span>
+                </button>
+                <form
+                  method="POST"
+                  action="/expenses/delete/{{ e.id }}"
+                  style="margin: 0; display: inline;"
+                  onsubmit="return confirm('Are you sure you want to delete this expense of ${{ '{:,.2f}'.format(e.amount) }} ({{ e.category }})?');"
+                >
+                  <button type="submit" class="btn-delete-action" title="Delete Expense">
+                    <i data-lucide="trash-2"></i>
+                    <span>Delete</span>
+                  </button>
+                </form>
+              </div>
+            </td>
+          </tr>
+          {% endfor %}
+        {% else %}
+          <tr>
+            <td colspan="6" style="text-align: center; color: var(--color-slate-400); padding: 2.5rem 1rem;">
+              No expenses found matching the selected criteria.
+            </td>
+          </tr>
+        {% endif %}
+        <tr id="expenseEmptySearchRow" style="display: none;">
+          <td colspan="6" style="text-align: center; color: var(--color-slate-400); padding: 2.5rem 1rem;">
+            No expenses matching your live search filter.
+          </td>
+        </tr>
+      </tbody>
+      <tfoot>
+        <tr style="background: #f8fafc; font-weight: 700; border-top: 2px solid var(--color-border);">
+          <td colspan="4" style="text-align: right; padding: 0.85rem 1rem; color: var(--color-slate-700); font-size: 0.85rem;">
+            Total Filtered Outflow:
+          </td>
+          <td style="text-align: right; color: #dc2626; padding: 0.85rem 1rem; font-size: 1rem;">
+            <span class="sensitive-data">${{ "{:,.2f}".format(total) }}</span>
+          </td>
+          <td></td>
+        </tr>
+      </tfoot>
+    </table>
   </div>
 </section>
 
+<!-- Add Expense Modal -->
 <div id="addExpenseModal" class="modal-backdrop" aria-hidden="true">
-  <div class="modal" role="dialog" aria-modal="true" aria-label="Add Expense">
+  <div class="modal" role="dialog" aria-modal="true" aria-label="Add Expense" style="max-width: 480px; width: 95%;">
     <div class="modal-header">
-      <h3>Add Expense</h3>
+      <div style="display: flex; align-items: center; gap: 0.5rem;">
+        <div class="expenses-stat-icon rose" style="width: 30px; height: 30px; border-radius: 8px;">
+          <i data-lucide="receipt" style="width: 15px; height: 15px;"></i>
+        </div>
+        <h3 style="margin: 0; font-size: 1rem; font-weight: 700;">Record New Expense</h3>
+      </div>
       <button type="button" class="modal-close" data-close-modal="addExpenseModal" aria-label="Close">&times;</button>
     </div>
     <div class="modal-body">
       <form id="addExpenseForm" method="POST" action="/expenses/add">
-        <div class="modal-field">
-          <label for="addDate">Date <span class="required">*</span></label>
-          <input type="date" name="date" id="addDate" class="form-control" required>
+        <div class="form-group" style="margin-bottom: 0.85rem;">
+          <label for="addDate" style="font-weight: 600; font-size: 0.775rem; color: var(--color-slate-700); display: block; margin-bottom: 0.35rem;">
+            Transaction Date <span style="color: #dc2626;">*</span>
+          </label>
+          <input type="date" name="date" id="addDate" class="form-control" required style="width: 100%; height: 36px;">
         </div>
-        <div class="modal-field">
-          <label for="addCategory">Category <span class="required">*</span></label>
-          <input type="text" name="category" id="addCategory" class="form-control" placeholder="e.g. Fuel, Salary, Rent..." required list="categoryList">
+
+        <div class="form-group" style="margin-bottom: 0.85rem;">
+          <label for="addCategory" style="font-weight: 600; font-size: 0.775rem; color: var(--color-slate-700); display: block; margin-bottom: 0.35rem;">
+            Category <span style="color: #dc2626;">*</span>
+          </label>
+          <input
+            type="text"
+            name="category"
+            id="addCategory"
+            class="form-control"
+            placeholder="e.g. Fuel, Utilities, Rent, Office Supplies..."
+            required
+            list="categoryList"
+            style="width: 100%; height: 36px;"
+          >
           <datalist id="categoryList">
             {% for c in categories %}<option value="{{ c }}">{% endfor %}
           </datalist>
         </div>
-        <div class="modal-field">
-          <label for="addDescription">Description</label>
-          <textarea name="description" id="addDescription" class="form-control" placeholder="Optional note" rows="3" style="resize: vertical;"></textarea>
+
+        <div class="form-group" style="margin-bottom: 0.85rem;">
+          <label for="addAmount" style="font-weight: 600; font-size: 0.775rem; color: var(--color-slate-700); display: block; margin-bottom: 0.35rem;">
+            Amount ($) <span style="color: #dc2626;">*</span>
+          </label>
+          <input
+            type="number"
+            name="amount"
+            id="addAmount"
+            class="form-control"
+            step="0.01"
+            min="0.01"
+            required
+            placeholder="0.00"
+            style="width: 100%; height: 36px;"
+          >
         </div>
-        <div class="modal-field">
-          <label for="addAmount">Amount ($) <span class="required">*</span></label>
-          <input type="number" name="amount" id="addAmount" class="form-control" step="0.01" min="0.01" required placeholder="0.00">
+
+        <div class="form-group" style="margin-bottom: 1.25rem;">
+          <label for="addDescription" style="font-weight: 600; font-size: 0.775rem; color: var(--color-slate-700); display: block; margin-bottom: 0.35rem;">
+            Description / Memo (Optional)
+          </label>
+          <textarea
+            name="description"
+            id="addDescription"
+            class="form-control"
+            placeholder="Payment details, vendor, receipt reference..."
+            rows="3"
+            style="resize: vertical; width: 100%;"
+          ></textarea>
         </div>
-        <div class="inline-flex" style="justify-content: flex-end; gap: 0.65rem; margin-top: 0.25rem;">
-          <button type="button" class="btn btn-secondary" data-close-modal="addExpenseModal">Cancel</button>
-          <button type="submit" class="btn btn-primary">Save Expense</button>
+
+        <div style="display: flex; justify-content: flex-end; gap: 0.5rem;">
+          <button type="button" class="btn btn-outline" data-close-modal="addExpenseModal" style="padding: 0.45rem 0.85rem; font-size: 0.825rem;">
+            Cancel
+          </button>
+          <button type="submit" class="btn btn-primary" style="padding: 0.45rem 1rem; font-size: 0.825rem; font-weight: 600;">
+            Save Expense
+          </button>
         </div>
       </form>
     </div>
   </div>
 </div>
 
+<!-- Edit Expense Modal -->
 <div id="editExpenseModal" class="modal-backdrop" aria-hidden="true">
-  <div class="modal" role="dialog" aria-modal="true" aria-label="Edit Expense">
+  <div class="modal" role="dialog" aria-modal="true" aria-label="Edit Expense" style="max-width: 480px; width: 95%;">
     <div class="modal-header">
-      <h3>Edit Expense</h3>
+      <div style="display: flex; align-items: center; gap: 0.5rem;">
+        <div class="expenses-stat-icon indigo" style="width: 30px; height: 30px; border-radius: 8px;">
+          <i data-lucide="pencil" style="width: 15px; height: 15px;"></i>
+        </div>
+        <h3 style="margin: 0; font-size: 1rem; font-weight: 700;">Edit Expense Entry</h3>
+      </div>
       <button type="button" class="modal-close" data-close-modal="editExpenseModal" aria-label="Close">&times;</button>
     </div>
     <div class="modal-body">
       <form id="editExpenseForm" method="POST">
-        <div class="modal-field">
-          <label for="editDate">Date <span class="required">*</span></label>
-          <input type="date" name="date" id="editDate" class="form-control" required>
+        <div class="form-group" style="margin-bottom: 0.85rem;">
+          <label for="editDate" style="font-weight: 600; font-size: 0.775rem; color: var(--color-slate-700); display: block; margin-bottom: 0.35rem;">
+            Transaction Date <span style="color: #dc2626;">*</span>
+          </label>
+          <input type="date" name="date" id="editDate" class="form-control" required style="width: 100%; height: 36px;">
         </div>
-        <div class="modal-field">
-          <label for="editCategory">Category <span class="required">*</span></label>
-          <input type="text" name="category" id="editCategory" class="form-control" required list="categoryList2">
+
+        <div class="form-group" style="margin-bottom: 0.85rem;">
+          <label for="editCategory" style="font-weight: 600; font-size: 0.775rem; color: var(--color-slate-700); display: block; margin-bottom: 0.35rem;">
+            Category <span style="color: #dc2626;">*</span>
+          </label>
+          <input
+            type="text"
+            name="category"
+            id="editCategory"
+            class="form-control"
+            required
+            list="categoryList2"
+            style="width: 100%; height: 36px;"
+          >
           <datalist id="categoryList2">
             {% for c in categories %}<option value="{{ c }}">{% endfor %}
           </datalist>
         </div>
-        <div class="modal-field">
-          <label for="editDescription">Description</label>
-          <textarea name="description" id="editDescription" class="form-control" rows="3" style="resize: vertical;"></textarea>
+
+        <div class="form-group" style="margin-bottom: 0.85rem;">
+          <label for="editAmount" style="font-weight: 600; font-size: 0.775rem; color: var(--color-slate-700); display: block; margin-bottom: 0.35rem;">
+            Amount ($) <span style="color: #dc2626;">*</span>
+          </label>
+          <input
+            type="number"
+            name="amount"
+            id="editAmount"
+            class="form-control"
+            step="0.01"
+            min="0.01"
+            required
+            style="width: 100%; height: 36px;"
+          >
         </div>
-        <div class="modal-field">
-          <label for="editAmount">Amount ($) <span class="required">*</span></label>
-          <input type="number" name="amount" id="editAmount" class="form-control" step="0.01" min="0.01" required>
+
+        <div class="form-group" style="margin-bottom: 1.25rem;">
+          <label for="editDescription" style="font-weight: 600; font-size: 0.775rem; color: var(--color-slate-700); display: block; margin-bottom: 0.35rem;">
+            Description / Memo (Optional)
+          </label>
+          <textarea
+            name="description"
+            id="editDescription"
+            class="form-control"
+            rows="3"
+            style="resize: vertical; width: 100%;"
+          ></textarea>
         </div>
-        <div class="inline-flex" style="justify-content: flex-end; gap: 0.65rem; margin-top: 0.25rem;">
-          <button type="button" class="btn btn-secondary" data-close-modal="editExpenseModal">Cancel</button>
-          <button type="submit" class="btn btn-primary">Save Changes</button>
+
+        <div style="display: flex; justify-content: flex-end; gap: 0.5rem;">
+          <button type="button" class="btn btn-outline" data-close-modal="editExpenseModal" style="padding: 0.45rem 0.85rem; font-size: 0.825rem;">
+            Cancel
+          </button>
+          <button type="submit" class="btn btn-primary" style="padding: 0.45rem 1rem; font-size: 0.825rem; font-weight: 600;">
+            Update Expense
+          </button>
         </div>
       </form>
     </div>
@@ -209,7 +421,15 @@
 
 <script>
 document.addEventListener('DOMContentLoaded', function() {
-  document.getElementById('addDate').value = new Date().toISOString().split('T')[0];
+  if (window.lucide) {
+    lucide.createIcons();
+  }
+
+  // Set default date for new expense to today
+  const addDateInput = document.getElementById('addDate');
+  if (addDateInput && !addDateInput.value) {
+    addDateInput.value = new Date().toISOString().split('T')[0];
+  }
 
   const addExpenseModal = document.getElementById('addExpenseModal');
   const editExpenseModal = document.getElementById('editExpenseModal');
@@ -220,6 +440,7 @@ document.addEventListener('DOMContentLoaded', function() {
     if (!modalEl) return;
     modalEl.classList.add('is-open');
     modalEl.setAttribute('aria-hidden', 'false');
+    if (window.lucide) lucide.createIcons();
   }
 
   function closeModal(modalEl) {
@@ -243,40 +464,84 @@ document.addEventListener('DOMContentLoaded', function() {
     });
   });
 
+  // Escape key closes modals
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') {
+      [addExpenseModal, editExpenseModal].forEach((m) => {
+        if (m && m.classList.contains('is-open')) closeModal(m);
+      });
+    }
+  });
+
   if (openAddExpenseModalBtn) {
     openAddExpenseModalBtn.addEventListener('click', () => {
       const form = document.getElementById('addExpenseForm');
       if (form) {
-        const d = document.getElementById('addDate').value;
+        const currentDate = addDateInput.value;
         form.reset();
-        document.getElementById('addDate').value = d; // keep today's date
+        addDateInput.value = currentDate || new Date().toISOString().split('T')[0];
       }
       openModal(addExpenseModal);
     });
   }
 
+  // Edit Expense modal population
   document.body.addEventListener('click', (e) => {
-    const btn = e.target.closest('[data-action]');
+    const btn = e.target.closest('[data-action="edit-expense"]');
     if (!btn) return;
 
-    if (btn.getAttribute('data-action') === 'edit-expense') {
-      let expense = null;
-      try {
-        expense = JSON.parse(btn.getAttribute('data-expense'));
-      } catch (err) {
-        console.error('Failed to parse expense data:', err);
-        return;
-      }
-      
-      document.getElementById('editExpenseForm').action = '/expenses/edit/' + expense.id;
+    let expense = null;
+    try {
+      expense = JSON.parse(btn.getAttribute('data-expense'));
+    } catch (err) {
+      console.error('Failed to parse expense data:', err);
+      return;
+    }
+
+    if (!expense) return;
+
+    const editForm = document.getElementById('editExpenseForm');
+    if (editForm) {
+      editForm.action = '/expenses/edit/' + expense.id;
       document.getElementById('editDate').value = expense.date || '';
       document.getElementById('editCategory').value = expense.category || '';
       document.getElementById('editDescription').value = expense.description || '';
       document.getElementById('editAmount').value = expense.amount || '';
-      
-      openModal(editExpenseModal);
     }
+
+    openModal(editExpenseModal);
   });
+
+  // Client-Side Live Filter on Table Rows
+  const expenseSearch = document.getElementById('expenseSearch');
+  const rows = document.querySelectorAll('.expense-row');
+  const emptyRow = document.getElementById('expenseEmptySearchRow');
+  const rowCountBadge = document.getElementById('expenseRowCountBadge');
+
+  if (expenseSearch) {
+    expenseSearch.addEventListener('input', function() {
+      const query = this.value.trim().toLowerCase();
+      let visibleCount = 0;
+
+      rows.forEach((row) => {
+        const text = row.getAttribute('data-search-text') || '';
+        if (!query || text.includes(query)) {
+          row.style.display = '';
+          visibleCount++;
+        } else {
+          row.style.display = 'none';
+        }
+      });
+
+      if (emptyRow) {
+        emptyRow.style.display = (visibleCount === 0 && rows.length > 0) ? '' : 'none';
+      }
+
+      if (rowCountBadge) {
+        rowCountBadge.textContent = visibleCount + ' Records';
+      }
+    });
+  }
 });
 </script>
 {% endblock %}

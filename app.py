@@ -5674,6 +5674,25 @@ def expenses():
         rows = [dict(r) for r in conn.execute(query, params).fetchall()]
         total = sum(r["amount"] for r in rows)
 
+        total_all_row = conn.execute("SELECT COALESCE(SUM(amount), 0), COUNT(*) FROM expenses").fetchone()
+        total_all = total_all_row[0] if total_all_row else 0
+        total_all_count = total_all_row[1] if total_all_row else 0
+
+        # Current month spending
+        current_month_prefix = date.today().strftime("%Y-%m")
+        month_row = conn.execute(
+            "SELECT COALESCE(SUM(amount), 0) FROM expenses WHERE date LIKE ?",
+            (f"{current_month_prefix}%",)
+        ).fetchone()
+        this_month_total = month_row[0] if month_row else 0
+
+        # Top category in filtered rows
+        category_totals = {}
+        for r in rows:
+            cat = r.get("category") or "Uncategorized"
+            category_totals[cat] = category_totals.get(cat, 0) + (r.get("amount") or 0)
+        top_category = max(category_totals.items(), key=lambda x: x[1])[0] if category_totals else "—"
+
         # All distinct categories entered already in the DB
         categories = [r[0] for r in conn.execute(
             "SELECT DISTINCT category FROM expenses WHERE category IS NOT NULL AND category != '' ORDER BY category COLLATE NOCASE"
@@ -5685,6 +5704,11 @@ def expenses():
         "expenses.html",
         expenses=rows,
         total=total,
+        total_all=total_all,
+        total_all_count=total_all_count,
+        this_month_total=this_month_total,
+        top_category=top_category,
+        count=len(rows),
         categories=categories,
         filters={"search": search, "category": category,
                  "start_date": start_date, "end_date": end_date},
