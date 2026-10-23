@@ -1,103 +1,729 @@
 {% extends "base.html" %}
-{% block title %}Brochure Settings — AK Distributors{% endblock %}
-{% block page_heading %}Brochure Settings{% endblock %}
+{% block title %}Brochure & Catalog Settings — AK Distributors{% endblock %}
+{% block page_heading %}Brochure & Catalog Settings{% endblock %}
 
 {% block content %}
 <style>
-  .settings-section {
-    background-color: white;
-    padding: 20px;
-    border-radius: 8px;
-    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
-    margin-bottom: 20px;
-  }
-  .brand-group {
-    margin-bottom: 30px;
-  }
-  .brand-header {
+  /* Brochure Settings Workstation Styling */
+  .brochure-container {
     display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+    padding-bottom: 5rem;
+    position: relative;
+  }
+
+  /* Top Control Bar */
+  .brochure-topbar {
+    display: flex;
+    justify-content: space-between;
     align-items: center;
-    gap: 10px;
-    margin-bottom: 15px;
-    padding-bottom: 10px;
-    border-bottom: 2px solid var(--color-bg);
+    gap: 1.25rem;
+    flex-wrap: wrap;
+    background: #ffffff;
+    border: 1px solid var(--color-slate-200);
+    border-radius: var(--radius);
+    padding: 1.25rem 1.5rem;
+    box-shadow: var(--shadow-sm);
   }
-  .brand-header h3 {
-    margin: 0;
-    color: var(--color-primary);
+
+  .brochure-intro {
+    max-width: 620px;
   }
-  .product-list {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
-    gap: 10px;
-  }
-  .checkbox-wrapper {
+
+  .brochure-intro h2 {
+    font-family: var(--font-display);
+    font-size: 1.15rem;
+    font-weight: 700;
+    color: var(--color-slate-900);
+    margin: 0 0 0.35rem 0;
     display: flex;
     align-items: center;
     gap: 8px;
   }
-  input[type="checkbox"] {
-    width: 18px;
-    height: 18px;
-    cursor: pointer;
+
+  .brochure-intro p {
+    font-size: 0.875rem;
+    color: var(--color-slate-500);
+    margin: 0;
+    line-height: 1.45;
   }
-  .btn-submit {
-    position: sticky;
+
+  .brochure-top-actions {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    flex-wrap: wrap;
+  }
+
+  .btn-top-action {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    height: 40px;
+    padding: 0 16px;
+    border-radius: var(--radius-sm);
+    font-size: 0.85rem;
+    font-weight: 600;
+    text-decoration: none;
+    transition: all 0.15s ease;
+    cursor: pointer;
+    white-space: nowrap;
+  }
+
+  .btn-action-outline {
+    background: #ffffff;
+    border: 1px solid var(--color-slate-200);
+    color: var(--color-slate-700);
+  }
+
+  .btn-action-outline:hover {
+    background: var(--color-slate-50);
+    border-color: var(--color-slate-300);
+    color: var(--color-slate-900);
+  }
+
+  .btn-action-primary {
+    background: var(--color-primary);
+    border: 1px solid var(--color-primary);
+    color: #ffffff;
+    box-shadow: 0 1px 3px rgba(16, 185, 129, 0.2);
+  }
+
+  .btn-action-primary:hover {
+    background: var(--color-primary-hover);
+    border-color: var(--color-primary-hover);
+    box-shadow: 0 4px 6px rgba(16, 185, 129, 0.3);
+  }
+
+  /* Live Filter & Metrics Strip */
+  .brochure-filter-strip {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    flex-wrap: wrap;
+    background: #ffffff;
+    border: 1px solid var(--color-slate-200);
+    border-radius: var(--radius);
+    padding: 0.875rem 1.25rem;
+    box-shadow: var(--shadow-sm);
+  }
+
+  .brochure-search-box {
+    position: relative;
+    width: 320px;
+    max-width: 100%;
+  }
+
+  .brochure-search-icon {
+    position: absolute;
+    left: 12px;
+    top: 50%;
+    transform: translateY(-50%);
+    color: var(--color-slate-400);
+    pointer-events: none;
+    display: flex;
+    align-items: center;
+  }
+
+  .brochure-search-input {
+    width: 100%;
+    height: 38px;
+    padding: 0 12px 0 38px;
+    border: 1px solid var(--color-slate-200);
+    border-radius: var(--radius-sm);
+    font-size: 0.85rem;
+    color: var(--color-slate-900);
+    background: var(--color-slate-50);
+    outline: none;
+    transition: all 0.15s ease;
+    box-sizing: border-box;
+  }
+
+  .brochure-search-input:focus {
+    background: #ffffff;
+    border-color: var(--color-primary);
+    box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.15);
+  }
+
+  .brochure-stats-badges {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+  }
+
+  .stat-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 10px;
+    border-radius: var(--radius-pill);
+    background: var(--color-slate-100);
+    color: var(--color-slate-700);
+    font-size: 0.775rem;
+    font-weight: 600;
+  }
+
+  .stat-badge-emerald {
+    background: var(--color-primary-light);
+    color: var(--color-primary-hover);
+    border: 1px solid var(--color-primary-border);
+  }
+
+  /* Settings Section Container */
+  .settings-section-card {
+    background: #ffffff;
+    border: 1px solid var(--color-slate-200);
+    border-radius: var(--radius);
+    padding: 1.5rem;
+    box-shadow: var(--shadow-sm);
+    display: flex;
+    flex-direction: column;
+    gap: 1.25rem;
+  }
+
+  .section-header-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    border-bottom: 1px solid var(--color-slate-100);
+    padding-bottom: 1rem;
+    flex-wrap: wrap;
+  }
+
+  .section-title-wrap {
+    display: flex;
+    align-items: center;
+    gap: 0.65rem;
+  }
+
+  .section-title {
+    font-family: var(--font-display);
+    font-size: 1.1rem;
+    font-weight: 700;
+    color: var(--color-slate-900);
+    margin: 0;
+  }
+
+  .section-badge {
+    padding: 2px 8px;
+    border-radius: var(--radius-pill);
+    background: var(--color-slate-100);
+    color: var(--color-slate-600);
+    font-size: 0.75rem;
+    font-weight: 700;
+  }
+
+  .btn-select-all {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    background: transparent;
+    border: 1px solid var(--color-slate-200);
+    border-radius: var(--radius-sm);
+    padding: 4px 10px;
+    font-size: 0.775rem;
+    font-weight: 600;
+    color: var(--color-slate-600);
+    cursor: pointer;
+    transition: all 0.15s ease;
+  }
+
+  .btn-select-all:hover {
+    background: var(--color-slate-50);
+    border-color: var(--color-slate-300);
+    color: var(--color-slate-900);
+  }
+
+  /* Brands Grid */
+  .brands-toggle-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+    gap: 0.85rem;
+  }
+
+  .brand-toggle-card {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 14px;
+    background: var(--color-slate-50);
+    border: 1px solid var(--color-slate-200);
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    transition: all 0.15s ease;
+    user-select: none;
+  }
+
+  .brand-toggle-card:hover {
+    background: #ffffff;
+    border-color: var(--color-slate-300);
+    box-shadow: 0 2px 6px rgba(15, 23, 42, 0.04);
+  }
+
+  .brand-toggle-card.selected {
+    background: var(--color-primary-light);
+    border-color: var(--color-primary-border);
+    color: var(--color-primary-hover);
+  }
+
+  .brand-toggle-card input[type="checkbox"] {
+    width: 16px;
+    height: 16px;
+    accent-color: var(--color-primary);
+    cursor: pointer;
+    margin: 0;
+  }
+
+  .brand-toggle-name {
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: var(--color-slate-800);
+    flex: 1;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .brand-toggle-card.selected .brand-toggle-name {
+    color: #065f46;
+  }
+
+  /* Products by Brand Cards */
+  .brand-group-block {
+    background: #ffffff;
+    border: 1px solid var(--color-slate-200);
+    border-radius: var(--radius);
+    overflow: hidden;
+    transition: all 0.15s ease;
+    margin-bottom: 1.25rem;
+  }
+
+  .brand-group-block:hover {
+    border-color: var(--color-slate-300);
+    box-shadow: 0 4px 10px rgba(15, 23, 42, 0.03);
+  }
+
+  .brand-group-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    padding: 0.875rem 1.25rem;
+    background: var(--color-slate-50);
+    border-bottom: 1px solid var(--color-slate-200);
+    flex-wrap: wrap;
+  }
+
+  .brand-group-title-wrap {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .brand-group-title {
+    font-family: var(--font-display);
+    font-size: 0.95rem;
+    font-weight: 700;
+    color: var(--color-slate-900);
+    margin: 0;
+  }
+
+  .brand-group-count {
+    font-size: 0.75rem;
+    font-weight: 600;
+    padding: 2px 8px;
+    border-radius: var(--radius-pill);
+    background: #ffffff;
+    border: 1px solid var(--color-slate-200);
+    color: var(--color-slate-600);
+  }
+
+  .products-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+    gap: 0.75rem;
+    padding: 1.25rem;
+  }
+
+  .product-toggle-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 12px;
+    background: var(--color-slate-50);
+    border: 1px solid var(--color-slate-200);
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    transition: all 0.12s ease;
+    user-select: none;
+  }
+
+  .product-toggle-item:hover {
+    background: #ffffff;
+    border-color: var(--color-slate-300);
+  }
+
+  .product-toggle-item.checked {
+    background: rgba(236, 253, 245, 0.6);
+    border-color: var(--color-primary-border);
+  }
+
+  .product-toggle-item input[type="checkbox"] {
+    width: 15px;
+    height: 15px;
+    accent-color: var(--color-primary);
+    cursor: pointer;
+    margin: 0;
+    flex-shrink: 0;
+  }
+
+  .product-toggle-name {
+    font-size: 0.825rem;
+    font-weight: 500;
+    color: var(--color-slate-700);
+    line-height: 1.3;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+  }
+
+  .product-toggle-item.checked .product-toggle-name {
+    color: var(--color-slate-900);
+    font-weight: 600;
+  }
+
+  /* Sticky Bottom Floating Dock */
+  .brochure-floating-dock {
+    position: fixed;
     bottom: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: rgba(15, 23, 42, 0.95);
+    backdrop-filter: blur(8px);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: var(--radius-pill);
+    box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.3);
+    padding: 8px 12px 8px 20px;
+    display: flex;
+    align-items: center;
+    gap: 1.25rem;
     z-index: 100;
-    box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+    color: #ffffff;
+    max-width: 90vw;
+  }
+
+  .dock-tally {
+    font-size: 0.85rem;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    white-space: nowrap;
+  }
+
+  .dock-tally strong {
+    color: #34d399;
+  }
+
+  .btn-dock-save {
+    height: 38px;
+    padding: 0 18px;
+    border: none;
+    border-radius: var(--radius-pill);
+    background: var(--color-primary);
+    color: #ffffff;
+    font-size: 0.85rem;
+    font-weight: 700;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    cursor: pointer;
+    transition: all 0.15s ease;
+    box-shadow: 0 2px 6px rgba(16, 185, 129, 0.4);
+    white-space: nowrap;
+  }
+
+  .btn-dock-save:hover {
+    background: var(--color-primary-hover);
+    transform: translateY(-1px);
+    box-shadow: 0 4px 10px rgba(16, 185, 129, 0.5);
+  }
+
+  .btn-dock-save:active {
+    transform: translateY(0);
   }
 </style>
 
-<div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 20px; gap: 20px; flex-wrap: wrap;">
-  <p style="color: var(--color-text-light); max-width: 600px; margin: 0;">
-    Select which brands and products should be included when generating the static brochure. 
-    If a brand is unchecked, its products will still appear in this list, but the brand section itself may be omitted if no products are selected.
-  </p>
-  <div style="display: flex; gap: 10px; flex-shrink: 0; align-items: center; flex-wrap: wrap;">
-    <a href="{{ url_for('regenerate_brochure') }}" class="btn btn-secondary" style="font-size: 14px; padding: 10px 18px; font-weight: 600; text-decoration: none; display: inline-flex; align-items: center; gap: 8px;">
-      <span>🔄</span> Regenerate Brochure
-    </a>
-    <a href="{{ url_for('public_bp.download_brochure') }}" class="btn btn-primary" style="font-size: 14px; padding: 10px 18px; font-weight: 600; text-decoration: none; display: inline-flex; align-items: center; gap: 8px;" target="_blank">
-      <span>📥</span> Download Brochure
-    </a>
-  </div>
-</div>
+<div class="brochure-container">
+  <!-- Top Control Bar -->
+  <div class="brochure-topbar">
+    <div class="brochure-intro">
+      <h2>
+        <i data-lucide="book-open" style="width: 20px; height: 20px; color: var(--color-primary);"></i>
+        Brochure & PDF Catalog Configurator
+      </h2>
+      <p>
+        Select which partner brands and product lines are compiled into the official AK Distributors static brochure and downloadable PDF catalog.
+      </p>
+    </div>
 
-<form method="POST" action="{{ url_for('brochure_settings') }}">
-  <div class="settings-section">
-    <h2 style="margin-top: 0;">Brands</h2>
-    <div class="product-list">
-      {% for b in brands %}
-      <label class="checkbox-wrapper">
-        <input type="checkbox" name="brands" value="{{ b.id }}" {% if b.show_in_brochure %}checked{% endif %}>
-        <span style="font-weight: 600;">{{ b.name }}</span>
-      </label>
-      {% endfor %}
+    <div class="brochure-top-actions">
+      <a href="{{ url_for('regenerate_brochure') }}" class="btn-top-action btn-action-outline" id="btnRegenerate" title="Recompile static PDF brochure with updated selections">
+        <i data-lucide="refresh-cw" style="width: 15px; height: 15px;"></i>
+        <span>Regenerate PDF</span>
+      </a>
+      <a href="{{ url_for('public_bp.download_brochure') }}" class="btn-top-action btn-action-primary" target="_blank" title="View or download current PDF brochure">
+        <i data-lucide="download" style="width: 15px; height: 15px;"></i>
+        <span>Download PDF</span>
+      </a>
+      <a href="{{ url_for('public_bp.catalog') }}" class="btn-top-action btn-action-outline" target="_blank" title="Preview public online catalog">
+        <i data-lucide="external-link" style="width: 15px; height: 15px;"></i>
+        <span>Public Catalog</span>
+      </a>
     </div>
   </div>
 
-  <div class="settings-section">
-    <h2 style="margin-top: 0;">Products by Brand</h2>
-    {% for brand_name, brand_products in products_by_brand.items() %}
-    <div class="brand-group">
-      <div class="brand-header">
-        <h3>{{ brand_name }}</h3>
+  <!-- Live Filter & Metrics Strip -->
+  <div class="brochure-filter-strip">
+    <div class="brochure-search-box">
+      <span class="brochure-search-icon">
+        <i data-lucide="search" style="width: 15px; height: 15px;"></i>
+      </span>
+      <input type="text" class="brochure-search-input" id="brochureFilterInput" placeholder="Filter products or brands..." autocomplete="off">
+    </div>
+
+    <div class="brochure-stats-badges">
+      <span class="stat-badge stat-badge-emerald" id="badgeSelectedBrands">
+        <i data-lucide="check" style="width: 13px; height: 13px;"></i>
+        <span id="selectedBrandsText">0 Brands Included</span>
+      </span>
+      <span class="stat-badge" id="badgeSelectedProducts">
+        <i data-lucide="package" style="width: 13px; height: 13px;"></i>
+        <span id="selectedProductsText">0 Products Included</span>
+      </span>
+    </div>
+  </div>
+
+  <!-- Main Settings Form -->
+  <form method="POST" action="{{ url_for('brochure_settings') }}" id="brochureForm">
+    <!-- Section 1: Brands Visibility -->
+    <div class="settings-section-card" id="brandsSection">
+      <div class="section-header-row">
+        <div class="section-title-wrap">
+          <i data-lucide="tag" style="width: 18px; height: 18px; color: var(--color-slate-600);"></i>
+          <h3 class="section-title">Included Brands</h3>
+          <span class="section-badge" id="totalBrandsBadge">{{ brands|length }} Total</span>
+        </div>
+        <div style="display: flex; gap: 6px;">
+          <button type="button" class="btn-select-all" onclick="toggleAllCheckboxes('brands', true)">
+            <i data-lucide="check-square" style="width: 13px; height: 13px;"></i>
+            Select All
+          </button>
+          <button type="button" class="btn-select-all" onclick="toggleAllCheckboxes('brands', false)">
+            <i data-lucide="square" style="width: 13px; height: 13px;"></i>
+            Clear All
+          </button>
+        </div>
       </div>
-      <div class="product-list">
-        {% for p in brand_products %}
-        <label class="checkbox-wrapper">
-          <input type="checkbox" name="products" value="{{ p.id }}" {% if p.show_in_brochure %}checked{% endif %}>
-          <span>{{ p.name }}</span>
+
+      <div class="brands-toggle-grid">
+        {% for b in brands %}
+        <label class="brand-toggle-card {% if b.show_in_brochure %}selected{% endif %}" data-brand-name="{{ b.name|lower }}">
+          <input type="checkbox" name="brands" value="{{ b.id }}" {% if b.show_in_brochure %}checked{% endif %} onchange="handleBrandToggle(this)">
+          <span class="brand-toggle-name" title="{{ b.name }}">{{ b.name }}</span>
         </label>
         {% endfor %}
       </div>
     </div>
-    {% endfor %}
-  </div>
-  
-  <div style="text-align: right; margin-bottom: 40px;">
-    <button type="submit" class="btn btn-primary btn-submit" style="font-size: 16px; padding: 12px 30px;">Save Brochure Settings</button>
-  </div>
-</form>
+
+    <!-- Section 2: Products Grouped by Brand -->
+    <div style="margin-top: 1.5rem;">
+      <div class="section-header-row" style="margin-bottom: 1rem; border-bottom: none;">
+        <div class="section-title-wrap">
+          <i data-lucide="layers" style="width: 18px; height: 18px; color: var(--color-slate-600);"></i>
+          <h3 class="section-title">Products by Brand</h3>
+        </div>
+        <div style="display: flex; gap: 6px;">
+          <button type="button" class="btn-select-all" onclick="toggleAllCheckboxes('products', true)">
+            <i data-lucide="check-square" style="width: 13px; height: 13px;"></i>
+            Select All Products
+          </button>
+          <button type="button" class="btn-select-all" onclick="toggleAllCheckboxes('products', false)">
+            <i data-lucide="square" style="width: 13px; height: 13px;"></i>
+            Clear All Products
+          </button>
+        </div>
+      </div>
+
+      {% for brand_name, brand_products in products_by_brand.items() %}
+      <div class="brand-group-block" data-brand-group="{{ brand_name|lower }}">
+        <div class="brand-group-header">
+          <div class="brand-group-title-wrap">
+            <h4 class="brand-group-title">{{ brand_name }}</h4>
+            <span class="brand-group-count" id="count-{{ loop.index }}">
+              {{ brand_products|selectattr('show_in_brochure')|list|length }} / {{ brand_products|length }} selected
+            </span>
+          </div>
+          <div style="display: flex; gap: 6px;">
+            <button type="button" class="btn-select-all" onclick="toggleBrandGroupProducts(this, true)">
+              Select All
+            </button>
+            <button type="button" class="btn-select-all" onclick="toggleBrandGroupProducts(this, false)">
+              Clear
+            </button>
+          </div>
+        </div>
+
+        <div class="products-grid">
+          {% for p in brand_products %}
+          <label class="product-toggle-item {% if p.show_in_brochure %}checked{% endif %}" data-product-name="{{ p.name|lower }}">
+            <input type="checkbox" name="products" value="{{ p.id }}" {% if p.show_in_brochure %}checked{% endif %} onchange="handleProductToggle(this)">
+            <span class="product-toggle-name" title="{{ p.name }}">{{ p.name }}</span>
+          </label>
+          {% endfor %}
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+
+    <!-- Floating Sticky Action Dock -->
+    <div class="brochure-floating-dock">
+      <div class="dock-tally">
+        <i data-lucide="sliders-horizontal" style="width: 16px; height: 16px; color: #34d399;"></i>
+        <span>Active Selection: <strong id="dockBrandsCount">0</strong> brands, <strong id="dockProductsCount">0</strong> products</span>
+      </div>
+      <button type="submit" class="btn-dock-save" id="btnSaveSettings">
+        <i data-lucide="check" style="width: 15px; height: 15px;"></i>
+        <span>Save Brochure Settings</span>
+      </button>
+    </div>
+  </form>
+</div>
+
+<script>
+  // Dynamic Live Tally Calculator
+  function updateLiveTallies() {
+    const brandCheckboxes = document.querySelectorAll('input[name="brands"]');
+    const productCheckboxes = document.querySelectorAll('input[name="products"]');
+
+    const selectedBrands = Array.from(brandCheckboxes).filter(cb => cb.checked).length;
+    const selectedProducts = Array.from(productCheckboxes).filter(cb => cb.checked).length;
+
+    // Update badges
+    const brandsBadge = document.getElementById('selectedBrandsText');
+    const productsBadge = document.getElementById('selectedProductsText');
+    if (brandsBadge) brandsBadge.textContent = `${selectedBrands} Brands Included`;
+    if (productsBadge) productsBadge.textContent = `${selectedProducts} Products Included`;
+
+    // Update floating dock
+    const dockBrands = document.getElementById('dockBrandsCount');
+    const dockProducts = document.getElementById('dockProductsCount');
+    if (dockBrands) dockBrands.textContent = selectedBrands;
+    if (dockProducts) dockProducts.textContent = selectedProducts;
+
+    // Update per-brand group badges
+    document.querySelectorAll('.brand-group-block').forEach(group => {
+      const cbs = group.querySelectorAll('input[name="products"]');
+      const checkedCount = Array.from(cbs).filter(c => c.checked).length;
+      const countEl = group.querySelector('.brand-group-count');
+      if (countEl) {
+        countEl.textContent = `${checkedCount} / ${cbs.length} selected`;
+      }
+    });
+  }
+
+  function handleBrandToggle(checkbox) {
+    const card = checkbox.closest('.brand-toggle-card');
+    if (card) {
+      card.classList.toggle('selected', checkbox.checked);
+    }
+    updateLiveTallies();
+  }
+
+  function handleProductToggle(checkbox) {
+    const item = checkbox.closest('.product-toggle-item');
+    if (item) {
+      item.classList.toggle('checked', checkbox.checked);
+    }
+    updateLiveTallies();
+  }
+
+  function toggleAllCheckboxes(name, check) {
+    const checkboxes = document.querySelectorAll(`input[name="${name}"]`);
+    checkboxes.forEach(cb => {
+      cb.checked = check;
+      if (name === 'brands') {
+        cb.closest('.brand-toggle-card')?.classList.toggle('selected', check);
+      } else {
+        cb.closest('.product-toggle-item')?.classList.toggle('checked', check);
+      }
+    });
+    updateLiveTallies();
+  }
+
+  function toggleBrandGroupProducts(btn, check) {
+    const group = btn.closest('.brand-group-block');
+    if (!group) return;
+    const checkboxes = group.querySelectorAll('input[name="products"]');
+    checkboxes.forEach(cb => {
+      cb.checked = check;
+      cb.closest('.product-toggle-item')?.classList.toggle('checked', check);
+    });
+    updateLiveTallies();
+  }
+
+  // Real-time Search Filter
+  const searchInput = document.getElementById('brochureFilterInput');
+  if (searchInput) {
+    searchInput.addEventListener('input', (e) => {
+      const query = e.target.value.toLowerCase().trim();
+
+      // Filter brands
+      document.querySelectorAll('.brand-toggle-card').forEach(card => {
+        const name = card.dataset.brandName || '';
+        card.style.display = (!query || name.includes(query)) ? 'flex' : 'none';
+      });
+
+      // Filter products & brand groups
+      document.querySelectorAll('.brand-group-block').forEach(group => {
+        const groupName = group.dataset.brandGroup || '';
+        let hasVisibleProduct = false;
+
+        group.querySelectorAll('.product-toggle-item').forEach(item => {
+          const prodName = item.dataset.productName || '';
+          const match = !query || prodName.includes(query) || groupName.includes(query);
+          item.style.display = match ? 'flex' : 'none';
+          if (match) hasVisibleProduct = true;
+        });
+
+        group.style.display = hasVisibleProduct ? 'block' : 'none';
+      });
+    });
+  }
+
+  // Regenerate Button loading feedback
+  const btnRegenerate = document.getElementById('btnRegenerate');
+  if (btnRegenerate) {
+    btnRegenerate.addEventListener('click', function(e) {
+      this.style.opacity = '0.7';
+      this.innerHTML = `
+        <span class="spinner" style="width:14px; height:14px; border:2px solid currentColor; border-top-color:transparent; border-radius:50%; display:inline-block; animation: spin 0.8s linear infinite;"></span>
+        <span>Compiling PDF...</span>
+      `;
+    });
+  }
+
+  // Initialize Tallies on page load
+  document.addEventListener('DOMContentLoaded', () => {
+    updateLiveTallies();
+    if (window.lucide) {
+      lucide.createIcons();
+    }
+  });
+</script>
 {% endblock %}

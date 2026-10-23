@@ -3,44 +3,448 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Sign in — AK Distributors</title>
+  <title>Sign In — AK Distributors</title>
+  <link rel="icon" type="image/png" href="{{ url_for('static', filename='logos/AK_Distributors_Logo.png') }}">
+  <link rel="shortcut icon" type="image/png" href="{{ url_for('static', filename='logos/AK_Distributors_Logo.png') }}">
+  
+  <!-- Modern Typography -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="icon" type="image/x-icon" href="{{ url_for('static', filename='favicon.ico') }}">
-  <link rel="shortcut icon" type="image/x-icon" href="{{ url_for('static', filename='favicon.ico') }}">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@500;600;700;800&display=swap" rel="stylesheet">
+  
+  <!-- Design System Base Styles -->
   <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+
+  <!-- Lucide Icons -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+
+  <style>
+    html, body {
+      height: 100%;
+      margin: 0;
+      padding: 0;
+      font-family: var(--font, 'Inter', system-ui, sans-serif);
+      color: var(--color-slate-900, #0f172a);
+      background: var(--color-slate-50, #f8fafc);
+      -webkit-font-smoothing: antialiased;
+    }
+
+    .auth-page {
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 2rem 1rem;
+      position: relative;
+      overflow: hidden;
+      background: 
+        radial-gradient(circle at 50% 10%, rgba(16, 185, 129, 0.08) 0%, transparent 55%),
+        radial-gradient(circle at 90% 85%, rgba(15, 23, 42, 0.04) 0%, transparent 45%),
+        radial-gradient(circle at 10% 80%, rgba(59, 130, 246, 0.03) 0%, transparent 40%),
+        #f8fafc;
+    }
+
+    /* Ambient background grid pattern */
+    .auth-page::before {
+      content: "";
+      position: absolute;
+      inset: 0;
+      background-image: radial-gradient(var(--color-slate-300, #cbd5e1) 1px, transparent 1px);
+      background-size: 28px 28px;
+      opacity: 0.35;
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    .auth-card-wrapper {
+      position: relative;
+      z-index: 10;
+      width: 100%;
+      max-width: 440px;
+      display: flex;
+      flex-direction: column;
+      gap: 1.5rem;
+    }
+
+    .auth-card {
+      background: #ffffff;
+      border: 1px solid var(--color-slate-200, #e2e8f0);
+      border-radius: var(--radius-lg, 16px);
+      box-shadow: 0 20px 25px -5px rgba(15, 23, 42, 0.08), 0 8px 10px -6px rgba(15, 23, 42, 0.04);
+      padding: 2.5rem 2.25rem 2.25rem;
+      position: relative;
+      overflow: hidden;
+    }
+
+    /* Subtle top primary highlight accent */
+    .auth-card::before {
+      content: "";
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 3px;
+      background: linear-gradient(90deg, #10b981 0%, #34d399 50%, #059669 100%);
+    }
+
+    /* Logo Showcase */
+    .auth-brand-strip {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 1.25rem;
+      margin-bottom: 1.75rem;
+    }
+
+    .auth-logo-box {
+      height: 64px;
+      padding: 6px 12px;
+      background: #ffffff;
+      border: 1px solid var(--color-slate-200, #e2e8f0);
+      border-radius: var(--radius-sm, 8px);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+      transition: all 0.2s ease;
+    }
+
+    .auth-logo-box:hover {
+      border-color: var(--color-slate-300, #cbd5e1);
+      transform: translateY(-1px);
+    }
+
+    .auth-logo-box img {
+      max-height: 100%;
+      width: auto;
+      object-fit: contain;
+      display: block;
+    }
+
+    .auth-logo-divider {
+      color: var(--color-slate-300, #cbd5e1);
+      font-size: 1.2rem;
+      font-weight: 300;
+    }
+
+    /* Titles */
+    .auth-header {
+      text-align: center;
+      margin-bottom: 1.75rem;
+    }
+
+    .auth-title {
+      font-family: var(--font-display, 'Plus Jakarta Sans', sans-serif);
+      font-size: 1.5rem;
+      font-weight: 800;
+      color: var(--color-slate-900, #0f172a);
+      margin: 0 0 0.4rem 0;
+      letter-spacing: -0.025em;
+      line-height: 1.2;
+    }
+
+    .auth-subtitle {
+      font-size: 0.875rem;
+      color: var(--color-slate-500, #64748b);
+      margin: 0;
+      line-height: 1.4;
+    }
+
+    /* Error Alert */
+    .auth-error-alert {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 0.85rem 1rem;
+      background: #fef2f2;
+      border: 1px solid #fecaca;
+      border-radius: var(--radius-sm, 8px);
+      color: #991b1b;
+      font-size: 0.85rem;
+      font-weight: 600;
+      margin-bottom: 1.5rem;
+      animation: alertShake 0.3s cubic-bezier(0.36, 0.07, 0.19, 0.97) both;
+    }
+
+    @keyframes alertShake {
+      10%, 90% { transform: translate3d(-1px, 0, 0); }
+      20%, 80% { transform: translate3d(2px, 0, 0); }
+      30%, 50%, 70% { transform: translate3d(-3px, 0, 0); }
+      40%, 60% { transform: translate3d(3px, 0, 0); }
+    }
+
+    /* Form Layout */
+    .auth-form {
+      display: flex;
+      flex-direction: column;
+      gap: 1.25rem;
+    }
+
+    .auth-field-group {
+      display: flex;
+      flex-direction: column;
+      gap: 0.45rem;
+      position: relative;
+    }
+
+    .auth-label {
+      font-size: 0.825rem;
+      font-weight: 600;
+      color: var(--color-slate-700, #334155);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .auth-input-container {
+      position: relative;
+      display: flex;
+      align-items: center;
+    }
+
+    .auth-input-icon {
+      position: absolute;
+      left: 14px;
+      color: var(--color-slate-400, #94a3b8);
+      pointer-events: none;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .auth-input {
+      width: 100%;
+      height: 44px;
+      padding: 0 42px 0 42px;
+      background: var(--color-slate-50, #f8fafc);
+      border: 1px solid var(--color-slate-200, #e2e8f0);
+      border-radius: var(--radius-sm, 8px);
+      font-family: inherit;
+      font-size: 0.925rem;
+      color: var(--color-slate-900, #0f172a);
+      outline: none;
+      transition: all 0.15s ease;
+      box-sizing: border-box;
+    }
+
+    .auth-input:focus {
+      background: #ffffff;
+      border-color: var(--color-primary, #10b981);
+      box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.15);
+    }
+
+    .auth-input-toggle {
+      position: absolute;
+      right: 10px;
+      background: transparent;
+      border: none;
+      color: var(--color-slate-400, #94a3b8);
+      cursor: pointer;
+      padding: 6px;
+      border-radius: 4px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: color 0.15s ease;
+    }
+
+    .auth-input-toggle:hover {
+      color: var(--color-slate-700, #334155);
+    }
+
+    /* Submit Button */
+    .btn-auth-submit {
+      width: 100%;
+      height: 46px;
+      margin-top: 0.5rem;
+      background: var(--color-primary, #10b981);
+      color: #ffffff;
+      border: none;
+      border-radius: var(--radius-sm, 8px);
+      font-family: inherit;
+      font-size: 0.95rem;
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      cursor: pointer;
+      box-shadow: 0 2px 6px rgba(16, 185, 129, 0.25);
+      transition: all 0.15s ease;
+    }
+
+    .btn-auth-submit:hover {
+      background: var(--color-primary-hover, #059669);
+      box-shadow: 0 4px 12px rgba(16, 185, 129, 0.35);
+      transform: translateY(-1px);
+    }
+
+    .btn-auth-submit:active {
+      transform: translateY(0);
+    }
+
+    /* Card Footer Info */
+    .auth-footer {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      font-size: 0.775rem;
+      color: var(--color-slate-400, #94a3b8);
+      text-align: center;
+    }
+
+    .auth-footer i {
+      color: var(--color-slate-400, #94a3b8);
+    }
+
+    .auth-catalog-link {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      color: var(--color-primary, #10b981);
+      text-decoration: none;
+      font-weight: 600;
+      transition: color 0.15s ease;
+    }
+
+    .auth-catalog-link:hover {
+      color: var(--color-primary-hover, #059669);
+      text-decoration: underline;
+    }
+  </style>
 </head>
-<body class="login-page">
-  <div class="login-card">
-    <div style="display:flex; justify-content:center; align-items:center; gap:16px; margin-bottom:20px;">
-      <img
-        src="{{ url_for('static', filename='logos/AK_Distributors_Logo.png') }}"
-        alt="AK Distributors Logo"
-        style="max-height:70px; width:auto; display:block;"
-      >
-      <img
-        src="{{ url_for('static', filename='logos/Zain Foods Logo.jpeg') }}"
-        alt="Zain Foods Logo"
-        style="max-height:70px; width:auto; display:block;"
-      >
+<body class="auth-page">
+  <div class="auth-card-wrapper">
+    <div class="auth-card">
+      <!-- Dual Partner Brand Logos -->
+      <div class="auth-brand-strip">
+        <div class="auth-logo-box" title="AK Distributors LLC">
+          <img src="{{ url_for('static', filename='logos/AK_Distributors_Logo.png') }}" alt="AK Distributors Logo">
+        </div>
+        <span class="auth-logo-divider">•</span>
+        <div class="auth-logo-box" title="Zain Foods Partner">
+          <img src="{{ url_for('static', filename='logos/Zain Foods Logo.jpeg') }}" alt="Zain Foods Logo">
+        </div>
+      </div>
+
+      <!-- Main Headline & Subtitle -->
+      <div class="auth-header">
+        <h1 class="auth-title">AK Distributors LLC</h1>
+        <p class="auth-subtitle">Enterprise Inventory & Distribution Management System</p>
+      </div>
+
+      <!-- Error Feedback Banner -->
+      {% if error %}
+      <div class="auth-error-alert" role="alert">
+        <i data-lucide="alert-circle" style="width: 18px; height: 18px; flex-shrink: 0;"></i>
+        <span>{{ error }}</span>
+      </div>
+      {% endif %}
+
+      <!-- Login Form -->
+      <form method="post" action="{{ url_for('login') }}" class="auth-form" id="loginForm" novalidate>
+        <!-- Username Input -->
+        <div class="auth-field-group">
+          <label for="username" class="auth-label">Username</label>
+          <div class="auth-input-container">
+            <span class="auth-input-icon">
+              <i data-lucide="user" style="width: 18px; height: 18px;"></i>
+            </span>
+            <input 
+              class="auth-input" 
+              type="text" 
+              id="username" 
+              name="username" 
+              placeholder="Enter your username" 
+              autocomplete="username" 
+              required 
+              autofocus
+            >
+          </div>
+        </div>
+
+        <!-- Password Input with Show/Hide Toggle -->
+        <div class="auth-field-group">
+          <label for="password" class="auth-label">Password</label>
+          <div class="auth-input-container">
+            <span class="auth-input-icon">
+              <i data-lucide="lock" style="width: 18px; height: 18px;"></i>
+            </span>
+            <input 
+              class="auth-input" 
+              type="password" 
+              id="password" 
+              name="password" 
+              placeholder="••••••••••••" 
+              autocomplete="current-password" 
+              required
+            >
+            <button type="button" class="auth-input-toggle" id="togglePasswordBtn" title="Toggle password visibility" aria-label="Toggle password visibility">
+              <i data-lucide="eye" id="togglePasswordIcon" style="width: 18px; height: 18px;"></i>
+            </button>
+          </div>
+        </div>
+
+        <!-- Submit Button -->
+        <button type="submit" class="btn-auth-submit" id="submitBtn">
+          <span>Sign In to Workstation</span>
+          <i data-lucide="arrow-right" style="width: 18px; height: 18px;"></i>
+        </button>
+      </form>
     </div>
-    <h1>AK Distributors LLC</h1>
-    <p class="login-sub">Sign in to continue</p>
-    {% if error %}
-    <div class="alert-error" role="alert">{{ error }}</div>
-    {% endif %}
-    <form method="post" action="{{ url_for('login') }}" novalidate>
-      <div class="form-group">
-        <label for="username">Username</label>
-        <input class="form-control" type="text" id="username" name="username" autocomplete="username" required>
-      </div>
-      <div class="form-group">
-        <label for="password">Password</label>
-        <input class="form-control" type="password" id="password" name="password" autocomplete="current-password" required>
-      </div>
-      <button type="submit" class="btn btn-primary btn-block">Login</button>
-    </form>
+
+    <!-- Security Badging & Catalog Quick Navigation -->
+    <div class="auth-footer">
+      <i data-lucide="shield-check" style="width: 14px; height: 14px;"></i>
+      <span>Authorized Personnel Only • Secure Portal</span>
+      <span>•</span>
+      <a href="{{ url_for('public_bp.catalog') }}" class="auth-catalog-link">
+        Product Catalog <i data-lucide="arrow-up-right" style="width: 12px; height: 12px;"></i>
+      </a>
+    </div>
   </div>
+
+  <script>
+    // Initialize Lucide Icons
+    if (window.lucide) {
+      lucide.createIcons();
+    }
+
+    // Password Visibility Toggle
+    const passwordInput = document.getElementById('password');
+    const togglePasswordBtn = document.getElementById('togglePasswordBtn');
+
+    if (togglePasswordBtn && passwordInput) {
+      togglePasswordBtn.addEventListener('click', () => {
+        const isPassword = passwordInput.getAttribute('type') === 'password';
+        passwordInput.setAttribute('type', isPassword ? 'text' : 'password');
+        
+        togglePasswordBtn.innerHTML = isPassword 
+          ? '<i data-lucide="eye-off" style="width: 18px; height: 18px;"></i>' 
+          : '<i data-lucide="eye" style="width: 18px; height: 18px;"></i>';
+          
+        if (window.lucide) {
+          lucide.createIcons();
+        }
+      });
+    }
+
+    // Form Submit Feedback State
+    const loginForm = document.getElementById('loginForm');
+    const submitBtn = document.getElementById('submitBtn');
+
+    if (loginForm && submitBtn) {
+      loginForm.addEventListener('submit', () => {
+        submitBtn.disabled = true;
+        submitBtn.style.opacity = '0.85';
+        submitBtn.innerHTML = `
+          <span style="width:16px; height:16px; border:2px solid #ffffff; border-top-color:transparent; border-radius:50%; display:inline-block; animation: spin 0.8s linear infinite;"></span>
+          <span>Authenticating...</span>
+        `;
+      });
+    }
+  </script>
 </body>
 </html>
