@@ -1,98 +1,632 @@
 {% extends "base.html" %}
-{% block title %}Help Center — AK Distributors{% endblock %}
-{% block page_heading %}Help Center & Software Manual{% endblock %}
+{% block title %}Knowledge Base & Manual — AK Distributors{% endblock %}
+{% block page_heading %}Knowledge Base & System Manual{% endblock %}
+
 {% block content %}
 <style>
-    .help-content h1, .help-content h2, .help-content h3 { color: #1e293b; margin-top: 1.5em; margin-bottom: 0.5em; }
-    .help-content h1 { font-size: 1.75rem; border-bottom: 1px solid #e2e8f0; padding-bottom: 0.3em; }
-    .help-content h2 { font-size: 1.4rem; border-bottom: 1px solid #e2e8f0; padding-bottom: 0.3em; }
-    .help-content h3 { font-size: 1.15rem; }
-    .help-content p { margin-bottom: 1em; }
-    .help-content ul, .help-content ol { margin-bottom: 1em; padding-left: 1.5em; }
-    .help-content li { margin-bottom: 0.25em; }
-    .help-content a { color: #2563eb; text-decoration: none; font-weight: 500; }
-    .help-content a:hover { text-decoration: underline; }
-    .help-content strong { color: #0f172a; }
+  .help-hub-container {
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+    padding-bottom: 4rem;
+  }
+
+  /* Top Hero Header */
+  .help-hero {
+    background: linear-gradient(135deg, #ffffff 0%, var(--color-slate-50) 100%);
+    border: 1px solid var(--color-slate-200);
+    border-radius: var(--radius);
+    padding: 1.75rem 2rem;
+    box-shadow: var(--shadow-sm);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1.5rem;
+    flex-wrap: wrap;
+  }
+
+  .help-hero-content {
+    max-width: 600px;
+  }
+
+  .help-hero-title {
+    font-family: var(--font-display);
+    font-size: 1.4rem;
+    font-weight: 800;
+    color: var(--color-slate-900);
+    margin: 0 0 0.4rem 0;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .help-hero-desc {
+    font-size: 0.925rem;
+    color: var(--color-slate-600);
+    margin: 0;
+    line-height: 1.5;
+  }
+
+  .help-hero-actions {
+    display: flex;
+    align-items: center;
+    gap: 0.85rem;
+  }
+
+  .btn-lang-switch {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    height: 42px;
+    padding: 0 16px;
+    background: #ffffff;
+    border: 1px solid var(--color-slate-200);
+    border-radius: var(--radius-pill);
+    color: var(--color-slate-700);
+    font-size: 0.875rem;
+    font-weight: 600;
+    text-decoration: none;
+    transition: all 0.15s ease;
+    box-shadow: var(--shadow-xs);
+  }
+
+  .btn-lang-switch:hover {
+    background: var(--color-slate-50);
+    border-color: var(--color-slate-300);
+    color: var(--color-slate-900);
+  }
+
+  /* Two Column Main Layout */
+  .help-grid-layout {
+    display: grid;
+    grid-template-columns: 280px 1fr;
+    gap: 1.5rem;
+    align-items: start;
+  }
+
+  @media (max-width: 992px) {
+    .help-grid-layout {
+      grid-template-columns: 1fr;
+    }
+  }
+
+  /* Sidebar Table of Contents Navigation */
+  .help-nav-sidebar {
+    position: sticky;
+    top: calc(var(--topbar-height, 64px) + 1.5rem);
+    background: #ffffff;
+    border: 1px solid var(--color-slate-200);
+    border-radius: var(--radius);
+    padding: 1.25rem;
+    box-shadow: var(--shadow-sm);
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+  }
+
+  .help-nav-header {
+    font-family: var(--font-display);
+    font-size: 0.85rem;
+    font-weight: 700;
+    color: var(--color-slate-400);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    padding-bottom: 0.5rem;
+    border-bottom: 1px solid var(--color-slate-100);
+  }
+
+  .help-nav-list {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .help-nav-link {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 12px;
+    border-radius: var(--radius-sm);
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: var(--color-slate-600);
+    text-decoration: none;
+    transition: all 0.15s ease;
+  }
+
+  .help-nav-link:hover {
+    background: var(--color-slate-50);
+    color: var(--color-primary-hover);
+  }
+
+  /* Workflow & Module Cards */
+  .help-content-area {
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+  }
+
+  .help-card {
+    background: #ffffff;
+    border: 1px solid var(--color-slate-200);
+    border-radius: var(--radius);
+    padding: 1.75rem;
+    box-shadow: var(--shadow-sm);
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+    scroll-margin-top: calc(var(--topbar-height, 64px) + 2rem);
+  }
+
+  .help-card-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    border-bottom: 1px solid var(--color-slate-100);
+    padding-bottom: 0.75rem;
+    flex-wrap: wrap;
+  }
+
+  .help-card-title {
+    font-family: var(--font-display);
+    font-size: 1.15rem;
+    font-weight: 700;
+    color: var(--color-slate-900);
+    margin: 0;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .btn-workflow-shortcut {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: var(--color-primary-hover);
+    background: var(--color-primary-light);
+    border: 1px solid var(--color-primary-border);
+    padding: 4px 10px;
+    border-radius: var(--radius-pill);
+    text-decoration: none;
+    transition: all 0.15s ease;
+  }
+
+  .btn-workflow-shortcut:hover {
+    background: #d1fae5;
+  }
+
+  .help-step-box {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+    margin-top: 0.5rem;
+  }
+
+  .help-step-item {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+  }
+
+  .help-step-num {
+    width: 26px;
+    height: 26px;
+    border-radius: 50%;
+    background: var(--color-slate-100);
+    color: var(--color-slate-700);
+    font-size: 0.8rem;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    margin-top: 2px;
+  }
+
+  .help-step-content {
+    font-size: 0.9rem;
+    color: var(--color-slate-700);
+    line-height: 1.5;
+  }
+
+  .help-step-content strong {
+    color: var(--color-slate-900);
+  }
+
+  /* Note & Tip Callouts */
+  .help-tip {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    padding: 0.875rem 1rem;
+    border-radius: var(--radius-sm);
+    background: var(--color-primary-light);
+    border: 1px solid var(--color-primary-border);
+    color: #065f46;
+    font-size: 0.85rem;
+    line-height: 1.45;
+  }
+
+  /* Modules Quick Access Directory */
+  .modules-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+    gap: 1rem;
+    margin-top: 0.5rem;
+  }
+
+  .module-card {
+    background: var(--color-slate-50);
+    border: 1px solid var(--color-slate-200);
+    border-radius: var(--radius-sm);
+    padding: 1.25rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    text-decoration: none;
+    transition: all 0.15s ease;
+  }
+
+  .module-card:hover {
+    background: #ffffff;
+    border-color: var(--color-slate-300);
+    transform: translateY(-2px);
+    box-shadow: 0 4px 10px rgba(15, 23, 42, 0.05);
+  }
+
+  .module-card-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    color: var(--color-slate-900);
+    font-weight: 700;
+    font-size: 0.95rem;
+  }
+
+  .module-card-icon {
+    width: 32px;
+    height: 32px;
+    border-radius: var(--radius-sm);
+    background: #ffffff;
+    border: 1px solid var(--color-slate-200);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--color-primary-hover);
+    flex-shrink: 0;
+  }
+
+  .module-card-desc {
+    font-size: 0.825rem;
+    color: var(--color-slate-500);
+    line-height: 1.4;
+    margin: 0;
+  }
 </style>
 
-<div class="panel" style="padding: 2.5rem; max-width: 900px; margin: 0 auto; background: white; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
-    <div style="display: flex; justify-content: flex-end; margin-bottom: 2rem;">
-        <a href="{{ url_for('help_center', lang='ur') }}" class="btn" style="font-size: 0.9rem; padding: 6px 14px; border: 1px solid #cbd5e1; border-radius: 6px; color: #475569; text-decoration: none; background: #f8fafc; font-weight: 600;">اردو میں پڑھیں (Urdu Version)</a>
+<div class="help-hub-container">
+  <!-- Top Hero Header -->
+  <div class="help-hero">
+    <div class="help-hero-content">
+      <h1 class="help-hero-title">
+        <i data-lucide="book-marked" style="width: 26px; height: 26px; color: var(--color-primary);"></i>
+        AK Distributors System Manual
+      </h1>
+      <p class="help-hero-desc">
+        Standard Operating Procedures (SOPs), end-to-end operational workflows, and software navigation guide for the AK Distributors management platform.
+      </p>
     </div>
-    
-    <div class="help-content" style="line-height: 1.7; color: #334155; font-size: 1rem;">
-        <h1>📘 AK Distributors — Help Center</h1>
-        <p>Welcome to the <strong>AK Distributors Inventory and Invoice Management System</strong>. This comprehensive guide is designed to help you and your team navigate the software, manage your daily operations, and streamline your business workflows.</p>
 
-        <h2>📑 Table of Contents</h2>
-        <ol>
-            <li><a href="#workflows">General Workflows (Step-by-Step)</a></li>
-            <li><a href="#modules">Module Guide (Navigation)</a></li>
-        </ol>
-
-        <h2 id="workflows">General Workflows</h2>
-
-        <h3>1. Introducing a New Product or Brand 📦</h3>
-        <p>Before a new product can be added to your catalogue or received in a shipment, the system needs to recognize the <strong>Supplier/Brand</strong>.</p>
-        <p><strong>Step 1: Register the Supplier/Brand</strong><br>
-        <em>Navigate to:</em> <a href="{{ url_for('suppliers_page') }}">Suppliers & Brands</a></p>
-        <ol>
-            <li>Click the <strong>Add Supplier/Brand</strong> button.</li>
-            <li>Fill in the required details: Supplier Name, Primary Contact Information, and the Brand Name they provide.</li>
-            <li><strong>Save</strong> the entry. This links the brand to your supplier permanently.</li>
-        </ol>
-
-        <p><strong>Step 2: Add the Product to the Catalogue</strong><br>
-        <em>Navigate to:</em> <a href="{{ url_for('inventory') }}">Inventory</a></p>
-        <ol>
-            <li>Click the <strong>Add New Product</strong> button.</li>
-            <li>Complete the product profile (Name, Description, Pricing, and the Brand you created in Step 1).</li>
-            <li><strong>Save</strong> the product. <em>(Note: It will have 0 stock until you record a purchase shipment.)</em></li>
-        </ol>
-
-        <h3>2. Receiving New Inventory (Purchases) 📥</h3>
-        <p>When a physical shipment of goods arrives at your warehouse, you must record it as a <strong>Purchase</strong>.</p>
-        <p><strong>Step 1: Log the Incoming Shipment</strong><br>
-        <em>Navigate to:</em> <a href="/purchases">Purchases</a></p>
-        <ol>
-            <li>Click <strong>New Purchase</strong>.</li>
-            <li>Select the <strong>Supplier</strong> and the <strong>Destination Warehouse</strong>.</li>
-            <li>Search for the products received, and input the exact quantities and unit costs.</li>
-            <li>Add any freight, tax, or shipping fees.</li>
-            <li><strong>Submit</strong> the purchase to instantly increase your stock levels.</li>
-        </ol>
-
-        <h3>3. Recording a Sale & Invoicing 🧾</h3>
-        <p>Recording a sale deducts from your active inventory, calculates your profit margins, and generates a professional invoice.</p>
-        <p><strong>Step 1: Process the Sale</strong><br>
-        <em>Navigate to:</em> <a href="{{ url_for('sales') }}">Sales</a></p>
-        <ol>
-            <li>Click <strong>Record Sale</strong>.</li>
-            <li>Select the <strong>Customer</strong> and the <strong>Dispatching Warehouse</strong>.</li>
-            <li>Add products, adjust quantities, and set the final selling price (you can offer line-item discounts here).</li>
-            <li>Add applicable Taxes/Delivery Fees, and mark the Payment Status (Paid, Partial, Unpaid).</li>
-            <li><strong>Submit</strong> the sale and click <strong>Generate PDF Invoice</strong>.</li>
-        </ol>
-
-        <h3>4. Transferring Stock Between Warehouses 🚚</h3>
-        <p>If you operate multiple storage locations, you will frequently need to move inventory between them.</p>
-        <p><em>Navigate to:</em> <a href="{{ url_for('inventory_transfers') }}">Transfers</a></p>
-        <ol>
-            <li>Click <strong>New Transfer</strong>.</li>
-            <li>Select the <strong>Source Warehouse</strong> and <strong>Destination Warehouse</strong>.</li>
-            <li>Add the specific products and quantities, then <strong>Confirm</strong>.</li>
-        </ol>
-
-        <h2 id="modules">Module Guide</h2>
-        <ul>
-            <li><strong><a href="{{ url_for('dashboard') }}">Dashboard & Reports</a>:</strong> Financial command center. View live snapshots of Sales, Gross Profit, Net Profit, and generate custom financial reports.</li>
-            <li><strong><a href="{{ url_for('inventory') }}">Products (Inventory & Purchases)</a>:</strong> Master list of all products, historical shipments, and internal stock movements.</li>
-            <li><strong><a href="{{ url_for('suppliers_page') }}">Suppliers & Brands</a>:</strong> CRM for your vendors and physical storage network manager (Warehouses).</li>
-            <li><strong><a href="{{ url_for('sales') }}">Sales & Customers</a>:</strong> Master ledger of all transactions, invoices, and your client directory.</li>
-            <li><strong><a href="/expenses">Administration (Expenses & Users)</a>:</strong> Log business expenses (crucial for accurate Net Profit) and manage staff access.</li>
-            <li><strong><a href="{{ url_for('brochure_settings') }}">Brochure Settings</a>:</strong> Control the content of your public-facing product catalogue website.</li>
-            <li><strong><a href="{{ url_for('pos') }}">POS Catalogue</a>:</strong> Streamlined Point-of-Sale interface for rapid transactions.</li>
-        </ul>
+    <div class="help-hero-actions">
+      <a href="{{ url_for('help_center', lang='ur') }}" class="btn-lang-switch" title="سافٹ ویئر گائیڈ اردو میں پڑھیں">
+        <i data-lucide="languages" style="width: 16px; height: 16px; color: var(--color-primary);"></i>
+        <span>اردو گائیڈ (Urdu Version)</span>
+      </a>
     </div>
+  </div>
+
+  <!-- Two Column Layout: Sidebar Rail + Content -->
+  <div class="help-grid-layout">
+    <!-- Left Navigation Rail -->
+    <aside class="help-nav-sidebar">
+      <div class="help-nav-header">Standard Workflows</div>
+      <ul class="help-nav-list">
+        <li>
+          <a href="#wf-products" class="help-nav-link">
+            <i data-lucide="package-plus" style="width: 16px; height: 16px;"></i>
+            <span>1. Products & Brands</span>
+          </a>
+        </li>
+        <li>
+          <a href="#wf-purchases" class="help-nav-link">
+            <i data-lucide="arrow-down-to-dot" style="width: 16px; height: 16px;"></i>
+            <span>2. Inbound Purchases</span>
+          </a>
+        </li>
+        <li>
+          <a href="#wf-sales" class="help-nav-link">
+            <i data-lucide="receipt" style="width: 16px; height: 16px;"></i>
+            <span>3. Sales & Invoicing</span>
+          </a>
+        </li>
+        <li>
+          <a href="#wf-transfers" class="help-nav-link">
+            <i data-lucide="truck" style="width: 16px; height: 16px;"></i>
+            <span>4. Stock Transfers</span>
+          </a>
+        </li>
+      </ul>
+
+      <div class="help-nav-header" style="margin-top: 0.5rem;">System Directory</div>
+      <ul class="help-nav-list">
+        <li>
+          <a href="#system-modules" class="help-nav-link">
+            <i data-lucide="layout-grid" style="width: 16px; height: 16px;"></i>
+            <span>ERP Modules Guide</span>
+          </a>
+        </li>
+      </ul>
+    </aside>
+
+    <!-- Right Content Area -->
+    <main class="help-content-area">
+      <!-- Workflow 1: Products & Brands -->
+      <section class="help-card" id="wf-products">
+        <div class="help-card-header">
+          <h2 class="help-card-title">
+            <i data-lucide="package-plus" style="width: 20px; height: 20px; color: var(--color-primary);"></i>
+            1. Introducing a New Product or Brand
+          </h2>
+          <a href="{{ url_for('suppliers_page') }}" class="btn-workflow-shortcut">
+            <span>Suppliers & Brands</span>
+            <i data-lucide="arrow-up-right" style="width: 13px; height: 13px;"></i>
+          </a>
+        </div>
+
+        <p style="font-size: 0.9rem; color: var(--color-slate-600); margin: 0; line-height: 1.5;">
+          Before receiving shipments or listing products in the catalog, the system must register the supplying partner and corresponding brand name.
+        </p>
+
+        <div class="help-step-box">
+          <div class="help-step-item">
+            <span class="help-step-num">1</span>
+            <div class="help-step-content">
+              <strong>Register the Supplier & Brand:</strong> Navigate to <a href="{{ url_for('suppliers_page') }}" style="color:var(--color-primary-hover); font-weight:600;">Suppliers & Brands</a>, click <em>"Add Supplier / Brand"</em>, enter supplier details (Name, Contact, Phone), and define their brand label.
+            </div>
+          </div>
+          <div class="help-step-item">
+            <span class="help-step-num">2</span>
+            <div class="help-step-content">
+              <strong>Register the Catalog Item:</strong> Navigate to <a href="{{ url_for('inventory') }}" style="color:var(--color-primary-hover); font-weight:600;">Inventory</a>, click <em>"Add New Product"</em>, specify product name, cost price, wholesale/selling price, brand, and packaging unit.
+            </div>
+          </div>
+        </div>
+
+        <div class="help-tip">
+          <i data-lucide="lightbulb" style="width: 18px; height: 18px; flex-shrink: 0;"></i>
+          <span><strong>Pro Tip:</strong> Newly added products initialize with zero active stock. Physical inventory increments automatically when inbound purchase shipments are logged.</span>
+        </div>
+      </section>
+
+      <!-- Workflow 2: Inbound Purchases -->
+      <section class="help-card" id="wf-purchases">
+        <div class="help-card-header">
+          <h2 class="help-card-title">
+            <i data-lucide="arrow-down-to-dot" style="width: 20px; height: 20px; color: var(--color-primary);"></i>
+            2. Receiving New Inventory (Inbound Purchases)
+          </h2>
+          <a href="/purchases" class="btn-workflow-shortcut">
+            <span>Purchases Workstation</span>
+            <i data-lucide="arrow-up-right" style="width: 13px; height: 13px;"></i>
+          </a>
+        </div>
+
+        <p style="font-size: 0.9rem; color: var(--color-slate-600); margin: 0; line-height: 1.5;">
+          When physical shipments arrive at warehouse facilities, recording an inbound purchase immediately replenishes inventory and updates accounting cost baselines.
+        </p>
+
+        <div class="help-step-box">
+          <div class="help-step-item">
+            <span class="help-step-num">1</span>
+            <div class="help-step-content">
+              <strong>Log Shipment Receipt:</strong> Navigate to <a href="/purchases" style="color:var(--color-primary-hover); font-weight:600;">Purchases</a> and click <em>"New Purchase"</em>.
+            </div>
+          </div>
+          <div class="help-step-item">
+            <span class="help-step-num">2</span>
+            <div class="help-step-content">
+              <strong>Select Warehouse & Vendor:</strong> Designate the receiving storage facility and supplier.
+            </div>
+          </div>
+          <div class="help-step-item">
+            <span class="help-step-num">3</span>
+            <div class="help-step-content">
+              <strong>Add Line Items:</strong> Search items by name or SKU, enter exact received carton/unit quantities and unit costs. Add any applicable freight or tax surcharges.
+            </div>
+          </div>
+          <div class="help-step-item">
+            <span class="help-step-num">4</span>
+            <div class="help-step-content">
+              <strong>Confirm Inbound:</strong> Submit to update real-time stock balances across warehouse ledgers.
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Workflow 3: Sales & Invoicing -->
+      <section class="help-card" id="wf-sales">
+        <div class="help-card-header">
+          <h2 class="help-card-title">
+            <i data-lucide="receipt" style="width: 20px; height: 20px; color: var(--color-primary);"></i>
+            3. Recording a Sale & Generating Invoices
+          </h2>
+          <a href="{{ url_for('sales') }}" class="btn-workflow-shortcut">
+            <span>Sales Workstation</span>
+            <i data-lucide="arrow-up-right" style="width: 13px; height: 13px;"></i>
+          </a>
+        </div>
+
+        <p style="font-size: 0.9rem; color: var(--color-slate-600); margin: 0; line-height: 1.5;">
+          Sales transactions simultaneously deduct stock from dispatch warehouses, compute gross profit margins, and generate PDF invoices.
+        </p>
+
+        <div class="help-step-box">
+          <div class="help-step-item">
+            <span class="help-step-num">1</span>
+            <div class="help-step-content">
+              <strong>Initiate Invoice:</strong> Navigate to <a href="{{ url_for('sales') }}" style="color:var(--color-primary-hover); font-weight:600;">Sales</a> and click <em>"Record Sale"</em> (or open the <a href="{{ url_for('pos') }}" style="color:var(--color-primary-hover); font-weight:600;">POS Terminal</a>).
+            </div>
+          </div>
+          <div class="help-step-item">
+            <span class="help-step-num">2</span>
+            <div class="help-step-content">
+              <strong>Customer & Location:</strong> Pick the customer account and the dispatching warehouse facility.
+            </div>
+          </div>
+          <div class="help-step-item">
+            <span class="help-step-num">3</span>
+            <div class="help-step-content">
+              <strong>Add Products & Terms:</strong> Select line items, set applicable discounts, record upfront payment, and choose payment terms (Cash, Cheque, or Credit).
+            </div>
+          </div>
+          <div class="help-step-item">
+            <span class="help-step-num">4</span>
+            <div class="help-step-content">
+              <strong>Generate PDF:</strong> Click <em>"Print Invoice PDF"</em> to generate an itemized invoice complete with paid stamp or outstanding balance.
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Workflow 4: Stock Transfers -->
+      <section class="help-card" id="wf-transfers">
+        <div class="help-card-header">
+          <h2 class="help-card-title">
+            <i data-lucide="truck" style="width: 20px; height: 20px; color: var(--color-primary);"></i>
+            4. Transferring Stock Between Storage Facilities
+          </h2>
+          <a href="{{ url_for('inventory_transfers') }}" class="btn-workflow-shortcut">
+            <span>Transfers Workstation</span>
+            <i data-lucide="arrow-up-right" style="width: 13px; height: 13px;"></i>
+          </a>
+        </div>
+
+        <p style="font-size: 0.9rem; color: var(--color-slate-600); margin: 0; line-height: 1.5;">
+          Inter-warehouse stock movements balance inventory across regional storage locations without affecting sales revenue or cost ledgers.
+        </p>
+
+        <div class="help-step-box">
+          <div class="help-step-item">
+            <span class="help-step-num">1</span>
+            <div class="help-step-content">
+              Navigate to <a href="{{ url_for('inventory_transfers') }}" style="color:var(--color-primary-hover); font-weight:600;">Transfers</a> and click <em>"New Transfer"</em>.
+            </div>
+          </div>
+          <div class="help-step-item">
+            <span class="help-step-num">2</span>
+            <div class="help-step-content">
+              Designate <strong>Source Warehouse</strong> and <strong>Destination Warehouse</strong>.
+            </div>
+          </div>
+          <div class="help-step-item">
+            <span class="help-step-num">3</span>
+            <div class="help-step-content">
+              Specify transfer quantities per item, add transport notes, and submit transfer verification.
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Section: System Modules Directory -->
+      <section class="help-card" id="system-modules">
+        <div class="help-card-header">
+          <h2 class="help-card-title">
+            <i data-lucide="layout-grid" style="width: 20px; height: 20px; color: var(--color-primary);"></i>
+            Software Modules Directory
+          </h2>
+        </div>
+
+        <div class="modules-grid">
+          <a href="{{ url_for('dashboard') }}" class="module-card">
+            <div class="module-card-header">
+              <span class="module-card-icon"><i data-lucide="layout-dashboard" style="width: 18px; height: 18px;"></i></span>
+              <span>ERP Dashboard</span>
+            </div>
+            <p class="module-card-desc">Executive command center with real-time gross revenue, net profit, low stock alarms, and quick actions.</p>
+          </a>
+
+          <a href="{{ url_for('sales') }}" class="module-card">
+            <div class="module-card-header">
+              <span class="module-card-icon"><i data-lucide="receipt" style="width: 18px; height: 18px;"></i></span>
+              <span>Sales & Invoices</span>
+            </div>
+            <p class="module-card-desc">Master transaction register, customer balance tracking, and PDF billing generator.</p>
+          </a>
+
+          <a href="{{ url_for('inventory') }}" class="module-card">
+            <div class="module-card-header">
+              <span class="module-card-icon"><i data-lucide="package" style="width: 18px; height: 18px;"></i></span>
+              <span>Inventory & Catalog</span>
+            </div>
+            <p class="module-card-desc">Product repository, live warehouse stock levels, image attachments, and pricing controls.</p>
+          </a>
+
+          <a href="/purchases" class="module-card">
+            <div class="module-card-header">
+              <span class="module-card-icon"><i data-lucide="shopping-cart" style="width: 18px; height: 18px;"></i></span>
+              <span>Purchases & Inbound</span>
+            </div>
+            <p class="module-card-desc">Shipment intake, landed cost computation, and supplier invoice reconciliation.</p>
+          </a>
+
+          <a href="{{ url_for('suppliers_page') }}" class="module-card">
+            <div class="module-card-header">
+              <span class="module-card-icon"><i data-lucide="truck" style="width: 18px; height: 18px;"></i></span>
+              <span>Suppliers & Brands</span>
+            </div>
+            <p class="module-card-desc">Vendor CRM, partner brand registration, and accounts payable balances.</p>
+          </a>
+
+          <a href="{{ url_for('customers') }}" class="module-card">
+            <div class="module-card-header">
+              <span class="module-card-icon"><i data-lucide="users" style="width: 18px; height: 18px;"></i></span>
+              <span>Customers & Accounts</span>
+            </div>
+            <p class="module-card-desc">Client profiles, credit terms, transaction history, and receivables aging.</p>
+          </a>
+
+          <a href="/expenses" class="module-card">
+            <div class="module-card-header">
+              <span class="module-card-icon"><i data-lucide="wallet" style="width: 18px; height: 18px;"></i></span>
+              <span>Expenses & Outflows</span>
+            </div>
+            <p class="module-card-desc">Categorized operating expenditures, recurring costs, and net margin calculation.</p>
+          </a>
+
+          <a href="{{ url_for('reports') }}" class="module-card">
+            <div class="module-card-header">
+              <span class="module-card-icon"><i data-lucide="bar-chart-3" style="width: 18px; height: 18px;"></i></span>
+              <span>Reports & Analytics</span>
+            </div>
+            <p class="module-card-desc">Profit & loss statements, salesman productivity matrices, customer analytics, and CSV exports.</p>
+          </a>
+
+          <a href="{{ url_for('pos') }}" class="module-card">
+            <div class="module-card-header">
+              <span class="module-card-icon"><i data-lucide="store" style="width: 18px; height: 18px;"></i></span>
+              <span>Catalogue POS</span>
+            </div>
+            <p class="module-card-desc">Full-screen rapid sales workstation with brand filter chips and instant invoice generation.</p>
+          </a>
+        </div>
+      </section>
+    </main>
+  </div>
 </div>
 {% endblock %}

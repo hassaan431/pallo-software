@@ -1,98 +1,625 @@
 {% extends "base.html" %}
-{% block title %}Help Center — AK Distributors{% endblock %}
-{% block page_heading %}ہیلپ سینٹر (Help Center){% endblock %}
+{% block title %}ہیلپ سینٹر اور رہنمائے سافٹ ویئر — AK Distributors{% endblock %}
+{% block page_heading %}ہیلپ سینٹر اور رہنمائے سافٹ ویئر{% endblock %}
+
 {% block content %}
 <style>
-    .help-content h1, .help-content h2, .help-content h3 { color: #1e293b; margin-top: 1.5em; margin-bottom: 0.5em; }
-    .help-content h1 { font-size: 1.75rem; border-bottom: 1px solid #e2e8f0; padding-bottom: 0.3em; }
-    .help-content h2 { font-size: 1.4rem; border-bottom: 1px solid #e2e8f0; padding-bottom: 0.3em; }
-    .help-content h3 { font-size: 1.15rem; }
-    .help-content p { margin-bottom: 1em; }
-    .help-content ul, .help-content ol { margin-bottom: 1em; padding-right: 1.5em; }
-    .help-content li { margin-bottom: 0.5em; }
-    .help-content a { color: #2563eb; text-decoration: none; font-weight: 500; }
-    .help-content a:hover { text-decoration: underline; }
-    .help-content strong { color: #0f172a; font-weight: 700; }
+  .help-hub-container {
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+    padding-bottom: 4rem;
+  }
+
+  /* Top Hero Header */
+  .help-hero {
+    background: linear-gradient(135deg, #ffffff 0%, var(--color-slate-50) 100%);
+    border: 1px solid var(--color-slate-200);
+    border-radius: var(--radius);
+    padding: 1.75rem 2rem;
+    box-shadow: var(--shadow-sm);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1.5rem;
+    flex-wrap: wrap;
+  }
+
+  .help-hero-content {
+    max-width: 600px;
+  }
+
+  .help-hero-title {
+    font-family: 'Noto Nastaliq Urdu', 'Jameel Noori Nastaleeq', var(--font-display), sans-serif;
+    font-size: 1.5rem;
+    font-weight: 800;
+    color: var(--color-slate-900);
+    margin: 0 0 0.4rem 0;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    line-height: 1.5;
+  }
+
+  .help-hero-desc {
+    font-size: 0.95rem;
+    color: var(--color-slate-600);
+    margin: 0;
+    line-height: 1.7;
+  }
+
+  .btn-lang-switch {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    height: 42px;
+    padding: 0 16px;
+    background: #ffffff;
+    border: 1px solid var(--color-slate-200);
+    border-radius: var(--radius-pill);
+    color: var(--color-slate-700);
+    font-size: 0.875rem;
+    font-weight: 600;
+    text-decoration: none;
+    transition: all 0.15s ease;
+    box-shadow: var(--shadow-xs);
+  }
+
+  .btn-lang-switch:hover {
+    background: var(--color-slate-50);
+    border-color: var(--color-slate-300);
+    color: var(--color-slate-900);
+  }
+
+  /* Two Column Main Layout (RTL) */
+  .help-grid-layout {
+    display: grid;
+    grid-template-columns: 280px 1fr;
+    gap: 1.5rem;
+    align-items: start;
+  }
+
+  @media (max-width: 992px) {
+    .help-grid-layout {
+      grid-template-columns: 1fr;
+    }
+  }
+
+  /* Sidebar Table of Contents Navigation */
+  .help-nav-sidebar {
+    position: sticky;
+    top: calc(var(--topbar-height, 64px) + 1.5rem);
+    background: #ffffff;
+    border: 1px solid var(--color-slate-200);
+    border-radius: var(--radius);
+    padding: 1.25rem;
+    box-shadow: var(--shadow-sm);
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+  }
+
+  .help-nav-header {
+    font-size: 0.85rem;
+    font-weight: 700;
+    color: var(--color-slate-400);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    padding-bottom: 0.5rem;
+    border-bottom: 1px solid var(--color-slate-100);
+  }
+
+  .help-nav-list {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .help-nav-link {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 12px;
+    border-radius: var(--radius-sm);
+    font-size: 0.9rem;
+    font-weight: 600;
+    color: var(--color-slate-600);
+    text-decoration: none;
+    transition: all 0.15s ease;
+  }
+
+  .help-nav-link:hover {
+    background: var(--color-slate-50);
+    color: var(--color-primary-hover);
+  }
+
+  /* Workflow & Module Cards */
+  .help-content-area {
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+  }
+
+  .help-card {
+    background: #ffffff;
+    border: 1px solid var(--color-slate-200);
+    border-radius: var(--radius);
+    padding: 1.75rem;
+    box-shadow: var(--shadow-sm);
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+    scroll-margin-top: calc(var(--topbar-height, 64px) + 2rem);
+  }
+
+  .help-card-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    border-bottom: 1px solid var(--color-slate-100);
+    padding-bottom: 0.75rem;
+    flex-wrap: wrap;
+  }
+
+  .help-card-title {
+    font-size: 1.25rem;
+    font-weight: 800;
+    color: var(--color-slate-900);
+    margin: 0;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .btn-workflow-shortcut {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: var(--color-primary-hover);
+    background: var(--color-primary-light);
+    border: 1px solid var(--color-primary-border);
+    padding: 4px 10px;
+    border-radius: var(--radius-pill);
+    text-decoration: none;
+    transition: all 0.15s ease;
+  }
+
+  .btn-workflow-shortcut:hover {
+    background: #d1fae5;
+  }
+
+  .help-step-box {
+    display: flex;
+    flex-direction: column;
+    gap: 0.85rem;
+    margin-top: 0.5rem;
+  }
+
+  .help-step-item {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+  }
+
+  .help-step-num {
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    background: var(--color-slate-100);
+    color: var(--color-slate-700);
+    font-size: 0.85rem;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    margin-top: 2px;
+  }
+
+  .help-step-content {
+    font-size: 0.95rem;
+    color: var(--color-slate-700);
+    line-height: 1.7;
+  }
+
+  .help-step-content strong {
+    color: var(--color-slate-900);
+  }
+
+  /* Note & Tip Callouts */
+  .help-tip {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    padding: 0.875rem 1.25rem;
+    border-radius: var(--radius-sm);
+    background: var(--color-primary-light);
+    border: 1px solid var(--color-primary-border);
+    color: #065f46;
+    font-size: 0.9rem;
+    line-height: 1.6;
+  }
+
+  /* Modules Quick Access Directory */
+  .modules-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+    gap: 1rem;
+    margin-top: 0.5rem;
+  }
+
+  .module-card {
+    background: var(--color-slate-50);
+    border: 1px solid var(--color-slate-200);
+    border-radius: var(--radius-sm);
+    padding: 1.25rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    text-decoration: none;
+    transition: all 0.15s ease;
+  }
+
+  .module-card:hover {
+    background: #ffffff;
+    border-color: var(--color-slate-300);
+    transform: translateY(-2px);
+    box-shadow: 0 4px 10px rgba(15, 23, 42, 0.05);
+  }
+
+  .module-card-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    color: var(--color-slate-900);
+    font-weight: 700;
+    font-size: 0.95rem;
+  }
+
+  .module-card-icon {
+    width: 32px;
+    height: 32px;
+    border-radius: var(--radius-sm);
+    background: #ffffff;
+    border: 1px solid var(--color-slate-200);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--color-primary-hover);
+    flex-shrink: 0;
+  }
+
+  .module-card-desc {
+    font-size: 0.85rem;
+    color: var(--color-slate-500);
+    line-height: 1.6;
+    margin: 0;
+  }
 </style>
 
-<div class="panel" style="padding: 2.5rem; max-width: 900px; margin: 0 auto; background: white; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.1);" dir="rtl">
-    <div style="display: flex; justify-content: flex-end; margin-bottom: 2rem;" dir="ltr">
-        <a href="{{ url_for('help_center', lang='en') }}" class="btn" style="font-size: 0.9rem; padding: 6px 14px; border: 1px solid #cbd5e1; border-radius: 6px; color: #475569; text-decoration: none; background: #f8fafc; font-weight: 600;">Read in English</a>
+<div class="help-hub-container" dir="rtl">
+  <!-- Top Hero Header -->
+  <div class="help-hero">
+    <div class="help-hero-content">
+      <h1 class="help-hero-title">
+        <i data-lucide="book-marked" style="width: 26px; height: 26px; color: var(--color-primary);"></i>
+        اے کے ڈسٹری بیوٹرز — ہیلپ سینٹر و رہنمائے سافٹ ویئر
+      </h1>
+      <p class="help-hero-desc">
+        روزمرہ کے کاروباری آپریشنز، انوینٹری مینجمنٹ اور سیلز و بلنگ کے لیے مکمل اردو گائیڈ۔
+      </p>
     </div>
-    
-    <div class="help-content" style="line-height: 1.8; color: #334155; font-size: 1.15rem; font-family: 'Jameel Noori Nastaleeq', 'Noto Nastaliq Urdu', Tahoma, Arial, sans-serif;">
-        <h1>📘 اے کے ڈسٹری بیوٹرز — ہیلپ سینٹر</h1>
-        <p><strong>اے کے ڈسٹری بیوٹرز سافٹ ویئر</strong> میں خوش آمدید! یہ گائیڈ خاص طور پر اس لیے بنائی گئی ہے تاکہ آپ اور آپ کی ٹیم کو سافٹ ویئر چلانے اور روزمرہ کے کام کرنے میں کوئی مشکل نہ ہو۔</p>
 
-        <h2>📑 فہرست</h2>
-        <ol>
-            <li><a href="#workflows">کام کرنے کا طریقہ (Workflows)</a></li>
-            <li><a href="#modules">سافٹ ویئر کے حصے (Modules)</a></li>
-        </ol>
-
-        <h2 id="workflows">عام کام کرنے کا طریقہ</h2>
-
-        <h3>1. نیا پروڈکٹ یا برانڈ کیسے ایڈ کریں 📦</h3>
-        <p>کسی بھی نئے پروڈکٹ کو سافٹ ویئر میں ڈالنے یا خریدنے سے پہلے، سافٹ ویئر میں اس کے <strong>سپلائر اور برانڈ</strong> کا ہونا ضروری ہے۔</p>
-        <p><strong>سٹیپ 1: سپلائر یا برانڈ ایڈ کریں</strong><br>
-        <em>یہاں جائیں:</em> <a href="{{ url_for('suppliers_page') }}">Suppliers & Brands</a></p>
-        <ol>
-            <li><strong>Add Supplier/Brand</strong> والے بٹن پر کلک کریں۔</li>
-            <li>ضروری معلومات لکھیں جیسے: سپلائر کا نام، نمبر اور برانڈ کا نام۔</li>
-            <li><strong>Save</strong> کر دیں۔ اس سے برانڈ آپ کے سپلائر کے ساتھ پکا جڑ جائے گا۔</li>
-        </ol>
-
-        <p><strong>سٹیپ 2: پروڈکٹ کو کیٹلاگ میں ڈالیں</strong><br>
-        <em>یہاں جائیں:</em> <a href="{{ url_for('inventory') }}">Inventory</a></p>
-        <ol>
-            <li><strong>Add New Product</strong> کے بٹن پر کلک کریں۔</li>
-            <li>پروڈکٹ کی تفصیل لکھیں (جیسے نام، قیمت اور وہ برانڈ جو آپ نے سٹیپ 1 میں بنایا تھا)۔</li>
-            <li>پروڈکٹ کو <strong>Save</strong> کر دیں۔ <em>(نوٹ: ابھی اس کا اسٹاک 0 ہوگا، جب تک آپ نئی پرچیز نہیں ڈالتے۔)</em></li>
-        </ol>
-
-        <h3>2. نیا سامان وصول کرنا (Purchases) 📥</h3>
-        <p>جب آپ کے گودام (Warehouse) میں نیا سامان آئے، تو آپ کو اسے <strong>Purchase</strong> کے طور پر ڈالنا ہوگا۔</p>
-        <p><strong>سٹیپ 1: آنے والے سامان کی انٹری کریں</strong><br>
-        <em>یہاں جائیں:</em> <a href="/purchases">Purchases</a></p>
-        <ol>
-            <li><strong>New Purchase</strong> پر کلک کریں۔</li>
-            <li>اپنا <strong>Supplier</strong> اور وہ <strong>Warehouse</strong> سلیکٹ کریں جہاں سامان اتر رہا ہے۔</li>
-            <li>جو سامان آیا ہے اسے سرچ کریں، اور اس کی صحیح مقدار (quantity) اور قیمت لکھیں۔</li>
-            <li>اگر کوئی کرایہ یا ٹیکس وغیرہ ہے تو وہ بھی ڈال دیں۔</li>
-            <li>پرچیز کو <strong>Submit</strong> کریں تاکہ آپ کا اسٹاک فوراً اپ ڈیٹ ہو جائے۔</li>
-        </ol>
-
-        <h3>3. سیل (Sale) کرنا اور بل بنانا 🧾</h3>
-        <p>سیل ڈالنے سے آپ کا اسٹاک کم ہوتا ہے، منافع کیلکولیٹ ہوتا ہے اور کسٹمر کے لیے ایک پروفیشنل بل بن جاتا ہے۔</p>
-        <p><strong>سٹیپ 1: سیل ڈالیں</strong><br>
-        <em>یہاں جائیں:</em> <a href="{{ url_for('sales') }}">Sales</a></p>
-        <ol>
-            <li><strong>Record Sale</strong> پر کلک کریں۔</li>
-            <li>اپنا <strong>Customer</strong> اور وہ <strong>Warehouse</strong> سلیکٹ کریں جہاں سے سامان جا رہا ہے۔</li>
-            <li>پروڈکٹس ایڈ کریں، مقدار سیٹ کریں، اور فائنل قیمت لکھیں (آپ یہاں ڈسکاؤنٹ بھی دے سکتے ہیں)۔</li>
-            <li>ٹیکس یا ڈیلیوری فیس ڈالیں اور بتائیں کہ پیمنٹ ہو گئی ہے یا نہیں (Paid, Partial, Unpaid)۔</li>
-            <li>سیل کو <strong>Submit</strong> کریں اور پھر <strong>Generate PDF Invoice</strong> پر کلک کر کے بل پرنٹ کر لیں۔</li>
-        </ol>
-
-        <h3>4. گوداموں کے درمیان اسٹاک ٹرانسفر کرنا 🚚</h3>
-        <p>اگر آپ کے پاس ایک سے زیادہ گودام یا دکانیں ہیں، تو آپ کو ان کے درمیان سامان بھیجنے کی ضرورت پڑ سکتی ہے۔</p>
-        <p><em>یہاں جائیں:</em> <a href="{{ url_for('inventory_transfers') }}">Transfers</a></p>
-        <ol>
-            <li><strong>New Transfer</strong> پر کلک کریں۔</li>
-            <li><strong>Source Warehouse</strong> (جہاں سے سامان جا رہا ہے) اور <strong>Destination Warehouse</strong> (جہاں سامان جا رہا ہے) سلیکٹ کریں۔</li>
-            <li>پروڈکٹس اور ان کی مقدار بتائیں، اور پھر <strong>Confirm</strong> کر دیں۔</li>
-        </ol>
-
-        <h2 id="modules">سافٹ ویئر کے حصے (Modules Guide)</h2>
-        <ul>
-            <li><strong><a href="{{ url_for('dashboard') }}">Dashboard & Reports</a>:</strong> یہ آپ کا مین پیج ہے۔ یہاں آپ روزانہ کی سیلز، منافع (Profit) دیکھ سکتے ہیں اور رپورٹس نکال سکتے ہیں۔</li>
-            <li><strong><a href="{{ url_for('inventory') }}">Products (Inventory & Purchases)</a>:</strong> آپ کے تمام پروڈکٹس کی لسٹ، پرانی خریداریاں، اور اسٹاک کی ہسٹری یہاں ملے گی۔</li>
-            <li><strong><a href="{{ url_for('suppliers_page') }}">Suppliers & Brands</a>:</strong> آپ کے تمام سپلائرز اور گوداموں (Warehouses) کا ریکارڈ۔</li>
-            <li><strong><a href="{{ url_for('sales') }}">Sales & Customers</a>:</strong> آپ کی تمام سیلز، پرانے بل اور کسٹمرز کا کھاتہ۔</li>
-            <li><strong><a href="/expenses">Administration (Expenses & Users)</a>:</strong> اپنے کاروباری خرچے (Expenses) یہاں ڈالیں تاکہ صحیح منافع نکل سکے۔ اس کے علاوہ اسٹاف کی آئی ڈیز بھی یہیں بنتی ہیں۔</li>
-            <li><strong><a href="{{ url_for('brochure_settings') }}">Brochure Settings</a>:</strong> پبلک کیٹلاگ ویب سائٹ کو یہاں سے کنٹرول کریں۔</li>
-            <li><strong><a href="{{ url_for('pos') }}">POS Catalogue</a>:</strong> کاؤنٹر پر جلدی بل بنانے کے لیے یہ انٹرفیس استعمال کریں۔</li>
-        </ul>
+    <div class="help-hero-actions" dir="ltr">
+      <a href="{{ url_for('help_center', lang='en') }}" class="btn-lang-switch" title="Read software manual in English">
+        <i data-lucide="languages" style="width: 16px; height: 16px; color: var(--color-primary);"></i>
+        <span>English Version</span>
+      </a>
     </div>
+  </div>
+
+  <!-- Two Column Layout (RTL) -->
+  <div class="help-grid-layout">
+    <!-- Right Sidebar Navigation -->
+    <aside class="help-nav-sidebar">
+      <div class="help-nav-header">ضروری طریقہ کار (Workflows)</div>
+      <ul class="help-nav-list">
+        <li>
+          <a href="#wf-products" class="help-nav-link">
+            <i data-lucide="package-plus" style="width: 16px; height: 16px;"></i>
+            <span>1. پروڈکٹس اور برانڈز ایڈ کرنا</span>
+          </a>
+        </li>
+        <li>
+          <a href="#wf-purchases" class="help-nav-link">
+            <i data-lucide="arrow-down-to-dot" style="width: 16px; height: 16px;"></i>
+            <span>2. مال وصول کرنا (Purchases)</span>
+          </a>
+        </li>
+        <li>
+          <a href="#wf-sales" class="help-nav-link">
+            <i data-lucide="receipt" style="width: 16px; height: 16px;"></i>
+            <span>3. سیلز اور بل بنانا</span>
+          </a>
+        </li>
+        <li>
+          <a href="#wf-transfers" class="help-nav-link">
+            <i data-lucide="truck" style="width: 16px; height: 16px;"></i>
+            <span>4. گودام ٹرانسفرز</span>
+          </a>
+        </li>
+      </ul>
+
+      <div class="help-nav-header" style="margin-top: 0.5rem;">سافٹ ویئر کے حصے</div>
+      <ul class="help-nav-list">
+        <li>
+          <a href="#system-modules" class="help-nav-link">
+            <i data-lucide="layout-grid" style="width: 16px; height: 16px;"></i>
+            <span>تمام ماڈیولز کی تفصیل</span>
+          </a>
+        </li>
+      </ul>
+    </aside>
+
+    <!-- Main Content Area -->
+    <main class="help-content-area">
+      <!-- Workflow 1 -->
+      <section class="help-card" id="wf-products">
+        <div class="help-card-header">
+          <h2 class="help-card-title">
+            <i data-lucide="package-plus" style="width: 20px; height: 20px; color: var(--color-primary);"></i>
+            1. نیا پروڈکٹ یا برانڈ شامل کرنے کا طریقہ
+          </h2>
+          <a href="{{ url_for('suppliers_page') }}" class="btn-workflow-shortcut">
+            <span>سپلائرز اور برانڈز پیج</span>
+            <i data-lucide="arrow-left" style="width: 13px; height: 13px;"></i>
+          </a>
+        </div>
+
+        <p style="font-size: 0.95rem; color: var(--color-slate-600); margin: 0; line-height: 1.7;">
+          کسی بھی نئے پروڈکٹ کو سسٹم میں رجسٹر کرنے سے پہلے اس کے سپلائر اور برانڈ کا سافٹ ویئر میں موجود ہونا ضروری ہے۔
+        </p>
+
+        <div class="help-step-box">
+          <div class="help-step-item">
+            <span class="help-step-num">1</span>
+            <div class="help-step-content">
+              <strong>سپلائر اور برانڈ شامل کریں:</strong> مینو میں <a href="{{ url_for('suppliers_page') }}" style="color:var(--color-primary-hover); font-weight:700;">Suppliers & Brands</a> پر جائیں، <em>"Add Supplier / Brand"</em> پر کلک کریں اور سپلائر کا نام، فون نمبر اور برانڈ درج کر کے محفوظ کریں۔
+            </div>
+          </div>
+          <div class="help-step-item">
+            <span class="help-step-num">2</span>
+            <div class="help-step-content">
+              <strong>پروڈکٹ رجسٹر کریں:</strong> <a href="{{ url_for('inventory') }}" style="color:var(--color-primary-hover); font-weight:700;">Inventory</a> پر جائیں، <em>"Add New Product"</em> پر کلک کریں، پروڈکٹ کا نام، لاگت، سیل پرائس اور برانڈ منتخب کر کے محفوظ کر لیں۔
+            </div>
+          </div>
+        </div>
+
+        <div class="help-tip">
+          <i data-lucide="lightbulb" style="width: 18px; height: 18px; flex-shrink: 0;"></i>
+          <span><strong>اہم نکتہ:</strong> نیا پروڈکٹ شامل کرنے پر اس کا اسٹاک 0 رہے گا۔ جیسے ہی آپ اس کی پرچیز انٹری ڈالیں گے، اسٹاک خودبخود بڑھ جائے گا۔</span>
+        </div>
+      </section>
+
+      <!-- Workflow 2 -->
+      <section class="help-card" id="wf-purchases">
+        <div class="help-card-header">
+          <h2 class="help-card-title">
+            <i data-lucide="arrow-down-to-dot" style="width: 20px; height: 20px; color: var(--color-primary);"></i>
+            2. نیا سامان وصول کرنا (Inbound Purchases)
+          </h2>
+          <a href="/purchases" class="btn-workflow-shortcut">
+            <span>پرچیزز پیج پر جائیں</span>
+            <i data-lucide="arrow-left" style="width: 13px; height: 13px;"></i>
+          </a>
+        </div>
+
+        <p style="font-size: 0.95rem; color: var(--color-slate-600); margin: 0; line-height: 1.7;">
+          جب فیکٹری یا وینڈر سے گودام پر سامان آئے، تو فوری طور پر پرچیز درج کریں تاکہ اسٹاک لیجر اور لاگت کا حساب خودکار طور پر اپ ڈیٹ ہو جائے۔
+        </p>
+
+        <div class="help-step-box">
+          <div class="help-step-item">
+            <span class="help-step-num">1</span>
+            <div class="help-step-content">
+              <a href="/purchases" style="color:var(--color-primary-hover); font-weight:700;">Purchases</a> پر جائیں اور <em>"New Purchase"</em> پر کلک کریں۔
+            </div>
+          </div>
+          <div class="help-step-item">
+            <span class="help-step-num">2</span>
+            <div class="help-step-content">
+              اپنا سپلائر اور منزل والا گودام (Destination Warehouse) منتخب کریں۔
+            </div>
+          </div>
+          <div class="help-step-item">
+            <span class="help-step-num">3</span>
+            <div class="help-step-content">
+              وصول شدہ پروڈکٹس سرچ کر کے کارٹن یا یونٹ کی مقدار اور قیمت درج کریں۔ اگر کرایہ یا فریٹ ہو تو وہ بھی شامل کریں۔
+            </div>
+          </div>
+          <div class="help-step-item">
+            <span class="help-step-num">4</span>
+            <div class="help-step-content">
+              پرچیز کو سبمٹ کریں تاکہ آپ کا انوینٹری بیلنس فوری طور پر اپ ڈیٹ ہو جائے۔
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Workflow 3 -->
+      <section class="help-card" id="wf-sales">
+        <div class="help-card-header">
+          <h2 class="help-card-title">
+            <i data-lucide="receipt" style="width: 20px; height: 20px; color: var(--color-primary);"></i>
+            3. سیل (Sale) ریکارڈ کرنا اور انوائس بنانا
+          </h2>
+          <a href="{{ url_for('sales') }}" class="btn-workflow-shortcut">
+            <span>سیلز پیج</span>
+            <i data-lucide="arrow-left" style="width: 13px; height: 13px;"></i>
+          </a>
+        </div>
+
+        <p style="font-size: 0.95rem; color: var(--color-slate-600); margin: 0; line-height: 1.7;">
+          سیل درج کرنے سے متعلقہ گودام سے اسٹاک کم ہوتا ہے، مجموعی منافع کیلکولیٹ ہوتا ہے اور پیشہ ورانہ پرنٹ ایبل پی ڈی ایف انوائس تیار ہوتی ہے۔
+        </p>
+
+        <div class="help-step-box">
+          <div class="help-step-item">
+            <span class="help-step-num">1</span>
+            <div class="help-step-content">
+              <a href="{{ url_for('sales') }}" style="color:var(--color-primary-hover); font-weight:700;">Sales</a> پر جائیں اور <em>"Record Sale"</em> پر کلک کریں (یا تیز رفتار <a href="{{ url_for('pos') }}" style="color:var(--color-primary-hover); font-weight:700;">POS Terminal</a> کھولیں)۔
+            </div>
+          </div>
+          <div class="help-step-item">
+            <span class="help-step-num">2</span>
+            <div class="help-step-content">
+              کسٹمر منتخب کریں اور وہ گودام منتخب کریں جہاں سے مال ڈسپیچ ہو رہا ہے۔
+            </div>
+          </div>
+          <div class="help-step-item">
+            <span class="help-step-num">3</span>
+            <div class="help-step-content">
+              پروڈکٹس ایڈ کریں، مقدار سیٹ کریں، ادا شدہ رقم درج کریں اور ادائیگی کی قسم (Cash، Cheque یا Credit) منتخب کریں۔
+            </div>
+          </div>
+          <div class="help-step-item">
+            <span class="help-step-num">4</span>
+            <div class="help-step-content">
+              سبمٹ کرنے کے بعد <em>"Print Invoice PDF"</em> پر کلک کر کے باضابطہ بل حاصل کریں۔
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Workflow 4 -->
+      <section class="help-card" id="wf-transfers">
+        <div class="help-card-header">
+          <h2 class="help-card-title">
+            <i data-lucide="truck" style="width: 20px; height: 20px; color: var(--color-primary);"></i>
+            4. گوداموں کے درمیان سامان منتقل کرنا (Stock Transfers)
+          </h2>
+          <a href="{{ url_for('inventory_transfers') }}" class="btn-workflow-shortcut">
+            <span>ٹرانسفرز پیج</span>
+            <i data-lucide="arrow-left" style="width: 13px; height: 13px;"></i>
+          </a>
+        </div>
+
+        <p style="font-size: 0.95rem; color: var(--color-slate-600); margin: 0; line-height: 1.7;">
+          ایک گودام سے دوسرے گودام میں مال منتقل کرنے کے لیے ٹرانسفر کا استعمال کریں تاکہ مال کا درست اندراج رہے۔
+        </p>
+
+        <div class="help-step-box">
+          <div class="help-step-item">
+            <span class="help-step-num">1</span>
+            <div class="help-step-content">
+              <a href="{{ url_for('inventory_transfers') }}" style="color:var(--color-primary-hover); font-weight:700;">Transfers</a> پر جائیں اور <em>"New Transfer"</em> پر کلک کریں۔
+            </div>
+          </div>
+          <div class="help-step-item">
+            <span class="help-step-num">2</span>
+            <div class="help-step-content">
+              ارسال کنندہ گودام (Source) اور وصول کنندہ گودام (Destination) چنیں۔
+            </div>
+          </div>
+          <div class="help-step-item">
+            <span class="help-step-num">3</span>
+            <div class="help-step-content">
+              پروڈکٹس اور منتقل ہونے والی تعداد منتخب کریں اور تصدیق کر دیں۔
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- System Modules Directory -->
+      <section class="help-card" id="system-modules">
+        <div class="help-card-header">
+          <h2 class="help-card-title">
+            <i data-lucide="layout-grid" style="width: 20px; height: 20px; color: var(--color-primary);"></i>
+            سافٹ ویئر کے اہم حصوں کی ڈائریکٹری
+          </h2>
+        </div>
+
+        <div class="modules-grid">
+          <a href="{{ url_for('dashboard') }}" class="module-card">
+            <div class="module-card-header">
+              <span class="module-card-icon"><i data-lucide="layout-dashboard" style="width: 18px; height: 18px;"></i></span>
+              <span>ڈیش بورڈ (Dashboard)</span>
+            </div>
+            <p class="module-card-desc">کاروباری خلاصہ، روزانہ کی سیلز، نیٹ پرافٹ اور کم اسٹاک کی الرٹس۔</p>
+          </a>
+
+          <a href="{{ url_for('sales') }}" class="module-card">
+            <div class="module-card-header">
+              <span class="module-card-icon"><i data-lucide="receipt" style="width: 18px; height: 18px;"></i></span>
+              <span>سیلز اور انوائسز (Sales)</span>
+            </div>
+            <p class="module-card-desc">تمام سیلز کا رجسٹر، کسٹمرز کے واجبات اور پی ڈی ایف بلنگ۔</p>
+          </a>
+
+          <a href="{{ url_for('inventory') }}" class="module-card">
+            <div class="module-card-header">
+              <span class="module-card-icon"><i data-lucide="package" style="width: 18px; height: 18px;"></i></span>
+              <span>انوینٹری اور کیٹلاگ (Inventory)</span>
+            </div>
+            <p class="module-card-desc">تمام مصنوعات کی فہرست، گوداموں کا لائیو اسٹاک اور قیمتوں کا انتظام۔</p>
+          </a>
+
+          <a href="/purchases" class="module-card">
+            <div class="module-card-header">
+              <span class="module-card-icon"><i data-lucide="shopping-cart" style="width: 18px; height: 18px;"></i></span>
+              <span>پرچیزز (Purchases)</span>
+            </div>
+            <p class="module-card-desc">آنے والے مال کا اندراج اور سپلائرز کے بلوں کا ریکارڈ۔</p>
+          </a>
+
+          <a href="{{ url_for('suppliers_page') }}" class="module-card">
+            <div class="module-card-header">
+              <span class="module-card-icon"><i data-lucide="truck" style="width: 18px; height: 18px;"></i></span>
+              <span>سپلائرز اور برانڈز</span>
+            </div>
+            <p class="module-card-desc">سپلائر وینڈرز کی تفصیلات اور پارٹنر برانڈز کا نظم۔</p>
+          </a>
+
+          <a href="{{ url_for('customers') }}" class="module-card">
+            <div class="module-card-header">
+              <span class="module-card-icon"><i data-lucide="users" style="width: 18px; height: 18px;"></i></span>
+              <span>گاہک اور کھاتے (Customers)</span>
+            </div>
+            <p class="module-card-desc">کسٹمر پروفائلز، ادھار کی تاریخ اور ریکوری کا ریکارڈ۔</p>
+          </a>
+
+          <a href="/expenses" class="module-card">
+            <div class="module-card-header">
+              <span class="module-card-icon"><i data-lucide="wallet" style="width: 18px; height: 18px;"></i></span>
+              <span>کاروباری خرچے (Expenses)</span>
+            </div>
+            <p class="module-card-desc">دکان اور گودام کے روزانہ اخراجات کا اندراج تاکہ درست منافع نکل سکے۔</p>
+          </a>
+
+          <a href="{{ url_for('reports') }}" class="module-card">
+            <div class="module-card-header">
+              <span class="module-card-icon"><i data-lucide="bar-chart-3" style="width: 18px; height: 18px;"></i></span>
+              <span>رپورٹس و تجزیات (Reports)</span>
+            </div>
+            <p class="module-card-desc">آمدن، منافع، سیلزمین رپورٹ، کسٹمر رپورٹس اور ایکسل برآمد۔</p>
+          </a>
+
+          <a href="{{ url_for('pos') }}" class="module-card">
+            <div class="module-card-header">
+              <span class="module-card-icon"><i data-lucide="store" style="width: 18px; height: 18px;"></i></span>
+              <span>پی او ایس کاؤنٹر (POS)</span>
+            </div>
+            <p class="module-card-desc">تیز رفتار سیلز اور فوری بلنگ کے لیے وقف سکرین۔</p>
+          </a>
+        </div>
+      </section>
+    </main>
+  </div>
 </div>
 {% endblock %}
