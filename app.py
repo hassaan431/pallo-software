@@ -11,7 +11,9 @@ from collections import defaultdict
 
 from database import get_connection, get_next_invoice_number, get_user_by_id, get_user_by_username, init_db, DB_PATH
 
-from flask import Flask, Response, flash, jsonify, redirect, render_template, request, url_for
+import urllib.parse
+
+from flask import Flask, Response, flash, jsonify, redirect, render_template, request, url_for, send_from_directory
 from flask_login import LoginManager, UserMixin, current_user, login_required, login_user, logout_user
 from werkzeug.security import check_password_hash, generate_password_hash
 from werkzeug.exceptions import HTTPException
@@ -26,11 +28,36 @@ init_db()
 from flask_cors import CORS
 CORS(app, resources={r"/api/*": {"origins": "*"}})
 
-from public_routes import public_bp
-app.register_blueprint(public_bp)
-
 from api_routes import api_bp
 app.register_blueprint(api_bp, url_prefix='/api')
+
+@app.route("/")
+def index():
+    if current_user.is_authenticated:
+        if current_user.role == 'salesman':
+            return redirect(url_for("pos"))
+        return redirect(url_for("dashboard"))
+    return redirect(url_for("login"))
+
+def fetch_resources(uri, rel):
+    """Callback to resolve local paths for xhtml2pdf"""
+    clean_uri = urllib.parse.unquote(str(uri).strip())
+    if '?' in clean_uri:
+        clean_uri = clean_uri.split('?')[0]
+    if clean_uri.startswith('/static/'):
+        return os.path.join(app.root_path, 'static', clean_uri[len('/static/'):])
+    elif clean_uri.startswith('static/'):
+        return os.path.join(app.root_path, 'static', clean_uri[len('static/'):])
+    return clean_uri
+
+@app.route("/brochure/download")
+def download_brochure():
+    downloads_dir = os.path.join(app.root_path, 'static', 'downloads')
+    filename = 'brochure.pdf'
+    file_path = os.path.join(downloads_dir, filename)
+    if not os.path.exists(file_path):
+        return "Brochure is not currently available. Please check back later.", 404
+    return send_from_directory(downloads_dir, filename, as_attachment=True, download_name="AK_Distributors_Brochure.pdf")
 
 login_manager = LoginManager()
 login_manager.init_app(app)
@@ -202,7 +229,6 @@ def favicon():
 @admin_required
 def regenerate_brochure():
     from database import get_brochure_products, get_brand_logo_filename
-    from public_routes import fetch_resources
     from xhtml2pdf import pisa
     from PIL import Image
     from io import BytesIO
