@@ -1,617 +1,642 @@
 {% extends "base.html" %}
-{% block title %}Reports — AK Distributors{% endblock %}
+{% block title %}Business Intelligence & Reports — AK Distributors{% endblock %}
 {% block page_heading %}Reports{% endblock %}
 
 {% block content %}
 <style>
-  .tab-buttons {
-    display: flex;
-    gap: 0.65rem;
-    flex-wrap: wrap;
-    margin-bottom: 1rem;
-  }
-
-  .tab-btn {
-    background: #f3f4f6;
-    color: var(--color-text);
-    border: 1px solid var(--color-border);
-    border-radius: 10px;
-    padding: 0.65rem 0.9rem;
-    font-weight: 800;
-    cursor: pointer;
-    user-select: none;
-    transition: background 0.15s ease, border-color 0.15s ease;
-  }
-
-  .tab-btn.is-active {
-    background: rgba(232, 128, 10, 0.12);
-    border-color: var(--color-accent);
-    color: var(--color-text);
-  }
-
   .stock-pill {
-    font-weight: 900;
-    padding: 0.25rem 0.5rem;
-    border-radius: 10px;
+    font-weight: 800;
+    padding: 0.2rem 0.5rem;
+    border-radius: 99px;
     display: inline-block;
+    font-size: 0.75rem;
   }
-
-  .stock-zero {
-    background: #ffe5e5;
-    color: #991b1b;
-  }
-
-  .stock-low {
-    background: #fff8e1;
-    color: #92400e;
-  }
-
-  .stock-ok {
-    background: #dcfce7;
-    color: #166534;
-  }
+  .stock-zero { background: #ffe5e5; color: #991b1b; }
+  .stock-low { background: #fff8e1; color: #92400e; }
+  .stock-ok { background: #dcfce7; color: #166534; }
   
   th[data-sort] {
-      cursor: pointer;
+    cursor: pointer;
+    user-select: none;
+    transition: background 0.15s ease;
   }
   th[data-sort]:hover {
-      background: #f1f5f9;
+    background: #e2e8f0 !important;
   }
 </style>
 
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
-<div class="tab-buttons" style="margin-top:1.15rem;">
-  <button type="button" class="tab-btn is-active" data-tab="profit">📈 Profit Analysis</button>
-  <button type="button" class="tab-btn" data-tab="salesman">🤵 By Salesman</button>
-  <button type="button" class="tab-btn" data-tab="customer">👤 By Customer</button>
-  <button type="button" class="tab-btn" data-tab="brand">🏷️ By Brand</button>
-  <button type="button" class="tab-btn" data-tab="category">🗂️ By Category</button>
-  <button type="button" class="tab-btn" data-tab="product">📦 By Product</button>
-  <button type="button" class="tab-btn" data-tab="commission">💰 Commission Report</button>
-  <button type="button" class="tab-btn" data-tab="inventory-additions">➕ Inventory Additions</button>
-  <button type="button" class="tab-btn" data-tab="stock-distribution">🏢 Stock Distribution</button>
+<!-- PHASE 12: Command Bar -->
+<div class="reports-header-bar">
+  <div class="reports-title-group">
+    <div>
+      <h2>Business Intelligence &amp; Reports</h2>
+      <div style="font-size: 0.8rem; color: var(--color-slate-500); margin-top: 2px;">
+        Real-time profitability analytics, sales rep performance, customer margins, and stock intelligence
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Modern Segmented Tab Navigation -->
+<div class="reports-nav-bar">
+  <button type="button" class="tab-btn reports-tab-btn is-active" data-tab="profit">📈 Profit Analysis</button>
+  <button type="button" class="tab-btn reports-tab-btn" data-tab="salesman">🤵 By Salesman</button>
+  <button type="button" class="tab-btn reports-tab-btn" data-tab="customer">👤 By Customer</button>
+  <button type="button" class="tab-btn reports-tab-btn" data-tab="brand">🏷️ By Brand</button>
+  <button type="button" class="tab-btn reports-tab-btn" data-tab="category">🗂️ By Category</button>
+  <button type="button" class="tab-btn reports-tab-btn" data-tab="product">📦 By Product</button>
+  <button type="button" class="tab-btn reports-tab-btn" data-tab="commission">💰 Commission Report</button>
+  <button type="button" class="tab-btn reports-tab-btn" data-tab="inventory-additions">➕ Inventory Additions</button>
+  <button type="button" class="tab-btn reports-tab-btn" data-tab="stock-distribution">🏢 Stock Distribution</button>
 </div>
 
 <!-- CUSTOMER TAB -->
 <div id="tab-customer" class="tab-content" style="display:none;">
-  <div class="panel" style="margin-bottom: 1rem;">
-    <div class="panel-body" style="padding: 1rem;">
-      <div style="display:flex; gap:0.9rem; align-items:end; flex-wrap:wrap;">
-        <div><label class="field-label">Date From</label><input type="date" class="form-control" id="c_date_from"></div>
-        <div><label class="field-label">Date To</label><input type="date" class="form-control" id="c_date_to"></div>
-        <div>
-          <label class="field-label">Product</label>
-          <select class="form-control" id="c_product">
-            <option value="">All Products</option>
-            {% for p in products %}
-              <option value="{{ p.id }}">{{ p.name }}</option>
-            {% endfor %}
-          </select>
-        </div>
-        <div>
-          <label class="field-label">Brand</label>
-          <select class="form-control" id="c_brand">
-            <option value="">All Brands</option>
-            {% for b in brands %}
-              <option value="{{ b }}">{{ b }}</option>
-            {% endfor %}
-          </select>
-        </div>
-        <div style="display:flex; gap:0.5rem;">
-          <button type="button" class="btn btn-primary" onclick="loadCustomerReport()">Apply Filter</button>
-          <button type="button" class="btn btn-secondary" onclick="exportCsv('customer')">Export CSV</button>
-        </div>
+  <div class="reports-filter-card">
+    <div style="display:flex; gap:0.75rem; align-items:flex-end; flex-wrap:wrap;">
+      <div class="reports-filter-group">
+        <label>Date From</label>
+        <input type="date" class="reports-filter-input" id="c_date_from">
+      </div>
+      <div class="reports-filter-group">
+        <label>Date To</label>
+        <input type="date" class="reports-filter-input" id="c_date_to">
+      </div>
+      <div class="reports-filter-group">
+        <label>Product</label>
+        <select class="reports-filter-input" id="c_product" style="min-width: 150px;">
+          <option value="">All Products</option>
+          {% for p in products %}
+            <option value="{{ p.id }}">{{ p.name }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="reports-filter-group">
+        <label>Brand</label>
+        <select class="reports-filter-input" id="c_brand" style="min-width: 140px;">
+          <option value="">All Brands</option>
+          {% for b in brands %}
+            <option value="{{ b }}">{{ b }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div style="display:flex; gap:0.4rem; align-items:flex-end;">
+        <button type="button" class="btn btn-primary" onclick="loadCustomerReport()" style="height: 34px; padding: 0 0.85rem; font-size: 0.8rem; font-weight: 600;">Apply Filter</button>
+        <button type="button" class="btn btn-outline" onclick="exportCsv('customer')" style="height: 34px; padding: 0 0.75rem; font-size: 0.8rem;">Export CSV</button>
       </div>
     </div>
   </div>
-  <section class="panel" style="box-shadow:none;">
-    <div class="panel-body">
-      <div class="table-wrap">
-        <table class="data-table" id="customerTable">
-          <thead>
-            <tr>
-              <th data-sort="customer_name">Customer Name</th>
-              <th data-sort="area">Area</th>
-              <th data-sort="invoice_count">Total Invoices</th>
-              <th data-sort="total_revenue">Total Revenue</th>
-              <th data-sort="profit_margin">Profit Margin (%)</th>
-              <th data-sort="profit_amount">Profit Amount ($)</th>
-              <th data-sort="outstanding">Outstanding</th>
-              <th data-sort="last_sale_date">Last Sale Date</th>
-            </tr>
-          </thead>
-          <tbody id="customerTableBody"></tbody>
-        </table>
-      </div>
+  <section class="reports-section-card">
+    <div class="reports-table-wrap">
+      <table class="data-table" id="customerTable">
+        <thead>
+          <tr>
+            <th data-sort="customer_name">Customer Name</th>
+            <th data-sort="area">Area</th>
+            <th data-sort="invoice_count" style="text-align: center;">Total Invoices</th>
+            <th data-sort="total_revenue" style="text-align: right;">Total Revenue</th>
+            <th data-sort="profit_margin" style="text-align: center;">Profit Margin (%)</th>
+            <th data-sort="profit_amount" style="text-align: right;">Profit Amount ($)</th>
+            <th data-sort="outstanding" style="text-align: right;">Outstanding</th>
+            <th data-sort="last_sale_date" style="text-align: center;">Last Sale Date</th>
+          </tr>
+        </thead>
+        <tbody id="customerTableBody"></tbody>
+      </table>
     </div>
   </section>
 </div>
 
 <!-- SALESMAN TAB -->
 <div id="tab-salesman" class="tab-content" style="display:none;">
-  <div class="panel" style="margin-bottom: 1rem;">
-    <div class="panel-body" style="padding: 1rem;">
-      <div style="display:flex; gap:0.9rem; align-items:end; flex-wrap:wrap;">
-        <div><label class="field-label">Date From</label><input type="date" class="form-control" id="s_date_from"></div>
-        <div><label class="field-label">Date To</label><input type="date" class="form-control" id="s_date_to"></div>
-        <div style="display:flex; gap:0.5rem;">
-          <button type="button" class="btn btn-primary" onclick="loadSalesmanReport()">Apply Filter</button>
-        </div>
+  <div class="reports-filter-card">
+    <div style="display:flex; gap:0.75rem; align-items:flex-end; flex-wrap:wrap;">
+      <div class="reports-filter-group">
+        <label>Date From</label>
+        <input type="date" class="reports-filter-input" id="s_date_from">
+      </div>
+      <div class="reports-filter-group">
+        <label>Date To</label>
+        <input type="date" class="reports-filter-input" id="s_date_to">
+      </div>
+      <div style="display:flex; gap:0.4rem; align-items:flex-end;">
+        <button type="button" class="btn btn-primary" onclick="loadSalesmanReport()" style="height: 34px; padding: 0 0.85rem; font-size: 0.8rem; font-weight: 600;">Apply Filter</button>
       </div>
     </div>
   </div>
-  <section class="panel" style="box-shadow:none;">
-    <div class="panel-body">
-      <div class="table-wrap">
-        <table class="data-table" id="salesmanTable" style="margin-bottom: 2rem;">
-          <thead>
-            <tr>
-              <th data-sort="salesman_name">Salesman Name</th>
-              <th data-sort="invoice_count">Total Invoices</th>
-              <th data-sort="total_revenue">Total Revenue</th>
-              <th data-sort="profit_margin">Profit Margin (%)</th>
-              <th data-sort="profit_amount">Profit Amount ($)</th>
-              <th data-sort="outstanding">Outstanding</th>
-            </tr>
-          </thead>
-          <tbody id="salesmanTableBody"></tbody>
-        </table>
-
-        <!-- Salesman Details Section -->
-        <div id="salesmanDetailsSection" style="display:none; padding: 1.5rem; background: white; border: 1px solid var(--color-border); border-radius: 8px; margin-top: 1.5rem; box-shadow: 0 1px 3px rgba(0,0,0,0.05);">
-          <h3 style="margin-top:0; margin-bottom:1rem; font-size:1.1rem; color:#1e293b;" id="salesmanDetailsTitle">Sales Details</h3>
-          <table class="data-table">
-            <thead>
-              <tr>
-                <th>Invoice#</th>
-                <th>Date</th>
-                <th>Grand Total</th>
-                <th>Profit Amount</th>
-                <th>Payment</th>
-                <th>Status</th>
-              </tr>
-            </thead>
-            <tbody id="salesmanDetailsBody"></tbody>
-          </table>
-          
-          <div style="display:flex; justify-content:space-between; align-items:center; margin-top:1rem; background:#f8fafc; padding:0.75rem 1rem; border-radius:0.5rem; border:1px solid #e2e8f0;">
-            <div style="color:#64748b; font-size:0.9rem;" id="salesmanPageInfo">Page 1</div>
-            <div style="display:flex; gap:0.5rem;">
-              <button class="btn btn-outline" id="salesmanPrevBtn" style="padding:0.25rem 0.75rem;">Previous</button>
-              <button class="btn btn-outline" id="salesmanNextBtn" style="padding:0.25rem 0.75rem;">Next</button>
-            </div>
-          </div>
-        </div>
-      </div>
+  <section class="reports-section-card">
+    <div class="reports-table-wrap">
+      <table class="data-table" id="salesmanTable">
+        <thead>
+          <tr>
+            <th data-sort="salesman_name">Salesman Name</th>
+            <th data-sort="invoice_count" style="text-align: center;">Total Invoices</th>
+            <th data-sort="total_revenue" style="text-align: right;">Total Revenue</th>
+            <th data-sort="profit_margin" style="text-align: center;">Profit Margin (%)</th>
+            <th data-sort="profit_amount" style="text-align: right;">Profit Amount ($)</th>
+            <th data-sort="outstanding" style="text-align: right;">Outstanding</th>
+          </tr>
+        </thead>
+        <tbody id="salesmanTableBody"></tbody>
+      </table>
     </div>
   </section>
 </div>
 
 <!-- BRAND TAB -->
 <div id="tab-brand" class="tab-content" style="display:none;">
-  <div class="panel" style="margin-bottom: 1rem;">
-    <div class="panel-body" style="padding: 1rem;">
-      <div style="display:flex; gap:0.9rem; align-items:end; flex-wrap:wrap;">
-        <div><label class="field-label">Date From</label><input type="date" class="form-control" id="b_date_from"></div>
-        <div><label class="field-label">Date To</label><input type="date" class="form-control" id="b_date_to"></div>
-        <div>
-          <label class="field-label">Customer</label>
-          <select class="form-control" id="b_customer">
-            <option value="">All Customers</option>
-            {% for c in customers %}
-              <option value="{{ c.id }}">{{ c.name }}</option>
-            {% endfor %}
-          </select>
-        </div>
-        <div style="display:flex; gap:0.5rem;">
-          <button type="button" class="btn btn-primary" onclick="loadBrandReport()">Apply Filter</button>
-          <button type="button" class="btn btn-secondary" onclick="exportCsv('brand')">Export CSV</button>
-        </div>
+  <div class="reports-filter-card">
+    <div style="display:flex; gap:0.75rem; align-items:flex-end; flex-wrap:wrap;">
+      <div class="reports-filter-group">
+        <label>Date From</label>
+        <input type="date" class="reports-filter-input" id="b_date_from">
+      </div>
+      <div class="reports-filter-group">
+        <label>Date To</label>
+        <input type="date" class="reports-filter-input" id="b_date_to">
+      </div>
+      <div class="reports-filter-group">
+        <label>Customer</label>
+        <select class="reports-filter-input" id="b_customer" style="min-width: 150px;">
+          <option value="">All Customers</option>
+          {% for c in customers %}
+            <option value="{{ c.id }}">{{ c.name }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div style="display:flex; gap:0.4rem; align-items:flex-end;">
+        <button type="button" class="btn btn-primary" onclick="loadBrandReport()" style="height: 34px; padding: 0 0.85rem; font-size: 0.8rem; font-weight: 600;">Apply Filter</button>
+        <button type="button" class="btn btn-outline" onclick="exportCsv('brand')" style="height: 34px; padding: 0 0.75rem; font-size: 0.8rem;">Export CSV</button>
       </div>
     </div>
   </div>
-  <section class="panel" style="box-shadow:none; margin-bottom:1.25rem;">
-    <div class="panel-body">
-      <div class="table-wrap">
-        <table class="data-table" id="brandTable">
-          <thead>
-            <tr>
-              <th data-sort="brand">Brand Name</th>
-              <th data-sort="units_sold">Units Sold</th>
-              <th data-sort="total_revenue">Total Revenue</th>
-              <th data-sort="profit_margin">Profit Margin (%)</th>
-              <th data-sort="profit_amount">Profit Amount ($)</th>
-            </tr>
-          </thead>
-          <tbody id="brandTableBody"></tbody>
-        </table>
-      </div>
+
+  <section class="reports-section-card">
+    <div class="reports-table-wrap">
+      <table class="data-table" id="brandTable">
+        <thead>
+          <tr>
+            <th data-sort="brand">Brand Name</th>
+            <th data-sort="units_sold" style="text-align: center;">Units Sold</th>
+            <th data-sort="total_revenue" style="text-align: right;">Total Revenue</th>
+            <th data-sort="profit_margin" style="text-align: center;">Profit Margin (%)</th>
+            <th data-sort="profit_amount" style="text-align: right;">Profit Amount ($)</th>
+          </tr>
+        </thead>
+        <tbody id="brandTableBody"></tbody>
+      </table>
     </div>
   </section>
-  <section class="panel" style="box-shadow:none;">
-    <div class="panel-body">
-      <div style="height:320px;">
-        <canvas id="brandChart"></canvas>
-      </div>
+
+  <div class="reports-chart-card">
+    <div style="font-weight: 700; font-size: 0.9rem; color: var(--color-slate-800); margin-bottom: 0.75rem;">
+      Brand Revenue &amp; Distribution
     </div>
-  </section>
+    <div style="height:300px;">
+      <canvas id="brandChart"></canvas>
+    </div>
+  </div>
 </div>
 
 <!-- CATEGORY TAB -->
 <div id="tab-category" class="tab-content" style="display:none;">
-  <div class="panel" style="margin-bottom: 1rem;">
-    <div class="panel-body" style="padding: 1rem;">
-      <div style="display:flex; gap:0.9rem; align-items:end; flex-wrap:wrap;">
-        <div><label class="field-label">Date From</label><input type="date" class="form-control" id="cat_date_from"></div>
-        <div><label class="field-label">Date To</label><input type="date" class="form-control" id="cat_date_to"></div>
-        <div>
-          <label class="field-label">Customer</label>
-          <select class="form-control" id="cat_customer">
-            <option value="">All Customers</option>
-            {% for c in customers %}
-              <option value="{{ c.id }}">{{ c.name }}</option>
-            {% endfor %}
-          </select>
-        </div>
-        <div style="display:flex; gap:0.5rem;">
-          <button type="button" class="btn btn-primary" onclick="loadCategoryReport()">Apply Filter</button>
-          <button type="button" class="btn btn-secondary" onclick="exportCsv('category')">Export CSV</button>
-        </div>
+  <div class="reports-filter-card">
+    <div style="display:flex; gap:0.75rem; align-items:flex-end; flex-wrap:wrap;">
+      <div class="reports-filter-group">
+        <label>Date From</label>
+        <input type="date" class="reports-filter-input" id="cat_date_from">
+      </div>
+      <div class="reports-filter-group">
+        <label>Date To</label>
+        <input type="date" class="reports-filter-input" id="cat_date_to">
+      </div>
+      <div class="reports-filter-group">
+        <label>Customer</label>
+        <select class="reports-filter-input" id="cat_customer" style="min-width: 150px;">
+          <option value="">All Customers</option>
+          {% for c in customers %}
+            <option value="{{ c.id }}">{{ c.name }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div style="display:flex; gap:0.4rem; align-items:flex-end;">
+        <button type="button" class="btn btn-primary" onclick="loadCategoryReport()" style="height: 34px; padding: 0 0.85rem; font-size: 0.8rem; font-weight: 600;">Apply Filter</button>
+        <button type="button" class="btn btn-outline" onclick="exportCsv('category')" style="height: 34px; padding: 0 0.75rem; font-size: 0.8rem;">Export CSV</button>
       </div>
     </div>
   </div>
-  <section class="panel" style="box-shadow:none; margin-bottom:1.25rem;">
-    <div class="panel-body">
-      <div class="table-wrap">
-        <table class="data-table" id="categoryTable">
-          <thead>
-            <tr>
-              <th data-sort="category_name">Category</th>
-              <th data-sort="qty_sold">Total Items Sold (Qty)</th>
-              <th data-sort="total_revenue">Total Revenue</th>
-              <th data-sort="profit_margin">Profit Margin (%)</th>
-              <th data-sort="profit_amount">Profit Amount ($)</th>
-              <th data-sort="current_stock">Current Stock</th>
-            </tr>
-          </thead>
-          <tbody id="categoryTableBody"></tbody>
-        </table>
-      </div>
+
+  <section class="reports-section-card">
+    <div class="reports-table-wrap">
+      <table class="data-table" id="categoryTable">
+        <thead>
+          <tr>
+            <th data-sort="category_name">Category</th>
+            <th data-sort="qty_sold" style="text-align: center;">Total Items Sold (Qty)</th>
+            <th data-sort="total_revenue" style="text-align: right;">Total Revenue</th>
+            <th data-sort="profit_margin" style="text-align: center;">Profit Margin (%)</th>
+            <th data-sort="profit_amount" style="text-align: right;">Profit Amount ($)</th>
+            <th data-sort="current_stock" style="text-align: center;">Current Stock</th>
+          </tr>
+        </thead>
+        <tbody id="categoryTableBody"></tbody>
+      </table>
     </div>
   </section>
-  <section class="panel" style="box-shadow:none;">
-    <div class="panel-body">
-      <div style="height:320px;">
-        <canvas id="categoryChart"></canvas>
-      </div>
+
+  <div class="reports-chart-card">
+    <div style="font-weight: 700; font-size: 0.9rem; color: var(--color-slate-800); margin-bottom: 0.75rem;">
+      Category Breakdown
     </div>
-  </section>
+    <div style="height:300px;">
+      <canvas id="categoryChart"></canvas>
+    </div>
+  </div>
 </div>
 
 <!-- PRODUCT TAB -->
 <div id="tab-product" class="tab-content" style="display:none;">
-  <div class="panel" style="margin-bottom: 1rem;">
-    <div class="panel-body" style="padding: 1rem;">
-      <div style="display:flex; gap:0.9rem; align-items:end; flex-wrap:wrap;">
-        <div><label class="field-label">Date From</label><input type="date" class="form-control" id="p_date_from"></div>
-        <div><label class="field-label">Date To</label><input type="date" class="form-control" id="p_date_to"></div>
-        <div>
-          <label class="field-label">Customer</label>
-          <select class="form-control" id="p_customer">
-            <option value="">All Customers</option>
-            {% for c in customers %}
-              <option value="{{ c.id }}">{{ c.name }}</option>
-            {% endfor %}
-          </select>
-        </div>
-        <div>
-          <label class="field-label">Warehouse</label>
-          <select class="form-control" id="p_warehouse">
-            <option value="all">All Warehouses</option>
-            {% for w in warehouses %}
-              <option value="{{ w.id }}">{{ w.name }}</option>
-            {% endfor %}
-          </select>
-        </div>
-        <div style="display:flex; gap:0.5rem;">
-          <button type="button" class="btn btn-primary" onclick="loadProductReport()">Apply Filter</button>
-          <button type="button" class="btn btn-secondary" onclick="exportCsv('product')">Export CSV</button>
-        </div>
+  <div class="reports-filter-card">
+    <div style="display:flex; gap:0.75rem; align-items:flex-end; flex-wrap:wrap;">
+      <div class="reports-filter-group">
+        <label>Date From</label>
+        <input type="date" class="reports-filter-input" id="p_date_from">
+      </div>
+      <div class="reports-filter-group">
+        <label>Date To</label>
+        <input type="date" class="reports-filter-input" id="p_date_to">
+      </div>
+      <div class="reports-filter-group">
+        <label>Customer</label>
+        <select class="reports-filter-input" id="p_customer" style="min-width: 150px;">
+          <option value="">All Customers</option>
+          {% for c in customers %}
+            <option value="{{ c.id }}">{{ c.name }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="reports-filter-group">
+        <label>Warehouse</label>
+        <select class="reports-filter-input" id="p_warehouse" style="min-width: 150px;">
+          <option value="all">All Warehouses</option>
+          {% for w in warehouses %}
+            <option value="{{ w.id }}">{{ w.name }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div style="display:flex; gap:0.4rem; align-items:flex-end;">
+        <button type="button" class="btn btn-primary" onclick="loadProductReport()" style="height: 34px; padding: 0 0.85rem; font-size: 0.8rem; font-weight: 600;">Apply Filter</button>
+        <button type="button" class="btn btn-outline" onclick="exportCsv('product')" style="height: 34px; padding: 0 0.75rem; font-size: 0.8rem;">Export CSV</button>
       </div>
     </div>
   </div>
-  <section class="panel" style="box-shadow:none;">
-    <div class="panel-body">
-      <div class="table-wrap">
-        <table class="data-table" id="productTable">
-          <thead>
-            <tr>
-              <th>#</th>
-              <th data-sort="product_name">Product Name</th>
-              <th data-sort="brand">Brand</th>
-              <th data-sort="category">Category</th>
-              <th data-sort="units_sold">Units Sold</th>
-              <th data-sort="total_revenue">Total Revenue</th>
-              <th data-sort="profit_margin">Profit Margin (%)</th>
-              <th data-sort="profit_amount">Profit Amount ($)</th>
-              <th data-sort="current_stock">Current Stock</th>
-            </tr>
-          </thead>
-          <tbody id="productTableBody"></tbody>
-        </table>
-      </div>
+
+  <section class="reports-section-card">
+    <div class="reports-table-wrap">
+      <table class="data-table" id="productTable">
+        <thead>
+          <tr>
+            <th style="width: 50px;">#</th>
+            <th data-sort="product_name">Product Name</th>
+            <th data-sort="brand">Brand</th>
+            <th data-sort="category">Category</th>
+            <th data-sort="units_sold" style="text-align: center;">Units Sold</th>
+            <th data-sort="total_revenue" style="text-align: right;">Total Revenue</th>
+            <th data-sort="profit_margin" style="text-align: center;">Profit Margin (%)</th>
+            <th data-sort="profit_amount" style="text-align: right;">Profit Amount ($)</th>
+            <th data-sort="current_stock" style="text-align: center;">Current Stock</th>
+          </tr>
+        </thead>
+        <tbody id="productTableBody"></tbody>
+      </table>
     </div>
   </section>
 </div>
 
 <!-- INVENTORY ADDITIONS TAB -->
 <div id="tab-inventory-additions" class="tab-content" style="display:none;">
-  <div class="panel" style="margin-bottom: 1rem;">
-    <div class="panel-body" style="padding: 1rem;">
-      <div style="display:flex; gap:0.9rem; align-items:end; flex-wrap:wrap;">
-        <div><label class="field-label">Date From</label><input type="date" class="form-control" id="ia_date_from"></div>
-        <div><label class="field-label">Date To</label><input type="date" class="form-control" id="ia_date_to"></div>
-        <div>
-          <label class="field-label">Supplier</label>
-          <select class="form-control" id="ia_supplier">
-            <option value="">All Suppliers</option>
-            {% for s in suppliers %}
-              <option value="{{ s.id }}">{{ s.name }}</option>
-            {% endfor %}
-          </select>
-        </div>
-        <div style="display:flex; gap:0.5rem;">
-          <button type="button" class="btn btn-primary" onclick="loadInventoryAdditionsReport()">Apply Filter</button>
-        </div>
+  <div class="reports-filter-card">
+    <div style="display:flex; gap:0.75rem; align-items:flex-end; flex-wrap:wrap;">
+      <div class="reports-filter-group">
+        <label>Date From</label>
+        <input type="date" class="reports-filter-input" id="ia_date_from">
+      </div>
+      <div class="reports-filter-group">
+        <label>Date To</label>
+        <input type="date" class="reports-filter-input" id="ia_date_to">
+      </div>
+      <div class="reports-filter-group">
+        <label>Supplier</label>
+        <select class="reports-filter-input" id="ia_supplier" style="min-width: 150px;">
+          <option value="">All Suppliers</option>
+          {% for s in suppliers %}
+            <option value="{{ s.id }}">{{ s.name }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div style="display:flex; gap:0.4rem; align-items:flex-end;">
+        <button type="button" class="btn btn-primary" onclick="loadInventoryAdditionsReport()" style="height: 34px; padding: 0 0.85rem; font-size: 0.8rem; font-weight: 600;">Apply Filter</button>
       </div>
     </div>
   </div>
 
-  <section class="panel" style="margin-bottom: 2rem;">
-    <div class="panel-header">
-      <h2>Supplier-wise Summary</h2>
+  <section class="reports-section-card" style="margin-bottom: 1.5rem;">
+    <div style="padding: 0.75rem 1rem; border-bottom: 1px solid var(--color-border); font-weight: 700; font-size: 0.9rem; color: var(--color-slate-800);">
+      Supplier-wise Summary
     </div>
-    <div class="panel-body">
-      <div class="table-wrap">
-        <table class="data-table">
-          <thead>
-            <tr>
-              <th>Supplier</th>
-              <th style="text-align:right">Quantity Remaining</th>
-              <th style="text-align:right">Total Quantity Added</th>
-              <th style="text-align:right">Total Value Added</th>
-              <th style="text-align:right">Balance Remaining</th>
-            </tr>
-          </thead>
-          <tbody id="iaSummaryTbody">
-          </tbody>
-        </table>
-      </div>
+    <div class="reports-table-wrap">
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th>Supplier</th>
+            <th style="text-align:right">Quantity Remaining</th>
+            <th style="text-align:right">Total Quantity Added</th>
+            <th style="text-align:right">Total Value Added</th>
+            <th style="text-align:right">Balance Remaining</th>
+          </tr>
+        </thead>
+        <tbody id="iaSummaryTbody">
+        </tbody>
+      </table>
     </div>
   </section>
 
-  <section class="panel" style="margin-bottom: 2rem;">
-    <div class="panel-header">
-      <h2>Date-wise Summary</h2>
+  <section class="reports-section-card" style="margin-bottom: 1.5rem;">
+    <div style="padding: 0.75rem 1rem; border-bottom: 1px solid var(--color-border); font-weight: 700; font-size: 0.9rem; color: var(--color-slate-800);">
+      Date-wise Summary
     </div>
-    <div class="panel-body">
-      <div class="table-wrap">
-        <table class="data-table">
-          <thead>
-            <tr>
-              <th>Date</th>
-              <th style="text-align:right">Total Quantity Added</th>
-              <th style="text-align:right">Total Value Added</th>
-            </tr>
-          </thead>
-          <tbody id="iaDateSummaryTbody">
-          </tbody>
-        </table>
-      </div>
-      <div id="iaDateSummaryPagination" style="padding: 1rem; text-align: center; display: flex; justify-content: center; gap: 1rem; align-items: center; border-top: 1px solid #e2e8f0;"></div>
+    <div class="reports-table-wrap">
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th>Date</th>
+            <th style="text-align:right">Total Quantity Added</th>
+            <th style="text-align:right">Total Value Added</th>
+          </tr>
+        </thead>
+        <tbody id="iaDateSummaryTbody">
+        </tbody>
+      </table>
     </div>
+    <div id="iaDateSummaryPagination" style="padding: 0.75rem 1rem; text-align: center; display: flex; justify-content: center; gap: 0.75rem; align-items: center; border-top: 1px solid var(--color-border); background: #f8fafc;"></div>
   </section>
 
-  <section class="panel">
-    <div class="panel-header">
-      <h2>Detailed Log</h2>
+  <section class="reports-section-card">
+    <div style="padding: 0.75rem 1rem; border-bottom: 1px solid var(--color-border); font-weight: 700; font-size: 0.9rem; color: var(--color-slate-800);">
+      Detailed Stock Inbound Log
     </div>
-    <div class="panel-body">
-      <div class="table-wrap">
-        <table class="data-table">
-          <thead>
-            <tr>
-              <th>Date</th>
-              <th>Product Name</th>
-              <th>Supplier</th>
-              <th>Transaction Type</th>
-              <th style="text-align:right">Quantity Remaining</th>
-              <th style="text-align:right">Quantity Added</th>
-              <th style="text-align:right">Value Added</th>
-              <th style="text-align:right">Balance Remaining</th>
-            </tr>
-          </thead>
-          <tbody id="iaLogTbody">
-          </tbody>
-        </table>
-      </div>
-      <div id="iaLogPagination" style="padding: 1rem; text-align: center; display: flex; justify-content: center; gap: 1rem; align-items: center; border-top: 1px solid #e2e8f0;"></div>
+    <div class="reports-table-wrap">
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th>Date</th>
+            <th>Product Name</th>
+            <th>Supplier</th>
+            <th>Transaction Type</th>
+            <th style="text-align:right">Quantity Remaining</th>
+            <th style="text-align:right">Quantity Added</th>
+            <th style="text-align:right">Value Added</th>
+            <th style="text-align:right">Balance Remaining</th>
+          </tr>
+        </thead>
+        <tbody id="iaLogTbody">
+        </tbody>
+      </table>
     </div>
+    <div id="iaLogPagination" style="padding: 0.75rem 1rem; text-align: center; display: flex; justify-content: center; gap: 0.75rem; align-items: center; border-top: 1px solid var(--color-border); background: #f8fafc;"></div>
   </section>
 </div>
 
+<!-- STOCK DISTRIBUTION TAB -->
 <div id="tab-stock-distribution" class="tab-content" style="display:none;">
-  <section class="panel">
-    <div class="panel-header">
-      <h2>Stock Distribution</h2>
+  <div class="reports-filter-card">
+    <div style="display: flex; gap: 0.75rem; align-items: flex-end; flex-wrap: wrap;">
+      <div class="reports-filter-group">
+        <label>Product Search</label>
+        <input type="text" id="sdFilterProduct" class="reports-filter-input" placeholder="Search by name..." style="width: 180px;">
+      </div>
+      <div class="reports-filter-group">
+        <label>Brand</label>
+        <select id="sdFilterBrand" class="reports-filter-input" style="width: 150px;">
+          <option value="">All Brands</option>
+          {% for b in brands %}
+            <option value="{{ b }}">{{ b }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="reports-filter-group">
+        <label>Stock Level</label>
+        <select id="sdFilterStock" class="reports-filter-input" style="width: 150px;">
+          <option value="">All Items</option>
+          <option value="in_stock">In Stock</option>
+          <option value="low">Low Stock</option>
+          <option value="no_stock">Out of Stock</option>
+        </select>
+      </div>
+      <div>
+        <button class="btn btn-primary" style="height: 34px; padding: 0 16px; font-size: 0.8rem; font-weight: 600;" onclick="loadStockDistributionReport()">Apply Filters</button>
+      </div>
     </div>
-    <div class="panel-body">
-      <div style="padding: 1.5rem 1.5rem 0 1.5rem;">
-        <div class="filter-bar" style="display: flex; gap: 1rem; align-items: flex-end; margin-bottom: 1.5rem; flex-wrap: wrap; background: #f8fafc; padding: 12px 16px; border-radius: 8px; border: 1px solid #e2e8f0;">
-          <div>
-            <label class="field-label" style="font-size: 0.8rem; margin-bottom: 4px; display: block;">Product Search</label>
-            <input type="text" id="sdFilterProduct" class="form-control" placeholder="Search by name..." style="width: 180px; padding: 4px 8px; font-size: 0.85rem; height: 32px;">
-          </div>
-          <div>
-            <label class="field-label" style="font-size: 0.8rem; margin-bottom: 4px; display: block;">Brand</label>
-            <select id="sdFilterBrand" class="form-control" style="width: 150px; padding: 4px 8px; font-size: 0.85rem; height: 32px;">
-              <option value="">All Brands</option>
-              {% for b in brands %}
-                <option value="{{ b }}">{{ b }}</option>
-              {% endfor %}
-            </select>
-          </div>
-          <div>
-            <label class="field-label" style="font-size: 0.8rem; margin-bottom: 4px; display: block;">Stock Level</label>
-            <select id="sdFilterStock" class="form-control" style="width: 150px; padding: 4px 8px; font-size: 0.85rem; height: 32px;">
-              <option value="">All Items</option>
-              <option value="in_stock">In Stock</option>
-              <option value="low">Low Stock</option>
-              <option value="no_stock">Out of Stock</option>
-            </select>
-          </div>
-          <div>
-            <button class="btn btn-primary" style="height: 32px; padding: 0 16px; font-size: 0.85rem;" onclick="loadStockDistributionReport()">Apply Filters</button>
-          </div>
-        </div>
-      </div>
-      <div class="table-wrap" style="margin-top: 1rem;">
-        <table class="data-table" id="stockDistributionTable">
-          <thead>
-            <tr id="sdTableHeader">
-              <!-- Dynamically built -->
-            </tr>
-          </thead>
-          <tbody id="sdTableBody">
-            <tr><td colspan="10" style="text-align:center;">Loading...</td></tr>
-          </tbody>
-        </table>
-      </div>
+  </div>
+
+  <section class="reports-section-card">
+    <div class="reports-table-wrap">
+      <table class="data-table" id="stockDistributionTable">
+        <thead>
+          <tr id="sdTableHeader">
+            <!-- Dynamically built -->
+          </tr>
+        </thead>
+        <tbody id="sdTableBody">
+          <tr><td colspan="10" style="text-align:center; padding: 2.5rem 1rem; color: var(--color-slate-400);">Loading stock distribution...</td></tr>
+        </tbody>
+      </table>
     </div>
   </section>
 </div>
 
 <div id="tab-profit" class="tab-content">
-  <section class="panel">
-    <div class="panel-header">
-      <h2>Profit Analysis</h2>
+  <!-- Profit Filter Bar -->
+  <div class="reports-filter-card">
+    <div style="display: flex; gap: 0.75rem; align-items: flex-end; flex-wrap: wrap;">
+      <div class="reports-filter-group">
+        <label>Date From</label>
+        <input type="date" class="reports-filter-input" id="profit_date_from">
+      </div>
+      <div class="reports-filter-group">
+        <label>Date To</label>
+        <input type="date" class="reports-filter-input" id="profit_date_to">
+      </div>
+      <div class="reports-filter-group">
+        <label>Brand</label>
+        <select id="profitFilterBrand" class="reports-filter-input" style="min-width: 140px;">
+          <option value="">All Brands</option>
+          {% for b in brands %}
+          <option value="{{ b }}">{{ b }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="reports-filter-group">
+        <label>Customer</label>
+        <select id="profitFilterCustomer" class="reports-filter-input" style="min-width: 150px;">
+          <option value="">All Customers</option>
+          {% for c in customers %}
+          <option value="{{ c.id }}">{{ c.name }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="reports-filter-group">
+        <label>Product</label>
+        <select id="profitFilterProduct" class="reports-filter-input" style="min-width: 160px;">
+          <option value="">All Products</option>
+          {% for p in products %}
+          <option value="{{ p.id }}">{{ p.name }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div style="display: flex; gap: 0.4rem; align-items: flex-end;">
+        <button type="button" class="btn btn-primary" onclick="loadProfitReport()" style="height: 34px; padding: 0 0.85rem; font-size: 0.8rem; font-weight: 600;">
+          Apply Filter
+        </button>
+      </div>
     </div>
-    <div class="panel-body">
-      <div style="padding: 1.5rem 1.5rem 0 1.5rem;">
-      <div class="filter-bar" style="display: flex; gap: 1rem; align-items: flex-end; margin-bottom: 1.5rem; flex-wrap: wrap; background: #f8fafc; padding: 12px 16px; border-radius: 8px; border: 1px solid #e2e8f0;">
-        <div><label class="field-label" style="font-size: 0.8rem; margin-bottom: 4px; display: block;">Date From</label><input type="date" class="form-control" id="profit_date_from" style="padding: 4px 8px; font-size: 0.85rem; height: 32px;"></div>
-        <div><label class="field-label" style="font-size: 0.8rem; margin-bottom: 4px; display: block;">Date To</label><input type="date" class="form-control" id="profit_date_to" style="padding: 4px 8px; font-size: 0.85rem; height: 32px;"></div>
-        <div>
-          <label class="field-label" style="font-size: 0.8rem; margin-bottom: 4px; display: block;">Brand</label>
-          <select id="profitFilterBrand" class="form-control" style="width: 130px; padding: 4px 8px; font-size: 0.85rem; height: 32px;">
-            <option value="">All Brands</option>
-            {% for b in brands %}
-            <option value="{{ b }}">{{ b }}</option>
-            {% endfor %}
-          </select>
-        </div>
-        <div>
-          <label class="field-label" style="font-size: 0.8rem; margin-bottom: 4px; display: block;">Customer</label>
-          <select id="profitFilterCustomer" class="form-control" style="width: 130px; padding: 4px 8px; font-size: 0.85rem; height: 32px;">
-            <option value="">All Customers</option>
-            {% for c in customers %}
-            <option value="{{ c.id }}">{{ c.name }}</option>
-            {% endfor %}
-          </select>
-        </div>
-        <div>
-          <label class="field-label" style="font-size: 0.8rem; margin-bottom: 4px; display: block;">Product</label>
-          <select id="profitFilterProduct" class="form-control" style="width: 130px; padding: 4px 8px; font-size: 0.85rem; height: 32px;">
-            <option value="">All Products</option>
-            {% for p in products %}
-            <option value="{{ p.id }}">{{ p.name }}</option>
-            {% endfor %}
-          </select>
-        </div>
-      </div>
+  </div>
 
-      <div class="card-grid" style="margin-bottom: 2rem; gap: 2rem;">
-        <article class="stat-card" style="padding: 1rem; min-height: 110px; display: flex; flex-direction: column; justify-content: center; align-items: center; text-align: center;">
-          <h3>Total Sales Amount</h3>
-          <p class="stat-value sensitive-data" id="summaryTotalSales">$0.00</p>
-          <p class="stat-note">For selected filters</p>
-        </article>
-        <article class="stat-card" style="padding: 1rem; min-height: 110px; display: flex; flex-direction: column; justify-content: center; align-items: center; text-align: center;">
-          <h3>Total Profit Amount</h3>
-          <p class="stat-value sensitive-data" id="summaryTotalProfit">$0.00</p>
-          <p class="stat-note">For selected filters</p>
-        </article>
-        <article class="stat-card" style="padding: 1rem; min-height: 110px; display: flex; flex-direction: column; justify-content: center; align-items: center; text-align: center;">
-          <h3>Overall Profit Margin</h3>
-          <p class="stat-value sensitive-data" id="summaryProfitMargin">0%</p>
-          <p class="stat-note">For selected filters</p>
-        </article>
-        <article class="stat-card" style="padding: 1rem; min-height: 110px; display: flex; flex-direction: column; justify-content: center; align-items: center; text-align: center;">
-          <h3>Number of Sales</h3>
-          <p class="stat-value" id="summarySalesCount">0</p>
-          <p class="stat-note">For selected filters</p>
-        </article>
+  <!-- 4-Card KPI Overview -->
+  <div class="reports-stats-grid">
+    <div class="reports-stat-card">
+      <div class="reports-stat-content">
+        <h3>Total Sales Revenue</h3>
+        <p class="reports-stat-value" style="color: #2563eb;">
+          <span class="sensitive-data" id="summaryTotalSales">$0.00</span>
+        </p>
+        <div class="reports-stat-note">Gross sales volume</div>
       </div>
-      
-      <div style="padding: 1.5rem; background: white; border: 1px solid var(--color-border); border-radius: 8px; margin-bottom: 2rem; box-shadow: 0 1px 3px rgba(0,0,0,0.05);">
-        <canvas id="profitChart" height="250"></canvas>
+      <div class="reports-stat-icon" style="background: #eff6ff; color: #2563eb;">
+        <i data-lucide="dollar-sign"></i>
       </div>
-      
+    </div>
+
+    <div class="reports-stat-card">
+      <div class="reports-stat-content">
+        <h3>Total Profit Amount</h3>
+        <p class="reports-stat-value" style="color: #059669;">
+          <span class="sensitive-data" id="summaryTotalProfit">$0.00</span>
+        </p>
+        <div class="reports-stat-note">Net gross margin profit</div>
       </div>
-      <div class="table-wrap">
-        <table class="data-table" id="profitTable">
-          <thead>
-            <tr>
-              <th data-sort="date">Date</th>
-              <th data-sort="invoice_count">Sales Count</th>
-              <th data-sort="total_revenue">Total Sales</th>
-              <th data-sort="profit_margin">Profit Margin (%)</th>
-              <th data-sort="profit_amount">Total Profit ($)</th>
-            </tr>
-          </thead>
-          <tbody id="profitTableBody"></tbody>
-        </table>
+      <div class="reports-stat-icon" style="background: #ecfdf5; color: #059669;">
+        <i data-lucide="trending-up"></i>
       </div>
+    </div>
+
+    <div class="reports-stat-card">
+      <div class="reports-stat-content">
+        <h3>Overall Margin</h3>
+        <p class="reports-stat-value" style="color: #9333ea;">
+          <span class="sensitive-data" id="summaryProfitMargin">0%</span>
+        </p>
+        <div class="reports-stat-note">Margin percentage</div>
+      </div>
+      <div class="reports-stat-icon" style="background: #faf5ff; color: #9333ea;">
+        <i data-lucide="pie-chart"></i>
+      </div>
+    </div>
+
+    <div class="reports-stat-card">
+      <div class="reports-stat-content">
+        <h3>Invoiced Orders</h3>
+        <p class="reports-stat-value" style="color: #d97706;" id="summarySalesCount">0</p>
+        <div class="reports-stat-note">Total sales transactions</div>
+      </div>
+      <div class="reports-stat-icon" style="background: #fffbeb; color: #d97706;">
+        <i data-lucide="shopping-bag"></i>
+      </div>
+    </div>
+  </div>
+
+  <!-- Profit Trajectory Chart Card -->
+  <div class="reports-chart-card">
+    <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.85rem; flex-wrap: wrap; gap: 0.5rem;">
+      <div style="display: flex; align-items: center; gap: 0.5rem;">
+        <i data-lucide="trending-up" style="width: 18px; height: 18px; color: var(--color-primary);"></i>
+        <span style="font-weight: 700; font-size: 0.95rem; color: var(--color-slate-800);">Profitability &amp; Revenue Trajectory</span>
+      </div>
+      <div style="display: flex; align-items: center; gap: 0.75rem; font-size: 0.75rem; font-weight: 600;">
+        <span style="display: inline-flex; align-items: center; gap: 0.35rem; color: #2563eb;">
+          <span style="display: inline-block; width: 10px; height: 10px; border-radius: 2px; background: rgba(59, 130, 246, 0.65);"></span>
+          Total Sales
+        </span>
+        <span style="display: inline-flex; align-items: center; gap: 0.35rem; color: #059669;">
+          <span style="display: inline-block; width: 10px; height: 3px; border-radius: 2px; background: #10b981;"></span>
+          Net Profit
+        </span>
+      </div>
+    </div>
+    <div class="reports-chart-container" style="position: relative; height: 280px; width: 100%;">
+      <canvas id="profitChart"></canvas>
+    </div>
+  </div>
+
+  <!-- Profit Ledger Table Card -->
+  <section class="reports-section-card">
+    <div class="reports-table-wrap">
+      <table class="data-table" id="profitTable">
+        <thead>
+          <tr>
+            <th data-sort="date">Date</th>
+            <th data-sort="invoice_count" style="text-align: center;">Sales Count</th>
+            <th data-sort="total_revenue" style="text-align: right;">Total Sales</th>
+            <th data-sort="profit_margin" style="text-align: center;">Profit Margin (%)</th>
+            <th data-sort="profit_amount" style="text-align: right;">Total Profit ($)</th>
+          </tr>
+        </thead>
+        <tbody id="profitTableBody"></tbody>
+      </table>
     </div>
   </section>
 </div>
 
 <!-- COMMISSION TAB -->
 <div id="tab-commission" class="tab-content" style="display:none;">
-  <div class="panel" style="margin-bottom: 1rem;">
-    <div class="panel-body" style="padding: 1rem;">
-      <div style="display:flex; gap:0.9rem; align-items:end; flex-wrap:wrap;">
-        <div><label class="field-label">Date From</label><input type="date" class="form-control" id="comm_date_from"></div>
-        <div><label class="field-label">Date To</label><input type="date" class="form-control" id="comm_date_to"></div>
-        <div>
-          <label class="field-label">Brand</label>
-          <select class="form-control" id="commFilterBrand">
-            <option value="">All Brands</option>
-            {% for b in brands %}
-            <option value="{{ b }}">{{ b }}</option>
-            {% endfor %}
-          </select>
-        </div>
-        <div style="display:flex; gap:0.5rem;">
-          <button type="button" class="btn btn-primary" onclick="loadCommissionReport()">Apply Filter</button>
-        </div>
+  <div class="reports-filter-card">
+    <div style="display:flex; gap:0.75rem; align-items:flex-end; flex-wrap:wrap;">
+      <div class="reports-filter-group">
+        <label>Date From</label>
+        <input type="date" class="reports-filter-input" id="comm_date_from">
+      </div>
+      <div class="reports-filter-group">
+        <label>Date To</label>
+        <input type="date" class="reports-filter-input" id="comm_date_to">
+      </div>
+      <div class="reports-filter-group">
+        <label>Brand</label>
+        <select class="reports-filter-input" id="commFilterBrand" style="min-width: 150px;">
+          <option value="">All Brands</option>
+          {% for b in brands %}
+          <option value="{{ b }}">{{ b }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div style="display:flex; gap:0.4rem; align-items:flex-end;">
+        <button type="button" class="btn btn-primary" onclick="loadCommissionReport()" style="height: 34px; padding: 0 0.85rem; font-size: 0.8rem; font-weight: 600;">Apply Filter</button>
       </div>
     </div>
   </div>
-  <section class="panel" style="box-shadow:none;">
-    <div class="panel-body">
-      <div class="table-wrap">
-        <table class="data-table" id="commissionTable" style="margin-bottom: 2rem;">
-          <thead>
-            <tr>
-              <th data-sort="salesman_name">Salesman Name</th>
-              <th data-sort="commission_amount">Total Commission ($)</th>
-            </tr>
-          </thead>
-          <tbody id="commissionTableBody"></tbody>
-        </table>
-      </div>
+
+  <section class="reports-section-card">
+    <div class="reports-table-wrap">
+      <table class="data-table" id="commissionTable">
+        <thead>
+          <tr>
+            <th data-sort="salesman_name">Salesman Name</th>
+            <th data-sort="commission_amount" style="text-align: right;">Total Commission ($)</th>
+          </tr>
+        </thead>
+        <tbody id="commissionTableBody"></tbody>
+      </table>
     </div>
   </section>
 </div>
@@ -781,18 +806,18 @@
       totalCom += parseFloat(r.commission_amount || 0);
       const tr = document.createElement('tr');
       tr.innerHTML = `
-        <td>${r.salesman_name || 'Admin'}</td>
-        <td class="sensitive-data" style="font-weight:600;">${money(r.commission_amount || 0)}</td>
+        <td style="font-weight: 600; color: var(--color-slate-900);">${r.salesman_name || 'Admin'}</td>
+        <td class="sensitive-data" style="text-align: right; font-weight: 700; color: #059669;">${money(r.commission_amount || 0)}</td>
       `;
       tbody.appendChild(tr);
     });
     
     const trTotal = document.createElement('tr');
-    trTotal.style.background = '#1a2332';
-    trTotal.style.color = 'white';
+    trTotal.style.background = '#f8fafc';
+    trTotal.style.borderTop = '2px solid var(--color-border)';
     trTotal.innerHTML = `
-      <td style="text-align:right; padding:12px 8px; font-weight:bold;">Total:</td>
-      <td class="sensitive-data" style="padding:12px 8px; font-weight:bold;">${money(totalCom)}</td>
+      <td style="text-align: right; padding: 10px 12px; font-weight: 700; color: var(--color-slate-800);">Total Commission:</td>
+      <td class="sensitive-data" style="text-align: right; padding: 10px 12px; font-weight: 800; color: #059669; font-size: 0.95rem;">${money(totalCom)}</td>
     `;
     tbody.appendChild(trTotal);
     
@@ -968,128 +993,152 @@
       const sorted = sortData('salesman');
 
       if (!sorted || sorted.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="6" class="empty-state">No data found for the selected filters. (Rows: ${cache.salesman ? cache.salesman.length : 0})</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="6" class="empty-state">No salesman data found for the selected filters.</td></tr>`;
         return;
       }
 
-      sorted.forEach((r) => {
+      sorted.forEach((r, idx) => {
         const tr = document.createElement('tr');
         
-        const tdName = document.createElement('td');
-        tdName.textContent = r.salesman_name || '(Unnamed)';
+        const marginVal = Number(r.profit_margin || 0);
+        const marginPill = `<span class="stock-pill sensitive-data ${marginVal > 0 ? 'stock-ok' : (marginVal < 0 ? 'stock-zero' : 'stock-low')}">${Math.round(marginVal)}%</span>`;
+        const outColor = (Number(r.outstanding || 0) > 0) ? '#dc2626' : 'var(--color-slate-600)';
+        const safeSalesmanName = (r.salesman_name || 'admin').replace(/'/g, "\\'");
 
-        const tdInv = document.createElement('td');
-        tdInv.textContent = r.invoice_count || 0;
-
-        const tdRev = document.createElement('td');
-        tdRev.className = 'sensitive-data';
-        tdRev.textContent = '$' + formatNumber(r.total_revenue);
-
-        const tdMargin = document.createElement('td');
-        tdMargin.className = 'sensitive-data';
-        tdMargin.textContent = formatNumber(r.profit_margin) + '%';
-        if (r.profit_margin < 0) tdMargin.style.color = '#dc2626';
-
-        const tdProfit = document.createElement('td');
-        tdProfit.className = 'sensitive-data';
-        tdProfit.textContent = '$' + formatNumber(r.profit_amount);
-        if (r.profit_amount < 0) tdProfit.style.color = '#dc2626';
-
-        const tdOut = document.createElement('td');
-        tdOut.className = 'sensitive-data';
-        tdOut.textContent = '$' + formatNumber(r.outstanding);
-        if (r.outstanding > 0) tdOut.style.color = '#dc2626';
-
-        tr.appendChild(tdName);
-        tr.appendChild(tdInv);
-        tr.appendChild(tdRev);
-        tr.appendChild(tdMargin);
-        tr.appendChild(tdProfit);
-        tr.appendChild(tdOut);
-        
-        tr.style.cursor = 'pointer';
-        tr.onclick = () => loadSalesmanDetails(r.salesman_id, r.salesman_name);
-        
+        tr.innerHTML = `
+          <td style="font-weight: 600;">
+            <a href="javascript:void(0)" onclick="toggleSalesmanInvoices('${idx}', '${safeSalesmanName}')" style="display:inline-flex; align-items:center; gap:0.4rem; color:var(--color-primary); text-decoration:none; font-weight:600;">
+              <i data-lucide="chevron-right" id="sales-chevron-${idx}" style="width:14px; height:14px; transition: transform 0.2s ease;"></i>
+              <div class="customer-avatar-monogram" style="width:24px; height:24px; font-size:0.7rem;">${(r.salesman_name || 'U').slice(0, 2).toUpperCase()}</div>
+              <span>${r.salesman_name || '(Unnamed)'}</span>
+            </a>
+          </td>
+          <td style="text-align: center;">${r.invoice_count || 0}</td>
+          <td class="sensitive-data" style="text-align: right; font-weight: 600;">${money(r.total_revenue)}</td>
+          <td style="text-align: center;">${marginPill}</td>
+          <td class="sensitive-data" style="text-align: right; font-weight: 700; color: ${Number(r.profit_amount || 0) < 0 ? 'var(--color-danger)' : 'var(--color-slate-800)'};">${money(r.profit_amount)}</td>
+          <td class="sensitive-data" style="text-align: right; font-weight: 600; color: ${outColor};">${money(r.outstanding)}</td>
+        `;
         tbody.appendChild(tr);
+
+        const invRow = document.createElement('tr');
+        invRow.id = 'salesman-invoices-' + idx;
+        invRow.style.display = 'none';
+        const td = document.createElement('td');
+        td.colSpan = 6;
+        td.style.padding = '0 0.75rem 0.75rem';
+        td.style.background = '#f8fafc';
+        td.id = 'salesman-invoices-cell-' + idx;
+        td.innerHTML = '<div style="color: var(--color-slate-500); font-size: 0.85rem; padding: 0.85rem 1rem;">Loading transactions...</div>';
+        invRow.appendChild(td);
+        tbody.appendChild(invRow);
       });
+
+      if (window.lucide) lucide.createIcons();
     } catch (err) {
       tbody.innerHTML = `<tr><td colspan="6" class="empty-state" style="color:red;">Error rendering report: ${err.message}</td></tr>`;
     }
   }
 
-  async function loadSalesmanDetails(salesmanId, salesmanName) {
-    document.getElementById('salesmanDetailsSection').style.display = 'block';
-    document.getElementById('salesmanDetailsTitle').textContent = `Sales Details for ${salesmanName || 'Admin'}`;
-    document.getElementById('salesmanDetailsBody').innerHTML = '<tr><td colspan="5" class="empty-state">Loading...</td></tr>';
-    
-    // Use salesman_name to fetch all merged rows
-    const params = getFiltersParams('salesman');
-    params.append('salesman_name', salesmanName || 'admin');
-    
-    try {
-      const rows = await fetch('/sales/data?' + params.toString(), { credentials: 'same-origin' }).then(r => r.json());
-      salesmanDetails = rows || [];
-      salesmanCurrentPage = 1;
-      renderSalesmanDetails();
-    } catch (err) {
-      document.getElementById('salesmanDetailsBody').innerHTML = `<tr><td colspan="5" class="empty-state" style="color:red;">Error loading details</td></tr>`;
-    }
-  }
+  window.toggleSalesmanInvoices = async function(idx, salesmanName) {
+    const invRow = document.getElementById('salesman-invoices-' + idx);
+    const chevron = document.getElementById('sales-chevron-' + idx);
+    const cell = document.getElementById('salesman-invoices-cell-' + idx);
+    if (!invRow) return;
 
-  function renderSalesmanDetails() {
-    const tbody = document.getElementById('salesmanDetailsBody');
-    if (!tbody) return;
-    tbody.innerHTML = '';
-    
-    if (salesmanDetails.length === 0) {
-      tbody.innerHTML = '<tr><td colspan="5" class="empty-state">No sales found for this salesman.</td></tr>';
-      document.getElementById('salesmanPageInfo').textContent = 'Page 1 of 1';
-      document.getElementById('salesmanPrevBtn').disabled = true;
-      document.getElementById('salesmanNextBtn').disabled = true;
-      return;
+    const isHidden = invRow.style.display === 'none' || !invRow.style.display;
+    invRow.style.display = isHidden ? 'table-row' : 'none';
+    if (chevron) {
+      chevron.style.transform = isHidden ? 'rotate(90deg)' : 'rotate(0deg)';
     }
-    
-    const totalPages = Math.ceil(salesmanDetails.length / SALESMAN_PAGE_SIZE);
-    document.getElementById('salesmanPageInfo').textContent = `Page ${salesmanCurrentPage} of ${totalPages} (${salesmanDetails.length} total)`;
-    
-    document.getElementById('salesmanPrevBtn').disabled = salesmanCurrentPage === 1;
-    document.getElementById('salesmanNextBtn').disabled = salesmanCurrentPage === totalPages;
-    
-    const start = (salesmanCurrentPage - 1) * SALESMAN_PAGE_SIZE;
-    const pageData = salesmanDetails.slice(start, start + SALESMAN_PAGE_SIZE);
-    
-    pageData.forEach(inv => {
-      const tr = document.createElement('tr');
-      const statusLower = (inv.status || '').toLowerCase();
-      let statusHtml = '';
-      if (statusLower === 'paid') statusHtml = `<span style="background:#16a34a; color:white; padding:3px 10px; border-radius:12px; font-size:11px; font-weight:600;">Paid</span>`;
-      else if (statusLower === 'partial') statusHtml = `<span style="background:#e8800a; color:white; padding:3px 10px; border-radius:12px; font-size:11px; font-weight:600;">Partial</span>`;
-      else statusHtml = `<span style="background:#dc2626; color:white; padding:3px 10px; border-radius:12px; font-size:11px; font-weight:600;">${inv.status || 'Unpaid'}</span>`;
-      
-      const profitVal = parseFloat(inv.profit_amount || 0);
-      const profitColor = profitVal < 0 ? '#dc2626' : '#16a34a';
 
-      tr.innerHTML = `
-        <td>${inv.invoice_number || ''}</td>
-        <td>${inv.invoice_date || ''}</td>
-        <td class="sensitive-data">${money(inv.grand_total)}</td>
-        <td class="sensitive-data" style="color:${profitColor}; font-weight:600;">${money(profitVal)}</td>
-        <td>${inv.payment_type || ''}</td>
-        <td>${statusHtml}</td>
+    if (isHidden && (!cell.dataset.loaded || cell.dataset.loaded === 'false')) {
+      cell.innerHTML = `
+        <div style="padding: 0.85rem 1rem; color: var(--color-slate-500); font-size: 0.85rem; display: flex; align-items: center; gap: 0.5rem;">
+          <div class="customer-avatar-monogram" style="width: 20px; height: 20px; font-size: 0.65rem;">...</div>
+          <span>Loading transactions for <strong>${salesmanName || 'Admin'}</strong>...</span>
+        </div>
       `;
-      tbody.appendChild(tr);
+
+      const params = getFiltersParams('salesman');
+      params.append('salesman_name', salesmanName || 'admin');
+
+      try {
+        const rows = await fetch('/sales/data?' + params.toString(), { credentials: 'same-origin' }).then(r => r.json());
+        cell.innerHTML = renderSalesmanInvoicesTable(rows || [], salesmanName);
+        cell.dataset.loaded = 'true';
+      } catch (err) {
+        cell.innerHTML = `<div style="color: var(--color-danger); font-size: 0.85rem; padding: 0.85rem 1rem;">Failed to load transactions: ${err.message}</div>`;
+      }
+    }
+    if (window.lucide) lucide.createIcons();
+  };
+
+  function renderSalesmanInvoicesTable(invoices, salesmanName) {
+    if (!invoices || invoices.length === 0) {
+      return `<div style="color: var(--color-slate-500); font-size: 0.85rem; padding: 0.85rem 1rem; background: #f8fafc; border-radius: 6px;">No invoices found for ${salesmanName || 'this salesman'} matching the active filters.</div>`;
+    }
+    let html = `
+      <div style="padding: 0.75rem 1rem; background: #f8fafc; border-radius: var(--radius-md); margin: 0.35rem 0;">
+        <div style="font-weight: 700; font-size: 0.825rem; color: var(--color-slate-700); margin-bottom: 0.5rem; display: flex; align-items: center; justify-content: space-between;">
+          <div style="display: flex; align-items: center; gap: 0.4rem;">
+            <i data-lucide="receipt" style="width: 14px; height: 14px; color: var(--color-primary);"></i>
+            <span>Invoiced Transactions for <strong>${salesmanName || 'Admin'}</strong></span>
+          </div>
+          <span style="font-size: 0.75rem; color: var(--color-slate-400);">${invoices.length} transactions</span>
+        </div>
+        <div class="table-wrap">
+          <table class="data-table" style="background: white; border: 1px solid var(--color-border); border-radius: 6px;">
+            <thead>
+              <tr>
+                <th>Invoice#</th>
+                <th>Date</th>
+                <th>Customer</th>
+                <th style="text-align: right;">Grand Total</th>
+                <th style="text-align: right;">Profit Amount</th>
+                <th style="text-align: center;">Payment</th>
+                <th style="text-align: center;">Status</th>
+              </tr>
+            </thead>
+            <tbody>
+    `;
+    invoices.forEach((inv) => {
+      const st = (inv.status || '').toLowerCase();
+      let statusBadge = '';
+      if (st === 'paid') statusBadge = '<span class="stock-pill stock-ok">Paid</span>';
+      else if (st === 'partial') statusBadge = '<span class="stock-pill stock-low">Partial</span>';
+      else statusBadge = '<span class="stock-pill stock-zero">' + (inv.status || 'Unpaid') + '</span>';
+
+      const profitVal = parseFloat(inv.profit_amount || 0);
+      const profitColor = profitVal < 0 ? 'var(--color-danger)' : 'var(--color-success)';
+
+      html += `
+        <tr>
+          <td style="font-weight: 600; color: var(--color-slate-900);">${inv.invoice_number || '-'}</td>
+          <td style="color: var(--color-slate-600); font-size: 0.825rem;">${inv.invoice_date || '-'}</td>
+          <td style="color: var(--color-slate-800);">${inv.customer_name || '-'}</td>
+          <td class="sensitive-data" style="text-align: right; font-weight: 600;">${money(inv.grand_total)}</td>
+          <td class="sensitive-data" style="text-align: right; font-weight: 700; color: ${profitColor};">${money(profitVal)}</td>
+          <td style="text-align: center; font-size: 0.8rem; text-transform: uppercase;">${inv.payment_type || '-'}</td>
+          <td style="text-align: center;">${statusBadge}</td>
+        </tr>
+      `;
     });
+    html += '</tbody></table></div></div>';
+    return html;
   }
 
-  document.addEventListener('DOMContentLoaded', () => {
-    document.getElementById('salesmanPrevBtn')?.addEventListener('click', () => {
-      if (salesmanCurrentPage > 1) { salesmanCurrentPage--; renderSalesmanDetails(); }
-    });
-    document.getElementById('salesmanNextBtn')?.addEventListener('click', () => {
-      const totalPages = Math.ceil(salesmanDetails.length / SALESMAN_PAGE_SIZE);
-      if (salesmanCurrentPage < totalPages) { salesmanCurrentPage++; renderSalesmanDetails(); }
-    });
-  });
+  window.toggleCustomerInvoices = function(customerId) {
+    const invRow = document.getElementById('customer-invoices-' + customerId);
+    const chevron = document.getElementById('cust-chevron-' + customerId);
+    if (!invRow) return;
+    const isHidden = invRow.style.display === 'none' || !invRow.style.display;
+    invRow.style.display = isHidden ? 'table-row' : 'none';
+    if (chevron) {
+      chevron.style.transform = isHidden ? 'rotate(90deg)' : 'rotate(0deg)';
+    }
+    if (window.lucide) lucide.createIcons();
+  };
 
   function renderCustomers() {
     const tbody = document.getElementById('customerTableBody');
@@ -1099,58 +1148,95 @@
     const sorted = sortData('customer');
 
     if (sorted.length === 0) {
-      tbody.innerHTML = '<tr><td colspan="7" class="empty-state">No data found for the selected filters.</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="8" class="empty-state">No customer data found for the selected filters.</td></tr>';
       return;
     }
 
     sorted.forEach((r) => {
       const tr = document.createElement('tr');
       
-      const tdName = document.createElement('td');
-      const link = document.createElement('button');
-      link.type = 'button';
-      link.className = 'btn btn-secondary';
-      link.style.padding = '0.45rem 0.7rem';
-      link.textContent = r.customer_name || '(Unnamed)';
-      link.addEventListener('click', () => {
-          const invRow = document.getElementById('customer-invoices-' + r.customer_id);
-          if (invRow) invRow.style.display = invRow.style.display === 'none' ? 'table-row' : 'none';
-      });
-      tdName.appendChild(link);
-
-      const outColor = (r.outstanding > 0) ? '#dc2626' : '#6b7280';
-      const margin = (r.profit_margin !== undefined && r.profit_margin !== null) ? r.profit_margin.toFixed(0) + '%' : '-';
-        const profitAmt = (r.profit_amount !== undefined && r.profit_amount !== null) ? money(r.profit_amount) : '-';
+      const outColor = (Number(r.outstanding || 0) > 0) ? '#dc2626' : 'var(--color-slate-600)';
+      const marginVal = Number(r.profit_margin || 0);
+      const marginPill = (r.profit_margin !== undefined && r.profit_margin !== null) 
+        ? `<span class="stock-pill sensitive-data ${marginVal > 0 ? 'stock-ok' : (marginVal < 0 ? 'stock-zero' : 'stock-low')}">${Math.round(marginVal)}%</span>` 
+        : '-';
+      const profitAmt = (r.profit_amount !== undefined && r.profit_amount !== null) ? money(r.profit_amount) : '$0.00';
 
       tr.innerHTML = `
-        <td>${r.area || ''}</td>
-        <td>${r.invoice_count || 0}</td>
-        <td class="sensitive-data">${money(r.total_revenue)}</td>
-        <td class="sensitive-data">${margin}</td>
-        <td class="sensitive-data" style="font-weight:600; color:${outColor}">${money(r.outstanding)}</td>
-        <td>${r.last_sale_date || ''}</td>
+        <td style="font-weight: 600;">
+          <a href="javascript:void(0)" onclick="toggleCustomerInvoices('${r.customer_id}')" style="display:inline-flex; align-items:center; gap:0.4rem; color:var(--color-primary); text-decoration:none; font-weight:600;">
+            <i data-lucide="chevron-right" id="cust-chevron-${r.customer_id}" style="width:14px; height:14px; transition: transform 0.2s ease;"></i>
+            <span>${r.customer_name || '(Unnamed)'}</span>
+          </a>
+        </td>
+        <td style="color: var(--color-slate-600);">${r.area || '-'}</td>
+        <td style="text-align: center;">${r.invoice_count || 0}</td>
+        <td class="sensitive-data" style="text-align: right; font-weight: 600;">${money(r.total_revenue)}</td>
+        <td style="text-align: center;">${marginPill}</td>
+        <td class="sensitive-data" style="text-align: right; font-weight: 700; color: ${Number(r.profit_amount || 0) < 0 ? 'var(--color-danger)' : 'var(--color-slate-800)'};">${profitAmt}</td>
+        <td class="sensitive-data" style="text-align: right; font-weight: 600; color: ${outColor};">${money(r.outstanding)}</td>
+        <td style="text-align: center; color: var(--color-slate-500); font-size: 0.825rem;">${r.last_sale_date || '-'}</td>
       `;
-      tr.prepend(tdName);
       tbody.appendChild(tr);
 
       const invRow = document.createElement('tr');
       invRow.id = 'customer-invoices-' + r.customer_id;
       invRow.style.display = 'none';
       const td = document.createElement('td');
-      td.colSpan = 7;
+      td.colSpan = 8;
+      td.style.padding = '0 0.75rem 0.75rem';
+      td.style.background = '#f8fafc';
       td.innerHTML = renderInvoicesTable(r.invoices || []);
       invRow.appendChild(td);
       tbody.appendChild(invRow);
     });
+
+    if (window.lucide) lucide.createIcons();
   }
 
   function renderInvoicesTable(invoices) {
-    if (!invoices || invoices.length === 0) return '<div style="color: #6b7280; font-weight:600; padding:0.6rem 0;">No invoices for this customer matching filters.</div>';
-    let html = '<div class="table-wrap" style="margin-top:0.1rem;"><table class="data-table"><thead><tr><th>Invoice#</th><th>Date</th><th>Salesman</th><th>Grand Total</th><th>Payment</th><th>Status</th></tr></thead><tbody>';
+    if (!invoices || invoices.length === 0) {
+      return '<div style="color: var(--color-slate-500); font-size: 0.85rem; padding: 0.85rem 1rem; background: #f8fafc; border-radius: 6px;">No invoices found for this customer matching the active filters.</div>';
+    }
+    let html = `
+      <div style="padding: 0.75rem 1rem; background: #f8fafc; border-radius: var(--radius-md); margin: 0.35rem 0;">
+        <div style="font-weight: 700; font-size: 0.825rem; color: var(--color-slate-700); margin-bottom: 0.5rem; display: flex; align-items: center; gap: 0.4rem;">
+          <i data-lucide="receipt" style="width: 14px; height: 14px; color: var(--color-primary);"></i>
+          <span>Customer Invoiced Transactions</span>
+        </div>
+        <div class="table-wrap">
+          <table class="data-table" style="background: white; border: 1px solid var(--color-border); border-radius: 6px;">
+            <thead>
+              <tr>
+                <th>Invoice#</th>
+                <th>Date</th>
+                <th>Salesman</th>
+                <th style="text-align: right;">Grand Total</th>
+                <th style="text-align: center;">Payment</th>
+                <th style="text-align: center;">Status</th>
+              </tr>
+            </thead>
+            <tbody>
+    `;
     invoices.forEach((inv) => {
-      html += `<tr><td>${inv.invoice_number || ''}</td><td>${inv.invoice_date || ''}</td><td>${inv.salesman_name || 'Admin'}</td><td class="sensitive-data">${money(inv.grand_total)}</td><td>${inv.payment_type || ''}</td><td>${inv.status || ''}</td></tr>`;
+      const st = (inv.status || '').toLowerCase();
+      let statusBadge = '';
+      if (st === 'paid') statusBadge = '<span class="stock-pill stock-ok">Paid</span>';
+      else if (st === 'partial') statusBadge = '<span class="stock-pill stock-low">Partial</span>';
+      else statusBadge = '<span class="stock-pill stock-zero">' + (inv.status || 'Unpaid') + '</span>';
+
+      html += `
+        <tr>
+          <td style="font-weight: 600; color: var(--color-slate-900);">${inv.invoice_number || '-'}</td>
+          <td style="color: var(--color-slate-600); font-size: 0.825rem;">${inv.invoice_date || '-'}</td>
+          <td>${inv.salesman_name || 'Admin'}</td>
+          <td class="sensitive-data" style="text-align: right; font-weight: 600;">${money(inv.grand_total)}</td>
+          <td style="text-align: center; font-size: 0.8rem; text-transform: uppercase;">${inv.payment_type || '-'}</td>
+          <td style="text-align: center;">${statusBadge}</td>
+        </tr>
+      `;
     });
-    html += '</tbody></table></div>';
+    html += '</tbody></table></div></div>';
     return html;
   }
 
@@ -1167,17 +1253,21 @@
     const sorted = sortData('brand');
 
     if (sorted.length === 0) {
-      tbody.innerHTML = '<tr><td colspan="4" class="empty-state">No brand data found.</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="5" class="empty-state">No brand data found.</td></tr>';
     } else {
       sorted.forEach((r) => {
         const tr = document.createElement('tr');
-        const margin = (r.profit_margin !== undefined && r.profit_margin !== null) ? r.profit_margin.toFixed(0) + '%' : '-';
-        const profitAmt = (r.profit_amount !== undefined && r.profit_amount !== null) ? money(r.profit_amount) : '-';
+        const marginVal = Number(r.profit_margin || 0);
+        const marginPill = (r.profit_margin !== undefined && r.profit_margin !== null) 
+          ? `<span class="stock-pill sensitive-data ${marginVal > 0 ? 'stock-ok' : (marginVal < 0 ? 'stock-zero' : 'stock-low')}">${Math.round(marginVal)}%</span>` 
+          : '-';
+        const profitAmt = (r.profit_amount !== undefined && r.profit_amount !== null) ? money(r.profit_amount) : '$0.00';
         tr.innerHTML = `
-          <td>${r.brand || 'Unbranded'}</td>
-          <td>${qty(r.units_sold)}</td>
-          <td class="sensitive-data">${money(r.total_revenue)}</td>
-          <td class="sensitive-data">${margin}</td>
+          <td style="font-weight:600; color:var(--color-slate-900);">${r.brand || 'Unbranded'}</td>
+          <td style="text-align: center;">${qty(r.units_sold)}</td>
+          <td class="sensitive-data" style="text-align: right; font-weight: 600;">${money(r.total_revenue)}</td>
+          <td style="text-align: center;">${marginPill}</td>
+          <td class="sensitive-data" style="text-align: right; font-weight: 700; color: ${Number(r.profit_amount || 0) < 0 ? 'var(--color-danger)' : 'var(--color-slate-800)'};">${profitAmt}</td>
         `;
         tbody.appendChild(tr);
       });
@@ -1190,8 +1280,19 @@
       brandChart = ensureChartDestroy(brandChart);
       brandChart = new Chart(canvas.getContext('2d'), {
         type: 'bar',
-        data: { labels: labels, datasets: [{ label: 'Revenue', data: values, backgroundColor: '#e8800a' }] },
-        options: { responsive: true, maintainAspectRatio: false }
+        data: { labels: labels, datasets: [{ label: 'Revenue ($)', data: values, backgroundColor: 'rgba(59, 130, 246, 0.45)', borderColor: '#2563eb', borderWidth: 1.5, borderRadius: 4, maxBarThickness: 36 }] },
+        options: { 
+          responsive: true, 
+          maintainAspectRatio: false,
+          plugins: { legend: { display: false } },
+          scales: {
+            x: { grid: { display: false } },
+            y: { 
+              grid: { color: '#f1f5f9' },
+              ticks: { callback: v => '$' + v }
+            }
+          }
+        }
       });
     }
   }
@@ -1204,18 +1305,27 @@
     const sorted = sortData('category');
 
     if (sorted.length === 0) {
-      tbody.innerHTML = '<tr><td colspan="5" class="empty-state">No category data found.</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="6" class="empty-state">No category data found.</td></tr>';
     } else {
       sorted.forEach((r) => {
         const tr = document.createElement('tr');
-        const margin = (r.profit_margin !== undefined && r.profit_margin !== null) ? r.profit_margin.toFixed(0) + '%' : '-';
-        const profitAmt = (r.profit_amount !== undefined && r.profit_amount !== null) ? money(r.profit_amount) : '-';
+        const marginVal = Number(r.profit_margin || 0);
+        const marginPill = (r.profit_margin !== undefined && r.profit_margin !== null) 
+          ? `<span class="stock-pill sensitive-data ${marginVal > 0 ? 'stock-ok' : (marginVal < 0 ? 'stock-zero' : 'stock-low')}">${Math.round(marginVal)}%</span>` 
+          : '-';
+        const profitAmt = (r.profit_amount !== undefined && r.profit_amount !== null) ? money(r.profit_amount) : '$0.00';
+        const stock = Number(r.current_stock || 0);
+        let stockC = 'stock-ok';
+        if (stock === 0) stockC = 'stock-zero';
+        else if (stock < 5) stockC = 'stock-low';
+
         tr.innerHTML = `
-          <td>${r.category_name || ''}</td>
-          <td>${qty(r.qty_sold)}</td>
-          <td class="sensitive-data">${money(r.total_revenue)}</td>
-          <td class="sensitive-data">${margin}</td>
-          <td>${qty(r.current_stock)}</td>
+          <td style="font-weight:600; color:var(--color-slate-900);">${r.category_name || '(Uncategorized)'}</td>
+          <td style="text-align: center;">${qty(r.qty_sold)}</td>
+          <td class="sensitive-data" style="text-align: right; font-weight: 600;">${money(r.total_revenue)}</td>
+          <td style="text-align: center;">${marginPill}</td>
+          <td class="sensitive-data" style="text-align: right; font-weight: 700; color: ${Number(r.profit_amount || 0) < 0 ? 'var(--color-danger)' : 'var(--color-slate-800)'};">${profitAmt}</td>
+          <td style="text-align: center;"><span class="stock-pill ${stockC}">${qty(stock)}</span></td>
         `;
         tbody.appendChild(tr);
       });
@@ -1226,11 +1336,17 @@
     const canvas = document.getElementById('categoryChart');
     if (canvas) {
       categoryChart = ensureChartDestroy(categoryChart);
-      const colors = labels.map((_, idx) => ['#e8800a', '#1a2332', '#f59e0b', '#6b7280', '#3b82f6', '#10b981', '#ef4444', '#8b5cf6'][idx % 8]);
+      const colors = labels.map((_, idx) => ['#3b82f6', '#10b981', '#f59e0b', '#8b5cf6', '#06b6d4', '#ec4899', '#f97316', '#64748b'][idx % 8]);
       categoryChart = new Chart(canvas.getContext('2d'), {
         type: 'doughnut',
         data: { labels: labels, datasets: [{ data: values, backgroundColor: colors }] },
-        options: { responsive: true, maintainAspectRatio: false }
+        options: { 
+          responsive: true, 
+          maintainAspectRatio: false,
+          plugins: {
+            legend: { position: 'bottom', labels: { boxWidth: 12, font: { family: 'Inter, sans-serif', size: 11 } } }
+          }
+        }
       });
     }
   }
@@ -1243,30 +1359,33 @@
     const sorted = sortData('product');
 
     if (sorted.length === 0) {
-      tbody.innerHTML = '<tr><td colspan="8" class="empty-state">No product data found.</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="9" class="empty-state">No product data found.</td></tr>';
       return;
     }
 
     sorted.forEach((r, idx) => {
       const tr = document.createElement('tr');
       const stock = Number(r.current_stock || 0);
-      const margin = (r.profit_margin !== undefined && r.profit_margin !== null) ? r.profit_margin.toFixed(0) + '%' : '-';
-        const profitAmt = (r.profit_amount !== undefined && r.profit_amount !== null) ? money(r.profit_amount) : '-';
+      const marginVal = Number(r.profit_margin || 0);
+      const marginPill = (r.profit_margin !== undefined && r.profit_margin !== null) 
+        ? `<span class="stock-pill sensitive-data ${marginVal > 0 ? 'stock-ok' : (marginVal < 0 ? 'stock-zero' : 'stock-low')}">${Math.round(marginVal)}%</span>` 
+        : '-';
+      const profitAmt = (r.profit_amount !== undefined && r.profit_amount !== null) ? money(r.profit_amount) : '$0.00';
       
       let stockC = 'stock-ok';
       if (stock === 0) stockC = 'stock-zero';
       else if (stock < 5) stockC = 'stock-low';
 
       tr.innerHTML = `
-        <td>${idx + 1}</td>
-        <td>${r.product_name || ''}</td>
-        <td>${r.brand || ''}</td>
-        <td>${r.category || ''}</td>
-        <td>${qty(r.units_sold)}</td>
-        <td class="sensitive-data">${money(r.total_revenue)}</td>
-        <td class="sensitive-data">${margin}</td>
-        <td class="sensitive-data" style="font-weight: 700;">${profitAmt}</td>
-        <td><span class="stock-pill ${stockC}">${qty(stock)}</span></td>
+        <td style="text-align: center; color: var(--color-slate-400); font-weight: 600;">${idx + 1}</td>
+        <td style="font-weight: 600; color: var(--color-slate-900);">${r.product_name || ''}</td>
+        <td>${r.brand || '-'}</td>
+        <td>${r.category || '-'}</td>
+        <td style="text-align: center;">${qty(r.units_sold)}</td>
+        <td class="sensitive-data" style="text-align: right; font-weight: 600;">${money(r.total_revenue)}</td>
+        <td style="text-align: center;">${marginPill}</td>
+        <td class="sensitive-data" style="text-align: right; font-weight: 700; color: ${Number(r.profit_amount || 0) < 0 ? 'var(--color-danger)' : 'var(--color-slate-800)'};">${profitAmt}</td>
+        <td style="text-align: center;"><span class="stock-pill ${stockC}">${qty(stock)}</span></td>
       `;
       tbody.appendChild(tr);
     });
@@ -1425,11 +1544,11 @@
 
       const tr = document.createElement('tr');
       tr.innerHTML = `
-        <td>${r.date}</td>
-        <td>${r.invoice_count}</td>
-        <td class="sensitive-data">${money(r.total_revenue)}</td>
-        <td><span class="stock-pill sensitive-data ${r.profit_margin > 0 ? 'stock-ok' : (r.profit_margin < 0 ? 'stock-zero' : 'stock-low')}">${Math.round(r.profit_margin)}%</span></td>
-        <td class="sensitive-data" style="font-weight: 700;">${money(r.profit_amount)}</td>
+        <td style="font-weight: 600; color: var(--color-slate-900);">${r.date}</td>
+        <td style="text-align: center;">${r.invoice_count}</td>
+        <td class="sensitive-data" style="text-align: right; font-weight: 600;">${money(r.total_revenue)}</td>
+        <td style="text-align: center;"><span class="stock-pill sensitive-data ${r.profit_margin > 0 ? 'stock-ok' : (r.profit_margin < 0 ? 'stock-zero' : 'stock-low')}">${Math.round(r.profit_margin)}%</span></td>
+        <td class="sensitive-data" style="text-align: right; font-weight: 700; color: ${r.profit_amount < 0 ? 'var(--color-danger)' : 'var(--color-slate-800)'};">${money(r.profit_amount)}</td>
       `;
       tbody.appendChild(tr);
     });
@@ -1459,9 +1578,21 @@
         profitChartInstance.destroy();
     }
     
-    const labels = data.map(r => r.date);
-    const revenueData = data.map(r => r.total_revenue);
-    const profitData = data.map(r => r.profit_amount);
+    // Sort chart data chronologically so table sorting does not distort trajectory
+    const chartData = [...data].sort((a, b) => (a.date || '').localeCompare(b.date || ''));
+    
+    const labels = chartData.map(r => {
+      if (!r.date) return '';
+      const parts = r.date.split('-');
+      if (parts.length === 3) {
+        const d = new Date(parts[0], parts[1] - 1, parts[2]);
+        return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+      }
+      return r.date;
+    });
+    
+    const revenueData = chartData.map(r => r.total_revenue);
+    const profitData = chartData.map(r => r.profit_amount);
     
     profitChartInstance = new Chart(ctx, {
         type: 'bar',
@@ -1469,21 +1600,30 @@
             labels: labels,
             datasets: [
                 {
-                    label: 'Total Sales ($)',
+                    label: 'Total Sales',
                     data: revenueData,
-                    backgroundColor: 'rgba(59, 130, 246, 0.5)',
-                    borderColor: 'rgb(59, 130, 246)',
-                    borderWidth: 1,
-                    yAxisID: 'y'
+                    backgroundColor: 'rgba(59, 130, 246, 0.22)',
+                    borderColor: '#2563eb',
+                    borderWidth: 1.5,
+                    borderRadius: 6,
+                    borderSkipped: false,
+                    maxBarThickness: 38,
+                    order: 2
                 },
                 {
-                    label: 'Profit Amount ($)',
+                    label: 'Profit Amount',
                     data: profitData,
                     type: 'line',
                     fill: false,
-                    borderColor: 'rgb(22, 163, 74)',
-                    tension: 0.1,
-                    yAxisID: 'y'
+                    borderColor: '#10b981',
+                    borderWidth: 2.5,
+                    tension: 0.3,
+                    pointBackgroundColor: '#ffffff',
+                    pointBorderColor: '#10b981',
+                    pointBorderWidth: 2,
+                    pointRadius: 4,
+                    pointHoverRadius: 6,
+                    order: 1
                 }
             ]
         },
@@ -1494,21 +1634,69 @@
               mode: 'index',
               intersect: false,
             },
+            plugins: {
+              legend: {
+                display: false
+              },
+              tooltip: {
+                backgroundColor: '#0f172a',
+                titleColor: '#94a3b8',
+                titleFont: { family: 'Inter, sans-serif', size: 11, weight: '600' },
+                bodyColor: '#ffffff',
+                bodyFont: { family: 'Inter, sans-serif', size: 12, weight: '600' },
+                borderColor: '#334155',
+                borderWidth: 1,
+                padding: 10,
+                cornerRadius: 8,
+                callbacks: {
+                  title: function(items) {
+                    if (!items.length) return '';
+                    const idx = items[0].dataIndex;
+                    return chartData[idx]?.date || items[0].label;
+                  },
+                  label: function(context) {
+                    const val = Number(context.parsed.y || 0);
+                    const formatted = val < 0 ? '-$' + Math.abs(val).toFixed(2) : '$' + val.toFixed(2);
+                    return context.dataset.label + ': ' + formatted;
+                  }
+                }
+              }
+            },
             scales: {
+              x: {
+                grid: {
+                  display: false
+                },
+                ticks: {
+                  color: '#64748b',
+                  font: { family: 'Inter, sans-serif', size: 11, weight: '500' }
+                }
+              },
               y: {
                 type: 'linear',
                 display: true,
                 position: 'left',
-                beginAtZero: true,
+                grid: {
+                  color: '#f1f5f9'
+                },
                 ticks: {
+                  color: '#64748b',
+                  font: { family: 'Inter, sans-serif', size: 11 },
                   callback: function(value) {
-                    return '$' + value;
+                    if (value < 0) {
+                      return '-$' + Math.abs(value).toFixed(value % 1 === 0 ? 0 : 2);
+                    }
+                    if (value >= 1000) {
+                      return '$' + (value / 1000).toFixed(1) + 'k';
+                    }
+                    return '$' + Number(value).toFixed(value % 1 === 0 ? 0 : 2);
                   }
                 }
               }
             }
         }
     });
+    if (window.lucide) lucide.createIcons();
   }
 
   // Bind sorting to all tables
