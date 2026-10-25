@@ -318,42 +318,95 @@ def generate_pdf_from_data(sale: dict, customer: dict, sale_items: list, is_quot
         invoice_x_right = x0 + usable_width
 
         if is_first_page:
-                # Header: logos + company info + INVOICE word
-            max_size = _LOGO_MAX_SIZE
-            ak_x = 36  # points from left (as requested)
-            logos_y = y_top - max_size + 6
-    
-            # Draw AK logo, fallback to placeholder (if missing).
-            ak_draw_w = _draw_logo(cnv, ak_logo_path, ak_x, logos_y, max_size)
-            if ak_draw_w is None:
-                _draw_logo_placeholder(cnv, ak_x, logos_y, max_size, max_size, "AK")
-                ak_draw_w = float(max_size)
-    
-            # Draw Zain logo 10pt to the right of AK logo.
-            zain_x = ak_x + ak_draw_w + 10
-            zain_draw_w = _draw_logo(cnv, zain_logo_path, zain_x, logos_y, max_size)
-            if zain_draw_w is None:
-                _draw_logo_placeholder(cnv, zain_x, logos_y, max_size, max_size, "ZAIN")
-                zain_draw_w = float(max_size)
-    
-            company_x = zain_x + max_size + 18
-            company_y = y_top - 18
-    
-            comp_name = (company.get("name") if company else None) or "AK DISTRIBUTORS LLC"
-            comp_address = (company.get("bill_address") if company else None) or "Sacramento California 95838"
-            comp_country = "U.S.A"
-            comp_phone = (company.get("phone") if company else None) or "9163545678"
-            comp_email = (company.get("email") if company else None) or "akdistributorsusa@gmail.com"
+            is_ak = (not company) or (company.get("id") == 1) or (company.get("slug") == "ak-distributors")
+            if is_ak:
+                max_size = _LOGO_MAX_SIZE
+                ak_x = 36  # points from left (as requested)
+                logos_y = y_top - max_size + 6
 
-            cnv.setFont("Helvetica-Bold", 13)
-            cnv.setFillColor(_DARK_NAVY)
-            cnv.drawString(company_x, company_y, comp_name.upper())
-            cnv.setFont("Helvetica", 10)
-            cnv.setFillColor(_TEXT_GREY)
-            cnv.drawString(company_x, company_y - 15, comp_address)
-            cnv.drawString(company_x, company_y - 30, comp_country)
-            cnv.drawString(company_x, company_y - 45, comp_phone)
-            cnv.drawString(company_x, company_y - 60, comp_email)
+                # Draw AK logo, fallback to placeholder (if missing).
+                ak_draw_w = _draw_logo(cnv, ak_logo_path, ak_x, logos_y, max_size)
+                if ak_draw_w is None:
+                    _draw_logo_placeholder(cnv, ak_x, logos_y, max_size, max_size, "AK")
+                    ak_draw_w = float(max_size)
+
+                # Draw Zain logo 10pt to the right of AK logo.
+                zain_x = ak_x + ak_draw_w + 10
+                zain_draw_w = _draw_logo(cnv, zain_logo_path, zain_x, logos_y, max_size)
+                if zain_draw_w is None:
+                    _draw_logo_placeholder(cnv, zain_x, logos_y, max_size, max_size, "ZAIN")
+                    zain_draw_w = float(max_size)
+
+                company_x = zain_x + max_size + 18
+                company_y = y_top - 18
+
+                comp_name = (company.get("name") if company else None) or "AK DISTRIBUTORS LLC"
+                comp_address = (company.get("bill_address") if company else None) or "Sacramento California 95838"
+                comp_country = "U.S.A"
+                comp_phone = (company.get("phone") if company else None) or "9163545678"
+                comp_email = (company.get("email") if company else None) or "akdistributorsusa@gmail.com"
+
+                cnv.setFont("Helvetica-Bold", 13)
+                cnv.setFillColor(_DARK_NAVY)
+                cnv.drawString(company_x, company_y, comp_name.upper())
+                cnv.setFont("Helvetica", 10)
+                cnv.setFillColor(_TEXT_GREY)
+                cnv.drawString(company_x, company_y - 15, comp_address)
+                cnv.drawString(company_x, company_y - 30, comp_country)
+                cnv.drawString(company_x, company_y - 45, comp_phone)
+                cnv.drawString(company_x, company_y - 60, comp_email)
+            else:
+                max_size = _LOGO_MAX_SIZE
+                logo_x = 36
+                logos_y = y_top - max_size + 6
+
+                tenant_logo_path = None
+                logo_url = company.get("logo_url")
+                if logo_url:
+                    cleaned_url = logo_url.lstrip("/")
+                    possible_path = os.path.join(BASE_DIR, cleaned_url)
+                    if os.path.exists(possible_path):
+                        tenant_logo_path = possible_path
+                    elif os.path.exists(logo_url):
+                        tenant_logo_path = logo_url
+
+                tenant_draw_w = None
+                if tenant_logo_path:
+                    tenant_draw_w = _draw_logo(cnv, tenant_logo_path, logo_x, logos_y, max_size)
+
+                comp_name = company.get("name") or "Company"
+                if tenant_draw_w is None:
+                    monogram = comp_name[:2].upper() if len(comp_name) >= 2 else "CO"
+                    _draw_logo_placeholder(cnv, logo_x, logos_y, max_size, max_size, monogram)
+                    tenant_draw_w = float(max_size)
+
+                company_x = logo_x + tenant_draw_w + 18
+                company_y = y_top - 18
+
+                comp_address = company.get("bill_address") or ""
+                comp_phone = company.get("phone") or ""
+                comp_email = company.get("email") or ""
+                comp_tax_id = company.get("tax_id") or ""
+
+                cnv.setFont("Helvetica-Bold", 13)
+                cnv.setFillColor(_DARK_NAVY)
+                cnv.drawString(company_x, company_y, comp_name.upper())
+
+                cnv.setFont("Helvetica", 9)
+                cnv.setFillColor(_TEXT_GREY)
+                curr_y = company_y - 14
+                if comp_address:
+                    cnv.drawString(company_x, curr_y, comp_address)
+                    curr_y -= 12
+                if comp_phone:
+                    cnv.drawString(company_x, curr_y, f"Phone: {comp_phone}")
+                    curr_y -= 12
+                if comp_email:
+                    cnv.drawString(company_x, curr_y, f"Email: {comp_email}")
+                    curr_y -= 12
+                if comp_tax_id:
+                    cnv.drawString(company_x, curr_y, f"Tax / VAT ID: {comp_tax_id}")
+                    curr_y -= 12
     
             # INVOICE label far right
             cnv.setFont("Helvetica-Bold", 28)
@@ -514,16 +567,16 @@ def generate_pdf_from_data(sale: dict, customer: dict, sale_items: list, is_quot
 
     # Prepare invoice data for drawing
     inv_data = {
-        "invoice_number": sale["invoice_number"],
-        "invoice_date": sale["invoice_date"],
-        "due_date": sale["due_date"],
-        "terms": sale["terms"] or "",
-        "subtotal": float(sale["subtotal"] or 0),
-        "discount_amount": float(sale["discount_amount"] or 0),
-        "grand_total": float(sale["grand_total"] or 0),
-        "payment_type": sale["payment_type"] or "cash",
-        "amount_paid": float(sale["amount_paid"] or 0),
-        "remaining_amount": float(sale["remaining_amount"] or 0),
+        "invoice_number": sale.get("invoice_number", ""),
+        "invoice_date": sale.get("invoice_date", ""),
+        "due_date": sale.get("due_date", ""),
+        "terms": sale.get("terms") or "",
+        "subtotal": float(sale.get("subtotal") or 0),
+        "discount_amount": float(sale.get("discount_amount") or 0),
+        "grand_total": float(sale.get("grand_total") or 0),
+        "payment_type": sale.get("payment_type") or "cash",
+        "amount_paid": float(sale.get("amount_paid") or 0),
+        "remaining_amount": float(sale.get("remaining_amount") or 0),
     }
 
     cust_data = {
@@ -633,16 +686,17 @@ def generate_pdf_from_data(sale: dict, customer: dict, sale_items: list, is_quot
             # For variants, actual qty is physical packets * package size
             actual_qty = qty_val * packing_multiplier
             rate_val = float(rate) if rate is not None else 0
+            curr_sym = (company.get("currency") if company else None) or "$"
             
             if sale_item_dict.get("print_dual_units") == 1:
                 # Use smaller font for dual units
                 cnv.setFont("Helvetica", item_font_size - 1.5)
                 qty_str = f"{qty_val:g} ({actual_qty:g}KG / {actual_qty * 35.274:.1f}Oz)"
-                rate_str = f"${format_rate(rate_val)}/KG / ${format_rate(rate_val / 35.274)}/Oz"
+                rate_str = f"{curr_sym}{format_rate(rate_val)}/KG / {curr_sym}{format_rate(rate_val / 35.274)}/Oz"
             else:
                 cnv.setFont("Helvetica", item_font_size)
                 qty_str = f"{qty_val:g}"
-                rate_str = f"${format_rate(rate_val)}"
+                rate_str = f"{curr_sym}{format_rate(rate_val)}"
             # Align right with padding
             qty_x_right = x_qty_right - 6
             rate_x_right = x_rate_right - 6
@@ -650,7 +704,7 @@ def generate_pdf_from_data(sale: dict, customer: dict, sale_items: list, is_quot
             cnv.drawRightString(qty_x_right, row_bottom + row_padding_y + 2, qty_str)
             cnv.drawRightString(rate_x_right, row_bottom + row_padding_y + 2, rate_str)
             cnv.setFont("Helvetica", item_font_size)
-            cnv.drawRightString(amt_x_right, row_bottom + row_padding_y + 2, f"${float(amount or 0):.2f}")
+            cnv.drawRightString(amt_x_right, row_bottom + row_padding_y + 2, f"{curr_sym}{float(amount or 0):.2f}")
 
             # Move cursor down
             y_cursor = row_bottom
@@ -679,11 +733,12 @@ def generate_pdf_from_data(sale: dict, customer: dict, sale_items: list, is_quot
             subtotal = inv_data["subtotal"]
             discount_amount = inv_data["discount_amount"]
             grand_total = inv_data["grand_total"]
+            curr_sym = (company.get("currency") if company else None) or "$"
 
             # Right-aligned totals
-            cnv.drawRightString(totals_right_x, totals_top - 28, f"Subtotal:       ${subtotal:.2f}")
+            cnv.drawRightString(totals_right_x, totals_top - 28, f"Subtotal:       {curr_sym}{subtotal:.2f}")
             if discount_amount > 0:
-                cnv.drawRightString(totals_right_x, totals_top - 44, f"Discount:      -${discount_amount:.2f}")
+                cnv.drawRightString(totals_right_x, totals_top - 44, f"Discount:      -{curr_sym}{discount_amount:.2f}")
 
             # Add separator line
             cnv.setFillColor(colors.black)
@@ -700,7 +755,7 @@ def generate_pdf_from_data(sale: dict, customer: dict, sale_items: list, is_quot
             cnv.rect(totals_x, grand_y, totals_right_x - totals_x, grand_h, stroke=1, fill=0)
             cnv.setFillColor(colors.black)
             cnv.setFont("Helvetica-Bold", 12)  # 12pt font as requested
-            cnv.drawRightString(totals_right_x - 6, grand_y + 10, f"TOTAL:    ${grand_total:.2f}")
+            cnv.drawRightString(totals_right_x - 6, grand_y + 10, f"TOTAL:    {curr_sym}{grand_total:.2f}")
 
             # Amount Paid and Remaining
             amount_paid = inv_data["amount_paid"]
@@ -711,14 +766,14 @@ def generate_pdf_from_data(sale: dict, customer: dict, sale_items: list, is_quot
                 cnv.setFont("Helvetica", 10)
                 cnv.setFillColor(colors.HexColor("#16a34a"))
                 cnv.drawRightString(totals_right_x, paid_y, 
-                    f"Amount Paid:    ${amount_paid:.2f}")
+                    f"Amount Paid:    {curr_sym}{amount_paid:.2f}")
                 paid_y -= 16
 
             if remaining_amount > 0:
                 cnv.setFont("Helvetica-Bold", 10)
                 cnv.setFillColor(colors.HexColor("#dc2626"))
                 cnv.drawRightString(totals_right_x, paid_y,
-                    f"Remaining Due:  ${remaining_amount:.2f}")
+                    f"Remaining Due:  {curr_sym}{remaining_amount:.2f}")
 
             # Footer
             cnv.setFillColor(_TEXT_GREY)

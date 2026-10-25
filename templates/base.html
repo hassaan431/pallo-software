@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>{% block title %}{{ self.page_heading() }} — AK Distributors{% endblock %}</title>
+  <title>{% block title %}{{ self.page_heading() }} — {{ current_company.name if current_company else 'AK Distributors' }}{% endblock %}</title>
 
   <!-- Typography: Inter & Plus Jakarta Sans -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -59,14 +59,27 @@
       <!-- Brand Header -->
       <div class="sidebar-brand-wrapper">
         <a href="{{ url_for('dashboard') if current_user.role == 'admin' else url_for('pos') }}" class="sidebar-brand-inner">
-          <img
-            src="{{ url_for('static', filename='logos/AK_Distributors_Logo.png') }}"
-            alt="AK Distributors Logo"
-            class="sidebar-logo-img"
-          >
+          {% if current_company and current_company.id != 1 and current_company.logo_url %}
+            <img
+              src="{{ current_company.logo_url }}"
+              alt="{{ current_company.name }} Logo"
+              class="sidebar-logo-img"
+              style="max-width: 48px; object-fit: contain;"
+            >
+          {% elif current_company and current_company.id != 1 %}
+            <div class="sidebar-logo-monogram" style="width: 32px; height: 32px; border-radius: 6px; background: rgba(16, 185, 129, 0.12); color: var(--color-primary, #10b981); display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 0.85rem; border: 1px solid rgba(16, 185, 129, 0.25); flex-shrink: 0;">
+              {{ current_company.name[:2]|upper }}
+            </div>
+          {% else %}
+            <img
+              src="{{ url_for('static', filename='logos/AK_Distributors_Logo.png') }}"
+              alt="AK Distributors Logo"
+              class="sidebar-logo-img"
+            >
+          {% endif %}
           <div class="sidebar-brand-text">
-            <span class="sidebar-brand-title">AK Distributors</span>
-            <span class="sidebar-brand-badge">PORTAL</span>
+            <span class="sidebar-brand-title">{{ current_company.name if current_company else 'AK Distributors' }}</span>
+            <span class="sidebar-brand-badge">{{ 'PORTAL' if not current_company or current_company.id == 1 else 'PRO' }}</span>
           </div>
         </a>
         <button id="sidebarCollapseBtn" class="sidebar-collapse-btn" type="button" title="Collapse sidebar">
@@ -122,6 +135,10 @@
         </a>
 
         <div class="sidebar-section">Administration</div>
+        <a href="{{ url_for('settings_company') }}" class="{{ 'is-active' if request.endpoint == 'settings_company' else '' }}" title="Company Settings">
+          <div class="sidebar-nav-icon"><i data-lucide="building"></i></div>
+          <span class="nav-label">Company Settings</span>
+        </a>
         <a href="/expenses" class="{{ 'is-active' if request.path.startswith('/expenses') else '' }}" title="Expenses">
           <div class="sidebar-nav-icon"><i data-lucide="wallet"></i></div>
           <span class="nav-label">Expenses</span>

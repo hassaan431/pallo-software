@@ -42,7 +42,13 @@ A production-ready **Pallo** multi-tenant SaaS running on PostgreSQL, where mult
   - Scoped suppliers and ledger history; scoped purchase orders and supplier payments.
   - Scoped operational expenses strictly restricted to `admin` role per ADR 0003.
   - Scoped staff/user management with self-deactivation protection and cross-tenant mutation blocks.
-  - Created test suite [tests/test_warehouse_purchases_scoping.py](file:///tests/test_warehouse_purchases_scoping.py) with 6 passing unit tests (56 total passing tests).
+  - Created test suite [tests/test_warehouse_purchases_scoping.py](file:///tests/test_warehouse_purchases_scoping.py) with 6 passing unit tests.
+- ✅ **Ticket 09** ([09-dynamic-pdf-invoicing-and-company-branding.md](file:///.scratch/pallo-saas/issues/09-dynamic-pdf-invoicing-and-company-branding.md)):
+  - Built Company Profile & White-Label Settings portal (`/settings/company`) for tenant admins to view and manage company details: business legal name, billing & shipping addresses, contact phone, contact email, tax/VAT ID, regional currency symbol, and invoice prefix.
+  - Implemented secure logo upload with safety guardrails: max 2MB file size cap, allowed image extensions (`.png`, `.jpg`, `.jpeg`, `.webp`, `.svg`), secure persistence (`static/logos/companies/company_{cid}.{ext}`), and database storage of `logo_url`.
+  - Updated sidebar brand header and document title in [templates/base.html](file:///templates/base.html) to dynamically render current tenant's logo and company name (with initials monogram fallback), while preserving dual logos and branding for Company 1 ("AK Distributors LLC").
+  - Updated invoice PDF generator [invoice_generator.py](file:///invoice_generator.py) to dynamically format rates, amounts, totals, and balances with the tenant's currency symbol and render tenant company headers while preserving Company 1 dual logos and contact details.
+  - Added unit test suite [tests/test_company_branding_settings.py](file:///tests/test_company_branding_settings.py) with 7 passing unit tests (63 total passing tests across repo).
 
 ---
 
@@ -77,25 +83,24 @@ A production-ready **Pallo** multi-tenant SaaS running on PostgreSQL, where mult
 ## Wayfinder Issue Map & Next Immediate Task
 
 ### Active Frontier Ticket (Take this first)
-- 🟢 **[09-dynamic-pdf-invoicing-and-company-branding.md](file:///.scratch/pallo-saas/issues/09-dynamic-pdf-invoicing-and-company-branding.md)**
-  - *Status*: Open, Unblocked (08 resolved).
-  - *Goal*: Complete dynamic company profile and branding settings page (`/settings/company`) with 2MB logo upload guardrails, custom currency display, and sidebar white-label badge.
+- 🟢 **[10-superadmin-platform-governance.md](file:///.scratch/pallo-saas/issues/10-superadmin-platform-governance.md)**
+  - *Status*: Open, Unblocked (08 & 09 resolved).
+  - *Goal*: SuperAdmin role, security gate (`@superadmin_required`), platform metrics dashboard (`/superadmin`), and soft-deactivation toggle (`is_active`) per ADR 0004.
 
 ### Remaining Downstream Tickets
-- **10-superadmin-platform-governance.md** (Unblocked - ready for execution)
-- **11-tenant-isolation-automated-test-suite.md** (Blocked by 09, 10)
+- **11-tenant-isolation-automated-test-suite.md** (Blocked by 10)
 
 ---
 
 ## Suggested Skills for the Next Agent
 - `wayfinder`: To claim, execute, and resolve tickets one by one per `.scratch/pallo-saas/map.md`.
-- `security-and-hardening`: For file upload safety validation (image type, max 2MB, secure filename).
-- `test-driven-development`: For unit testing company settings and logo uploads.
+- `security-and-hardening`: For superadmin gate access control and soft-deactivation session termination.
+- `test-driven-development`: For unit testing superadmin metrics and tenant deactivation flows.
 
 ---
 
 ## Prompt to Start Next Session
 Copy and paste this into the new window:
 ```text
-/wayfinder We are converting the ERP to Pallo Multi-Tenant SaaS on PostgreSQL. Review the handoff document at HANDOFF.md and .scratch/pallo-saas/map.md. Claim and start working on Ticket 09 (.scratch/pallo-saas/issues/09-dynamic-pdf-invoicing-and-company-branding.md).
+/wayfinder We are converting the ERP to Pallo Multi-Tenant SaaS on PostgreSQL. Review the handoff document at HANDOFF.md and .scratch/pallo-saas/map.md. Claim and start working on Ticket 10 (.scratch/pallo-saas/issues/10-superadmin-platform-governance.md).
 ```

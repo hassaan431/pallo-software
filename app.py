@@ -5881,6 +5881,93 @@ def users_reset_password():
     finally:
         conn.close()
 
+ALLOWED_LOGO_EXTENSIONS = {"png", "jpg", "jpeg", "webp", "svg"}
+MAX_LOGO_BYTES = 2 * 1024 * 1024  # 2MB
+
+@app.route("/settings/company", methods=["GET", "POST"])
+@login_required
+@admin_required
+def settings_company():
+    cid = current_user.company_id if hasattr(current_user, "company_id") and current_user.company_id else 1
+    conn = get_connection()
+    try:
+        if request.method == "POST":
+            name = (request.form.get("name") or "").strip()
+            tax_id = (request.form.get("tax_id") or "").strip()
+            bill_address = (request.form.get("bill_address") or "").strip()
+            ship_address = (request.form.get("ship_address") or "").strip()
+            phone = (request.form.get("phone") or "").strip()
+            email = (request.form.get("email") or "").strip()
+            currency = (request.form.get("currency") or "$").strip()
+            invoice_prefix = (request.form.get("invoice_prefix") or "INV-").strip()
+            remove_logo = request.form.get("remove_logo") == "1"
+
+            if not name:
+                flash("Company legal name is required.", "danger")
+                return redirect(url_for("settings_company"))
+
+            logo_url = None
+            if "logo" in request.files:
+                file = request.files["logo"]
+                if file and file.filename:
+                    ext = file.filename.rsplit(".", 1)[-1].lower() if "." in file.filename else ""
+                    if ext not in ALLOWED_LOGO_EXTENSIONS:
+                        flash("Invalid image format. Allowed extensions: PNG, JPG, JPEG, WEBP, SVG.", "danger")
+                        return redirect(url_for("settings_company"))
+                    
+                    content = file.read()
+                    if len(content) > MAX_LOGO_BYTES:
+                        flash("Logo file exceeds maximum size of 2MB.", "danger")
+                        return redirect(url_for("settings_company"))
+                    
+                    logos_dir = os.path.join(app.root_path, "static", "logos", "companies")
+                    os.makedirs(logos_dir, exist_ok=True)
+                    safe_filename = f"company_{cid}.{ext}"
+                    filepath = os.path.join(logos_dir, safe_filename)
+                    with open(filepath, "wb") as f:
+                        f.write(content)
+                    logo_url = f"/static/logos/companies/{safe_filename}"
+
+            if logo_url:
+                conn.execute(
+                    """
+                    UPDATE companies
+                    SET name = ?, tax_id = ?, bill_address = ?, ship_address = ?, phone = ?, email = ?, currency = ?, invoice_prefix = ?, logo_url = ?
+                    WHERE id = ?
+                    """,
+                    (name, tax_id, bill_address, ship_address, phone, email, currency, invoice_prefix, logo_url, cid)
+                )
+            elif remove_logo:
+                conn.execute(
+                    """
+                    UPDATE companies
+                    SET name = ?, tax_id = ?, bill_address = ?, ship_address = ?, phone = ?, email = ?, currency = ?, invoice_prefix = ?, logo_url = NULL
+                    WHERE id = ?
+                    """,
+                    (name, tax_id, bill_address, ship_address, phone, email, currency, invoice_prefix, cid)
+                )
+            else:
+                conn.execute(
+                    """
+                    UPDATE companies
+                    SET name = ?, tax_id = ?, bill_address = ?, ship_address = ?, phone = ?, email = ?, currency = ?, invoice_prefix = ?
+                    WHERE id = ?
+                    """,
+                    (name, tax_id, bill_address, ship_address, phone, email, currency, invoice_prefix, cid)
+                )
+            conn.commit()
+            flash("Company settings updated successfully.", "success")
+            return redirect(url_for("settings_company"))
+
+        company = conn.execute("SELECT * FROM companies WHERE id = ?", (cid,)).fetchone()
+        if not company:
+            company = {"id": cid, "name": "Company", "currency": "$", "invoice_prefix": "INV-"}
+        else:
+            company = dict(company)
+        return render_template("settings_company.html", company=company)
+    finally:
+        conn.close()
+
 @app.route("/pos")
 @login_required
 def pos():

@@ -38,10 +38,10 @@ This document tracks implementation items, technical decisions, and milestones f
   - [x] Scope Expenses & Financial Reports (`company_id`, admin-only).
   - [x] Scope User/Staff Management (`company_id`).
 
-- [ ] **M4: Dynamic White-Labeling & Invoicing**
+- [x] **M4: Dynamic White-Labeling & Invoicing**
   - [x] Dynamic invoice PDF generation (`invoice_generator.py`) based on company settings (preserving AK Distributors formatting for Company 1).
-  - [ ] Company profile & branding settings page (`/settings/company`) with 2MB logo upload guardrails.
-  - [ ] Dynamic sidebar branding and company name badge.
+  - [x] Company profile & branding settings page (`/settings/company`) with 2MB logo upload guardrails.
+  - [x] Dynamic sidebar branding and company name badge.
 
 - [ ] **M5: Public Tenant Catalogues & Resource Guardrails**
   - [ ] Implement `/c/<company_slug>/catalogue` and `/c/<company_slug>/brochure`.
