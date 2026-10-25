@@ -23,6 +23,7 @@ A fully functional, production-ready Pallo multi-tenant SaaS running on PostgreS
 - [Self-Serve Registration & Provisioning](issues/05-self-serve-company-registration.md): Collision-proof slug generator, atomic workspace initialization (warehouse, categories, admin user), and responsive `/register` onboarding flow.
 - [Product & Inventory Scoping with Cost Masking](issues/06-scope-products-inventory-and-cost-masking.md): Multi-tenant isolation for products, categories, brands, and warehouse inventory; automated SQLite & Postgres compatibility with `PooledCursorWrapper`; ADR 0003 cost price and profit margin redaction for non-admin roles (`salesman`, `warehouse_manager`).
 - [Customer & Sales POS Scoping with Tenant Sequential Invoicing](issues/07-scope-customers-and-sales-pos.md): Multi-tenant customer ledgers, sales CRUD, POS checkout, reports, dashboard isolation, quote conversion, dynamic invoice PDF branding, and company-specific sequential invoice numbers (e.g., AK-001012 vs INV-000001).
+- [Warehouse Transfers, Purchases & Expenses Scoping](issues/08-scope-warehouses-transfers-purchases-expenses.md): Multi-tenant warehouse isolation and plan limits (`max_warehouses`); inter-warehouse transfer validation preventing cross-tenant stock movement; supplier ledger and purchase order scoping; admin-only operational expenses protection per ADR 0003; tenant staff management.
 
 ## Not yet specified
 

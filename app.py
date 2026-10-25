@@ -1391,10 +1391,11 @@ def inventory_adjust_stock():
 @app.route("/inventory/transfer/new", methods=["GET"])
 @admin_required
 def new_inventory_transfer():
+    cid = current_user.company_id if hasattr(current_user, "company_id") and current_user.company_id else 1
     conn = get_connection()
     try:
-        warehouses = [dict(row) for row in conn.execute("SELECT id, name FROM warehouses ORDER BY name").fetchall()]
-        products = [dict(row) for row in conn.execute("SELECT id, name, unit, cost_price, selling_price FROM products ORDER BY name COLLATE NOCASE ASC").fetchall()]
+        warehouses = [dict(row) for row in conn.execute("SELECT id, name FROM warehouses WHERE company_id = ? ORDER BY name", (cid,)).fetchall()]
+        products = [dict(row) for row in conn.execute("SELECT id, name, unit, cost_price, selling_price FROM products WHERE company_id = ? ORDER BY name ASC", (cid,)).fetchall()]
     finally:
         conn.close()
     
@@ -1404,6 +1405,7 @@ def new_inventory_transfer():
 @app.route("/inventory/transfer", methods=["POST"])
 @admin_required
 def inventory_transfer():
+    cid = current_user.company_id if hasattr(current_user, "company_id") and current_user.company_id else 1
     data = request.json
     if not data:
         return jsonify({"ok": False, "error": "Invalid JSON payload"}), 400
@@ -1421,8 +1423,16 @@ def inventory_transfer():
 
     conn = get_connection()
     try:
+        # Validate that both warehouses belong to tenant's company
+        valid_warehouses = conn.execute("SELECT id FROM warehouses WHERE id IN (?, ?) AND company_id = ?", (source_wid, dest_wid, cid)).fetchall()
+        if len(valid_warehouses) < 2:
+            return jsonify({"ok": False, "error": "One or both selected warehouses are invalid or unauthorized."}), 400
+
         conn.execute("BEGIN")
-        cursor = conn.execute("INSERT INTO inventory_transfers (source_warehouse_id, destination_warehouse_id, notes) VALUES (?, ?, ?)", (source_wid, dest_wid, notes))
+        cursor = conn.execute(
+            "INSERT INTO inventory_transfers (source_warehouse_id, destination_warehouse_id, notes, company_id) VALUES (?, ?, ?, ?)",
+            (source_wid, dest_wid, notes, cid)
+        )
         transfer_id = cursor.lastrowid
         
         for item in items:
@@ -1433,27 +1443,39 @@ def inventory_transfer():
                 conn.execute("ROLLBACK")
                 return jsonify({"ok": False, "error": "Invalid product or quantity."}), 400
 
+            # Verify product belongs to company
+            prod_check = conn.execute("SELECT id, name FROM products WHERE id = ? AND company_id = ?", (product_id, cid)).fetchone()
+            if not prod_check:
+                conn.execute("ROLLBACK")
+                return jsonify({"ok": False, "error": f"Product ID {product_id} is invalid or unauthorized."}), 400
+
             # Check source stock
-            source_stock_row = conn.execute("SELECT stock_quantity FROM warehouse_inventory WHERE product_id = ? AND warehouse_id = ?", (product_id, source_wid)).fetchone()
+            source_stock_row = conn.execute("SELECT stock_quantity FROM warehouse_inventory WHERE product_id = ? AND warehouse_id = ? AND company_id = ?", (product_id, source_wid, cid)).fetchone()
             source_stock = float(source_stock_row["stock_quantity"]) if source_stock_row else 0.0
             
             if (source_stock - quantity) < -1e-5:
                 conn.execute("ROLLBACK")
-                return jsonify({"ok": False, "error": f"Insufficient stock for product ID {product_id} in source warehouse. Available: {source_stock}"}), 400
+                return jsonify({"ok": False, "error": f"Insufficient stock for product {prod_check['name']} in source warehouse. Available: {source_stock}"}), 400
 
             # Check destination stock
-            dest_stock_row = conn.execute("SELECT stock_quantity FROM warehouse_inventory WHERE product_id = ? AND warehouse_id = ?", (product_id, dest_wid)).fetchone()
+            dest_stock_row = conn.execute("SELECT stock_quantity FROM warehouse_inventory WHERE product_id = ? AND warehouse_id = ? AND company_id = ?", (product_id, dest_wid, cid)).fetchone()
             dest_stock = float(dest_stock_row["stock_quantity"]) if dest_stock_row else 0.0
 
             # Execute transfer
             new_source_stock = round(source_stock - quantity, 4)
             new_dest_stock = round(dest_stock + quantity, 4)
 
-            conn.execute("UPDATE warehouse_inventory SET stock_quantity = ? WHERE product_id = ? AND warehouse_id = ?", (new_source_stock, product_id, source_wid))
-            conn.execute("INSERT INTO warehouse_inventory (product_id, warehouse_id, stock_quantity) VALUES (?, ?, ?) ON CONFLICT(warehouse_id, product_id) DO UPDATE SET stock_quantity = ?", (product_id, dest_wid, new_dest_stock, new_dest_stock))
+            conn.execute("UPDATE warehouse_inventory SET stock_quantity = ? WHERE product_id = ? AND warehouse_id = ? AND company_id = ?", (new_source_stock, product_id, source_wid, cid))
+            conn.execute(
+                "INSERT INTO warehouse_inventory (product_id, warehouse_id, stock_quantity, company_id) VALUES (?, ?, ?, ?) ON CONFLICT(warehouse_id, product_id) DO UPDATE SET stock_quantity = ?",
+                (product_id, dest_wid, new_dest_stock, cid, new_dest_stock)
+            )
 
             # Insert into transfer items
-            conn.execute("INSERT INTO inventory_transfer_items (transfer_id, product_id, quantity) VALUES (?, ?, ?)", (transfer_id, product_id, round(quantity, 4)))
+            conn.execute(
+                "INSERT INTO inventory_transfer_items (transfer_id, product_id, quantity, company_id) VALUES (?, ?, ?, ?)",
+                (transfer_id, product_id, round(quantity, 4), cid)
+            )
 
             # Log history
             ref_note = f"Transfer to Warehouse {dest_wid}"
@@ -1461,8 +1483,8 @@ def inventory_transfer():
                 ref_note += f" ({notes})"
                 
             conn.execute(
-                "INSERT INTO inventory_history (product_id, transaction_type, quantity_change, previous_stock, new_stock, reference, warehouse_id) VALUES (?, ?, ?, ?, ?, ?, ?)",
-                (product_id, "Transfer Out", -quantity, source_stock, new_source_stock, ref_note, source_wid)
+                "INSERT INTO inventory_history (product_id, transaction_type, quantity_change, previous_stock, new_stock, reference, warehouse_id, company_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                (product_id, "Transfer Out", -quantity, source_stock, new_source_stock, ref_note, source_wid, cid)
             )
             
             ref_note_in = f"Transfer from Warehouse {source_wid}"
@@ -1470,8 +1492,8 @@ def inventory_transfer():
                 ref_note_in += f" ({notes})"
                 
             conn.execute(
-                "INSERT INTO inventory_history (product_id, transaction_type, quantity_change, previous_stock, new_stock, reference, warehouse_id) VALUES (?, ?, ?, ?, ?, ?, ?)",
-                (product_id, "Transfer In", quantity, dest_stock, new_dest_stock, ref_note_in, dest_wid)
+                "INSERT INTO inventory_history (product_id, transaction_type, quantity_change, previous_stock, new_stock, reference, warehouse_id, company_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                (product_id, "Transfer In", quantity, dest_stock, new_dest_stock, ref_note_in, dest_wid, cid)
             )
 
         conn.commit()
@@ -1485,16 +1507,17 @@ def inventory_transfer():
 @app.route("/inventory/transfer/edit/<int:transfer_id>", methods=["GET"])
 @admin_required
 def edit_inventory_transfer(transfer_id):
+    cid = current_user.company_id if hasattr(current_user, "company_id") and current_user.company_id else 1
     conn = get_connection()
     try:
-        transfer = conn.execute("SELECT * FROM inventory_transfers WHERE id = ?", (transfer_id,)).fetchone()
+        transfer = conn.execute("SELECT * FROM inventory_transfers WHERE id = ? AND company_id = ?", (transfer_id, cid)).fetchone()
         if not transfer:
             return redirect(url_for("inventory_transfers"))
             
-        items = conn.execute("SELECT * FROM inventory_transfer_items WHERE transfer_id = ?", (transfer_id,)).fetchall()
+        items = conn.execute("SELECT * FROM inventory_transfer_items WHERE transfer_id = ? AND company_id = ?", (transfer_id, cid)).fetchall()
         
-        warehouses = [dict(row) for row in conn.execute("SELECT id, name FROM warehouses ORDER BY name").fetchall()]
-        products = [dict(row) for row in conn.execute("SELECT id, name, unit, cost_price, selling_price FROM products ORDER BY name COLLATE NOCASE ASC").fetchall()]
+        warehouses = [dict(row) for row in conn.execute("SELECT id, name FROM warehouses WHERE company_id = ? ORDER BY name", (cid,)).fetchall()]
+        products = [dict(row) for row in conn.execute("SELECT id, name, unit, cost_price, selling_price FROM products WHERE company_id = ? ORDER BY name ASC", (cid,)).fetchall()]
         
         return render_template("inventory_transfer_new.html", 
                                warehouses=warehouses, 
@@ -1507,6 +1530,7 @@ def edit_inventory_transfer(transfer_id):
 @app.route("/inventory/transfer/edit/<int:transfer_id>", methods=["POST"])
 @admin_required
 def process_edit_inventory_transfer(transfer_id):
+    cid = current_user.company_id if hasattr(current_user, "company_id") and current_user.company_id else 1
     data = request.json
     if not data:
         return jsonify({"ok": False, "error": "Invalid JSON payload"}), 400
@@ -1524,9 +1548,14 @@ def process_edit_inventory_transfer(transfer_id):
 
     conn = get_connection()
     try:
+        # Validate warehouses belong to company
+        valid_warehouses = conn.execute("SELECT id FROM warehouses WHERE id IN (?, ?) AND company_id = ?", (new_source_wid, new_dest_wid, cid)).fetchall()
+        if len(valid_warehouses) < 2:
+            return jsonify({"ok": False, "error": "One or both selected warehouses are invalid or unauthorized."}), 400
+
         conn.execute("BEGIN")
         
-        old_transfer = conn.execute("SELECT * FROM inventory_transfers WHERE id = ?", (transfer_id,)).fetchone()
+        old_transfer = conn.execute("SELECT * FROM inventory_transfers WHERE id = ? AND company_id = ?", (transfer_id, cid)).fetchone()
         if not old_transfer:
             conn.execute("ROLLBACK")
             return jsonify({"ok": False, "error": "Transfer not found."}), 404
@@ -1534,7 +1563,7 @@ def process_edit_inventory_transfer(transfer_id):
         old_source_wid = old_transfer["source_warehouse_id"]
         old_dest_wid = old_transfer["destination_warehouse_id"]
         
-        old_items = conn.execute("SELECT * FROM inventory_transfer_items WHERE transfer_id = ?", (transfer_id,)).fetchall()
+        old_items = conn.execute("SELECT * FROM inventory_transfer_items WHERE transfer_id = ? AND company_id = ?", (transfer_id, cid)).fetchall()
         
         stock_changes = defaultdict(float)
         
@@ -1552,6 +1581,11 @@ def process_edit_inventory_transfer(transfer_id):
             if pid <= 0 or qty <= 0:
                 conn.execute("ROLLBACK")
                 return jsonify({"ok": False, "error": "Invalid product or quantity."}), 400
+            # Validate product belongs to company
+            p_check = conn.execute("SELECT id FROM products WHERE id = ? AND company_id = ?", (pid, cid)).fetchone()
+            if not p_check:
+                conn.execute("ROLLBACK")
+                return jsonify({"ok": False, "error": f"Product ID {pid} is invalid or unauthorized."}), 400
             stock_changes[(new_source_wid, pid)] -= qty
             stock_changes[(new_dest_wid, pid)] += qty
             
@@ -1560,7 +1594,10 @@ def process_edit_inventory_transfer(transfer_id):
             if net_change == 0:
                 continue
                 
-            cur_stock_row = conn.execute("SELECT stock_quantity, p.name FROM warehouse_inventory wi JOIN products p ON p.id = wi.product_id WHERE wi.product_id = ? AND wi.warehouse_id = ?", (pid, wid)).fetchone()
+            cur_stock_row = conn.execute(
+                "SELECT stock_quantity, p.name FROM warehouse_inventory wi JOIN products p ON p.id = wi.product_id WHERE wi.product_id = ? AND wi.warehouse_id = ? AND wi.company_id = ?",
+                (pid, wid, cid)
+            ).fetchone()
             
             if not cur_stock_row and net_change < 0:
                 conn.execute("ROLLBACK")
@@ -1575,21 +1612,21 @@ def process_edit_inventory_transfer(transfer_id):
                 return jsonify({"ok": False, "error": f"Insufficient stock for {prod_name} in warehouse {wid}. Need {-net_change}, have {cur_stock}."}), 400
                 
             if cur_stock_row:
-                conn.execute("UPDATE warehouse_inventory SET stock_quantity = ? WHERE product_id = ? AND warehouse_id = ?", (new_stock, pid, wid))
+                conn.execute("UPDATE warehouse_inventory SET stock_quantity = ? WHERE product_id = ? AND warehouse_id = ? AND company_id = ?", (new_stock, pid, wid, cid))
             else:
-                conn.execute("INSERT INTO warehouse_inventory (product_id, warehouse_id, stock_quantity) VALUES (?, ?, ?)", (pid, wid, new_stock))
+                conn.execute("INSERT INTO warehouse_inventory (product_id, warehouse_id, stock_quantity, company_id) VALUES (?, ?, ?, ?) ON CONFLICT(warehouse_id, product_id) DO UPDATE SET stock_quantity = ?", (pid, wid, new_stock, cid, new_stock))
                 
             trans_type = "Transfer Edit In" if net_change > 0 else "Transfer Edit Out"
             ref = f"Edit Transfer #{transfer_id}"
-            conn.execute("INSERT INTO inventory_history (product_id, transaction_type, quantity_change, previous_stock, new_stock, reference, warehouse_id) VALUES (?, ?, ?, ?, ?, ?, ?)",
-                         (pid, trans_type, net_change, cur_stock, new_stock, ref, wid))
+            conn.execute("INSERT INTO inventory_history (product_id, transaction_type, quantity_change, previous_stock, new_stock, reference, warehouse_id, company_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                         (pid, trans_type, net_change, cur_stock, new_stock, ref, wid, cid))
                          
         # 4. Update the transfer records
-        conn.execute("UPDATE inventory_transfers SET source_warehouse_id = ?, destination_warehouse_id = ?, notes = ? WHERE id = ?", (new_source_wid, new_dest_wid, notes, transfer_id))
+        conn.execute("UPDATE inventory_transfers SET source_warehouse_id = ?, destination_warehouse_id = ?, notes = ? WHERE id = ? AND company_id = ?", (new_source_wid, new_dest_wid, notes, transfer_id, cid))
         
-        conn.execute("DELETE FROM inventory_transfer_items WHERE transfer_id = ?", (transfer_id,))
+        conn.execute("DELETE FROM inventory_transfer_items WHERE transfer_id = ? AND company_id = ?", (transfer_id, cid))
         for item in new_items:
-            conn.execute("INSERT INTO inventory_transfer_items (transfer_id, product_id, quantity) VALUES (?, ?, ?)", (transfer_id, int(item["product_id"]), float(item["quantity"])))
+            conn.execute("INSERT INTO inventory_transfer_items (transfer_id, product_id, quantity, company_id) VALUES (?, ?, ?, ?)", (transfer_id, int(item["product_id"]), float(item["quantity"]), cid))
             
         conn.commit()
         return jsonify({"ok": True})
@@ -1603,6 +1640,7 @@ def process_edit_inventory_transfer(transfer_id):
 @app.route("/inventory/transfers", methods=["GET"])
 @admin_required
 def inventory_transfers():
+    cid = current_user.company_id if hasattr(current_user, "company_id") and current_user.company_id else 1
     conn = get_connection()
     try:
         transfers_raw = conn.execute("""
@@ -1617,8 +1655,9 @@ def inventory_transfers():
             FROM inventory_transfers it
             LEFT JOIN warehouses w1 ON it.source_warehouse_id = w1.id
             LEFT JOIN warehouses w2 ON it.destination_warehouse_id = w2.id
+            WHERE it.company_id = ?
             ORDER BY it.id DESC
-        """).fetchall()
+        """, (cid,)).fetchall()
         
         transfers = []
         for t in transfers_raw:
@@ -1630,8 +1669,8 @@ def inventory_transfers():
                     p.id AS product_id
                 FROM inventory_transfer_items iti
                 JOIN products p ON p.id = iti.product_id
-                WHERE iti.transfer_id = ?
-            """, (t["id"],)).fetchall()
+                WHERE iti.transfer_id = ? AND iti.company_id = ?
+            """, (t["id"], cid)).fetchall()
             items_list = [dict(i) for i in items_raw]
             t_dict["items"] = items_list
             t_dict["total_items_count"] = len(items_list)
@@ -1645,15 +1684,16 @@ def inventory_transfers():
 @app.route("/inventory/transfers/<int:transfer_id>/delete", methods=["POST"])
 @admin_required
 def delete_transfer(transfer_id):
+    cid = current_user.company_id if hasattr(current_user, "company_id") and current_user.company_id else 1
     conn = get_connection()
     try:
         conn.execute("BEGIN")
-        transfer = conn.execute("SELECT * FROM inventory_transfers WHERE id = ?", (transfer_id,)).fetchone()
+        transfer = conn.execute("SELECT * FROM inventory_transfers WHERE id = ? AND company_id = ?", (transfer_id, cid)).fetchone()
         if not transfer:
             conn.execute("ROLLBACK")
             return jsonify({"ok": False, "error": "Transfer not found"}), 404
             
-        items = conn.execute("SELECT product_id, quantity FROM inventory_transfer_items WHERE transfer_id = ?", (transfer_id,)).fetchall()
+        items = conn.execute("SELECT product_id, quantity FROM inventory_transfer_items WHERE transfer_id = ? AND company_id = ?", (transfer_id, cid)).fetchall()
         
         source_wid = transfer["source_warehouse_id"]
         dest_wid = transfer["destination_warehouse_id"]
@@ -1663,39 +1703,39 @@ def delete_transfer(transfer_id):
             qty = float(item["quantity"])
             
             # Revert destination stock (reduce)
-            dest_stock_row = conn.execute("SELECT stock_quantity FROM warehouse_inventory WHERE product_id = ? AND warehouse_id = ?", (product_id, dest_wid)).fetchone()
+            dest_stock_row = conn.execute("SELECT stock_quantity FROM warehouse_inventory WHERE product_id = ? AND warehouse_id = ? AND company_id = ?", (product_id, dest_wid, cid)).fetchone()
             current_dest = float(dest_stock_row["stock_quantity"] or 0) if dest_stock_row else 0.0
             new_dest = current_dest - qty
             if new_dest < 0:
-                p_name = conn.execute("SELECT name FROM products WHERE id = ?", (product_id,)).fetchone()["name"]
+                p_name = conn.execute("SELECT name FROM products WHERE id = ? AND company_id = ?", (product_id, cid)).fetchone()["name"]
                 conn.execute("ROLLBACK")
                 return jsonify({"ok": False, "error": f"Cannot delete: Reversing this transfer would cause negative stock ({new_dest}) for product {p_name} in destination warehouse."}), 400
             
-            conn.execute("UPDATE warehouse_inventory SET stock_quantity = ? WHERE product_id = ? AND warehouse_id = ?", (new_dest, product_id, dest_wid))
+            conn.execute("UPDATE warehouse_inventory SET stock_quantity = ? WHERE product_id = ? AND warehouse_id = ? AND company_id = ?", (new_dest, product_id, dest_wid, cid))
             
             # Revert source stock (increase)
-            source_stock_row = conn.execute("SELECT stock_quantity FROM warehouse_inventory WHERE product_id = ? AND warehouse_id = ?", (product_id, source_wid)).fetchone()
+            source_stock_row = conn.execute("SELECT stock_quantity FROM warehouse_inventory WHERE product_id = ? AND warehouse_id = ? AND company_id = ?", (product_id, source_wid, cid)).fetchone()
             current_source = float(source_stock_row["stock_quantity"] or 0) if source_stock_row else 0.0
             new_source = current_source + qty
             
             conn.execute('''
-                INSERT INTO warehouse_inventory (product_id, warehouse_id, stock_quantity)
-                VALUES (?, ?, ?)
+                INSERT INTO warehouse_inventory (product_id, warehouse_id, stock_quantity, company_id)
+                VALUES (?, ?, ?, ?)
                 ON CONFLICT(warehouse_id, product_id) DO UPDATE SET stock_quantity = ?
-            ''', (product_id, source_wid, new_source, new_source))
+            ''', (product_id, source_wid, new_source, cid, new_source))
             
             # Log reversal
             conn.execute(
-                "INSERT INTO inventory_history (product_id, transaction_type, quantity_change, previous_stock, new_stock, reference, warehouse_id) VALUES (?, ?, ?, ?, ?, ?, ?)",
-                (product_id, "Transfer Reversal", qty, current_source, new_source, f"Reversed Transfer #{transfer_id}", source_wid)
+                "INSERT INTO inventory_history (product_id, transaction_type, quantity_change, previous_stock, new_stock, reference, warehouse_id, company_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                (product_id, "Transfer Reversal", qty, current_source, new_source, f"Reversed Transfer #{transfer_id}", source_wid, cid)
             )
             conn.execute(
-                "INSERT INTO inventory_history (product_id, transaction_type, quantity_change, previous_stock, new_stock, reference, warehouse_id) VALUES (?, ?, ?, ?, ?, ?, ?)",
-                (product_id, "Transfer Reversal", -qty, current_dest, new_dest, f"Reversed Transfer #{transfer_id}", dest_wid)
+                "INSERT INTO inventory_history (product_id, transaction_type, quantity_change, previous_stock, new_stock, reference, warehouse_id, company_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                (product_id, "Transfer Reversal", -qty, current_dest, new_dest, f"Reversed Transfer #{transfer_id}", dest_wid, cid)
             )
             
         # Delete records
-        conn.execute("DELETE FROM inventory_transfer_items WHERE transfer_id = ?", (transfer_id,))
+        conn.execute("DELETE FROM inventory_transfer_items WHERE transfer_id = ? AND company_id = ?", (transfer_id, cid))
         conn.execute("DELETE FROM inventory_transfers WHERE id = ?", (transfer_id,))
         
         conn.commit()
@@ -2023,26 +2063,29 @@ def brands_add():
 @app.route("/suppliers", methods=["GET"])
 @admin_required
 def suppliers_page():
+    cid = current_user.company_id if hasattr(current_user, "company_id") and current_user.company_id else 1
     conn = get_connection()
     try:
         cur_suppliers = conn.execute("""
             SELECT s.*, COUNT(p.id) as products_count,
-                   (SELECT COALESCE(SUM(remaining_amount), 0) FROM purchases WHERE supplier_id = s.id) as total_balance,
-                   (SELECT COALESCE(SUM(amount_paid), 0) FROM purchases WHERE supplier_id = s.id) as total_paid
+                   (SELECT COALESCE(SUM(remaining_amount), 0) FROM purchases WHERE supplier_id = s.id AND company_id = ?) as total_balance,
+                   (SELECT COALESCE(SUM(amount_paid), 0) FROM purchases WHERE supplier_id = s.id AND company_id = ?) as total_paid
             FROM suppliers s
-            LEFT JOIN products p ON s.id = p.supplier_id
+            LEFT JOIN products p ON s.id = p.supplier_id AND p.company_id = ?
+            WHERE s.company_id = ?
             GROUP BY s.id
-            ORDER BY s.name COLLATE NOCASE
-        """)
+            ORDER BY s.name ASC
+        """, (cid, cid, cid, cid))
         suppliers = [dict(r) for r in cur_suppliers.fetchall()]
         
         cur_brands = conn.execute("""
             SELECT b.*, b.commission_rate, COUNT(p.id) as products_count
             FROM brands b
-            LEFT JOIN products p ON b.name = p.brand
+            LEFT JOIN products p ON b.name = p.brand AND p.company_id = ?
+            WHERE b.company_id = ?
             GROUP BY b.id
-            ORDER BY b.name COLLATE NOCASE
-        """)
+            ORDER BY b.name ASC
+        """, (cid, cid))
         brands = [dict(r) for r in cur_brands.fetchall()]
         
         return render_template("suppliers.html", suppliers=suppliers, brands=brands)
@@ -2052,6 +2095,7 @@ def suppliers_page():
 @app.route("/suppliers/add", methods=["POST"])
 @admin_required
 def suppliers_add():
+    cid = current_user.company_id if hasattr(current_user, "company_id") and current_user.company_id else 1
     name = request.form.get("name", "").strip()
     contact_name = request.form.get("contact_name", "").strip()
     phone = request.form.get("phone", "").strip()
@@ -2062,7 +2106,7 @@ def suppliers_add():
         
     conn = get_connection()
     try:
-        conn.execute("INSERT INTO suppliers (name, contact_name, phone, address) VALUES (?, ?, ?, ?)", (name, contact_name, phone, address))
+        conn.execute("INSERT INTO suppliers (name, contact_name, phone, address, company_id) VALUES (?, ?, ?, ?, ?)", (name, contact_name, phone, address, cid))
         conn.commit()
     finally:
         conn.close()
@@ -2071,6 +2115,7 @@ def suppliers_add():
 @app.route("/suppliers/edit/<int:supplier_id>", methods=["POST"])
 @admin_required
 def suppliers_edit(supplier_id):
+    cid = current_user.company_id if hasattr(current_user, "company_id") and current_user.company_id else 1
     name = request.form.get("name", "").strip()
     contact_name = request.form.get("contact_name", "").strip()
     phone = request.form.get("phone", "").strip()
@@ -2081,7 +2126,10 @@ def suppliers_edit(supplier_id):
         
     conn = get_connection()
     try:
-        conn.execute("UPDATE suppliers SET name = ?, contact_name = ?, phone = ?, address = ? WHERE id = ?", (name, contact_name, phone, address, supplier_id))
+        cur = conn.execute("SELECT id FROM suppliers WHERE id = ? AND company_id = ?", (supplier_id, cid)).fetchone()
+        if not cur:
+            abort(404)
+        conn.execute("UPDATE suppliers SET name = ?, contact_name = ?, phone = ?, address = ? WHERE id = ? AND company_id = ?", (name, contact_name, phone, address, supplier_id, cid))
         conn.commit()
     finally:
         conn.close()
@@ -2090,11 +2138,15 @@ def suppliers_edit(supplier_id):
 @app.route("/suppliers/delete/<int:supplier_id>", methods=["POST"])
 @admin_required
 def suppliers_delete(supplier_id):
+    cid = current_user.company_id if hasattr(current_user, "company_id") and current_user.company_id else 1
     conn = get_connection()
     try:
-        conn.execute("DELETE FROM suppliers WHERE id = ?", (supplier_id,))
-        conn.execute("UPDATE products SET supplier_id = NULL WHERE supplier_id = ?", (supplier_id,))
-        conn.execute("UPDATE inventory_history SET supplier_id = NULL WHERE supplier_id = ?", (supplier_id,))
+        cur = conn.execute("SELECT id FROM suppliers WHERE id = ? AND company_id = ?", (supplier_id, cid)).fetchone()
+        if not cur:
+            abort(404)
+        conn.execute("DELETE FROM suppliers WHERE id = ? AND company_id = ?", (supplier_id, cid))
+        conn.execute("UPDATE products SET supplier_id = NULL WHERE supplier_id = ? AND company_id = ?", (supplier_id, cid))
+        conn.execute("UPDATE inventory_history SET supplier_id = NULL WHERE supplier_id = ? AND company_id = ?", (supplier_id, cid))
         conn.commit()
     finally:
         conn.close()
@@ -2103,8 +2155,12 @@ def suppliers_delete(supplier_id):
 @app.route("/suppliers/<int:supplier_id>/history", methods=["GET"])
 @admin_required
 def supplier_history(supplier_id):
+    cid = current_user.company_id if hasattr(current_user, "company_id") and current_user.company_id else 1
     conn = get_connection()
     try:
+        cur = conn.execute("SELECT id FROM suppliers WHERE id = ? AND company_id = ?", (supplier_id, cid)).fetchone()
+        if not cur:
+            abort(404)
         rows = conn.execute(
             '''
             SELECT
@@ -2113,12 +2169,12 @@ def supplier_history(supplier_id):
                 COALESCE(SUM(ih.quantity_change), 0) AS total_added,
                 COALESCE(SUM(ih.quantity_change * p.cost_price), 0) AS total_value
             FROM inventory_history ih
-            JOIN products p ON p.id = ih.product_id
-            WHERE p.supplier_id = ? AND ih.transaction_type = 'IN'
+            JOIN products p ON p.id = ih.product_id AND p.company_id = ?
+            WHERE p.supplier_id = ? AND ih.company_id = ? AND ih.transaction_type = 'IN'
               AND ih.reference IN ('Initial Stock', 'Initial Stock (Legacy)', 'Manual Edit', 'Manual Edit (Edit Product)')
             GROUP BY date(ih.created_at), p.id
             ORDER BY addition_date DESC, p.name ASC
-            ''', (supplier_id,)
+            ''', (cid, supplier_id, cid)
         ).fetchall()
         
         result = []
@@ -5545,17 +5601,19 @@ def reports_export(type: str):
 @app.route("/users")
 @admin_required
 def users_list():
+    cid = current_user.company_id if hasattr(current_user, "company_id") and current_user.company_id else 1
     conn = get_connection()
     try:
         users = conn.execute("""
             SELECT u.id, u.username, u.role, u.is_active, u.warehouse_id, w.name as warehouse_name,
-                   (SELECT COUNT(*) FROM sales WHERE salesman_id = u.id) as sales_count,
-                   (SELECT COALESCE(SUM(grand_total), 0) FROM sales WHERE salesman_id = u.id) as sales_volume
+                   (SELECT COUNT(*) FROM sales WHERE salesman_id = u.id AND company_id = ?) as sales_count,
+                   (SELECT COALESCE(SUM(grand_total), 0) FROM sales WHERE salesman_id = u.id AND company_id = ?) as sales_volume
             FROM users u 
             LEFT JOIN warehouses w ON u.warehouse_id = w.id
+            WHERE u.company_id = ?
             ORDER BY u.id ASC
-        """).fetchall()
-        warehouses = conn.execute("SELECT id, name FROM warehouses ORDER BY name").fetchall()
+        """, (cid, cid, cid)).fetchall()
+        warehouses = conn.execute("SELECT id, name FROM warehouses WHERE company_id = ? ORDER BY name", (cid,)).fetchall()
         user_dicts = [dict(u) for u in users]
         total_users = len(user_dicts)
         active_users = sum(1 for u in user_dicts if u.get('is_active') == 1)
@@ -5577,6 +5635,7 @@ def users_list():
 @app.route("/users/add", methods=["POST"])
 @admin_required
 def users_add():
+    cid = current_user.company_id if hasattr(current_user, "company_id") and current_user.company_id else 1
     username = (request.form.get("username") or "").strip()
     password = (request.form.get("password") or "").strip()
     role = (request.form.get("role") or "salesman").strip()
@@ -5589,27 +5648,41 @@ def users_add():
         
     conn = get_connection()
     try:
+        if warehouse_id:
+            wh_check = conn.execute("SELECT id FROM warehouses WHERE id = ? AND company_id = ?", (warehouse_id, cid)).fetchone()
+            if not wh_check:
+                return jsonify({"ok": False, "error": "Invalid warehouse selected."}), 400
+
         conn.execute(
-            "INSERT INTO users (username, password_hash, role, warehouse_id) VALUES (?, ?, ?, ?)",
-            (username, generate_password_hash(password, method="pbkdf2:sha256"), role, warehouse_id)
+            "INSERT INTO users (username, password_hash, role, warehouse_id, company_id) VALUES (?, ?, ?, ?, ?)",
+            (username, generate_password_hash(password, method="pbkdf2:sha256"), role, warehouse_id, cid)
         )
         conn.commit()
         return jsonify({"ok": True})
-    except sqlite3.IntegrityError:
-        return jsonify({"ok": False, "error": "Username already exists."}), 409
+    except (sqlite3.IntegrityError, Exception) as e:
+        if "unique" in str(e).lower() or "duplicate" in str(e).lower():
+            return jsonify({"ok": False, "error": "Username already exists."}), 409
+        return jsonify({"ok": False, "error": str(e)}), 500
     finally:
         conn.close()
+
 @app.route("/users/toggle_active/<int:user_id>", methods=["POST"])
 @admin_required
 def users_toggle_active(user_id):
+    cid = current_user.company_id if hasattr(current_user, "company_id") and current_user.company_id else 1
+    if user_id == current_user.id:
+        flash("You cannot deactivate your own account.", "warning")
+        return redirect(url_for("users_list"))
+
     conn = get_connection()
     try:
-        cur = conn.execute("SELECT is_active FROM users WHERE id = ?", (user_id,))
+        cur = conn.execute("SELECT is_active FROM users WHERE id = ? AND company_id = ?", (user_id, cid))
         row = cur.fetchone()
-        if row:
-            new_active = 0 if row["is_active"] == 1 else 1
-            conn.execute("UPDATE users SET is_active = ? WHERE id = ?", (new_active, user_id))
-            conn.commit()
+        if not row:
+            abort(404)
+        new_active = 0 if row["is_active"] == 1 else 1
+        conn.execute("UPDATE users SET is_active = ? WHERE id = ? AND company_id = ?", (new_active, user_id, cid))
+        conn.commit()
     finally:
         conn.close()
     return redirect(url_for("users_list"))
@@ -5617,6 +5690,7 @@ def users_toggle_active(user_id):
 @app.route("/users/edit/<int:user_id>", methods=["POST"])
 @admin_required
 def users_edit(user_id):
+    cid = current_user.company_id if hasattr(current_user, "company_id") and current_user.company_id else 1
     warehouse_id = request.form.get("warehouse_id")
     if not warehouse_id:
         warehouse_id = None
@@ -5624,7 +5698,15 @@ def users_edit(user_id):
     
     conn = get_connection()
     try:
-        conn.execute("UPDATE users SET role = ?, warehouse_id = ? WHERE id = ?", (role, warehouse_id, user_id))
+        target_user = conn.execute("SELECT id, role FROM users WHERE id = ? AND company_id = ?", (user_id, cid)).fetchone()
+        if not target_user:
+            abort(404)
+        if warehouse_id:
+            wh_check = conn.execute("SELECT id FROM warehouses WHERE id = ? AND company_id = ?", (warehouse_id, cid)).fetchone()
+            if not wh_check:
+                flash("Invalid warehouse.", "danger")
+                return redirect(url_for("users_list"))
+        conn.execute("UPDATE users SET role = ?, warehouse_id = ? WHERE id = ? AND company_id = ?", (role, warehouse_id, user_id, cid))
         conn.commit()
         return redirect(url_for("users_list"))
     finally:
@@ -5665,6 +5747,10 @@ def api_warehouse_recent_sales():
         
     conn = get_connection()
     try:
+        wh = conn.execute("SELECT id FROM warehouses WHERE id = ? AND company_id = ?", (warehouse_id, cid)).fetchone()
+        if not wh:
+            return jsonify([])
+            
         cur = conn.execute("""
             SELECT 
                 s.id, s.invoice_number, s.invoice_date, c.name as customer_name,
@@ -5691,6 +5777,10 @@ def api_warehouse_inventory():
         
     conn = get_connection()
     try:
+        wh = conn.execute("SELECT id FROM warehouses WHERE id = ? AND company_id = ?", (warehouse_id, cid)).fetchone()
+        if not wh:
+            return jsonify([])
+
         cur = conn.execute("""
             SELECT 
                 p.id as product_id,
@@ -5700,10 +5790,10 @@ def api_warehouse_inventory():
                 p.cost_price,
                 (COALESCE(wi.stock_quantity, 0) * COALESCE(p.cost_price, 0)) as total_value
             FROM products p
-            JOIN warehouse_inventory wi ON p.id = wi.product_id
+            JOIN warehouse_inventory wi ON p.id = wi.product_id AND wi.company_id = ?
             WHERE wi.warehouse_id = ? AND p.company_id = ?
-            ORDER BY p.name COLLATE NOCASE
-        """, (warehouse_id, cid))
+            ORDER BY p.name ASC
+        """, (cid, warehouse_id, cid))
         inventory = [dict(row) for row in cur.fetchall()]
         return jsonify(inventory)
     finally:
@@ -5712,6 +5802,7 @@ def api_warehouse_inventory():
 @app.route("/warehouses/add", methods=["POST"])
 @admin_required
 def warehouses_add():
+    cid = current_user.company_id if hasattr(current_user, "company_id") and current_user.company_id else 1
     name = (request.form.get("name") or "").strip()
     location = (request.form.get("location") or "").strip()
     commission_applies = 1 if request.form.get("commission_applies") == "1" else 0
@@ -5720,9 +5811,21 @@ def warehouses_add():
         
     conn = get_connection()
     try:
-        conn.execute("INSERT INTO warehouses (name, location, commission_applies) VALUES (?, ?, ?)", (name, location, commission_applies))
+        # Enforce max_warehouses limit
+        co_row = conn.execute("SELECT max_warehouses FROM companies WHERE id = ?", (cid,)).fetchone()
+        max_w = co_row["max_warehouses"] if co_row and co_row["max_warehouses"] is not None else 5
+        cur_count_row = conn.execute("SELECT COUNT(*) as count FROM warehouses WHERE company_id = ?", (cid,)).fetchone()
+        cur_count = cur_count_row["count"] if cur_count_row else 0
+        if cur_count >= max_w:
+            flash(f"Warehouse limit reached ({max_w}). Please upgrade your plan to add more warehouses.", "error")
+            return redirect(url_for("warehouses_list"))
+
+        conn.execute(
+            "INSERT INTO warehouses (name, location, commission_applies, company_id) VALUES (?, ?, ?, ?)",
+            (name, location, commission_applies, cid)
+        )
         conn.commit()
-    except sqlite3.IntegrityError:
+    except (sqlite3.IntegrityError, Exception):
         pass
     finally:
         conn.close()
@@ -5731,6 +5834,7 @@ def warehouses_add():
 @app.route("/warehouses/edit/<int:warehouse_id>", methods=["POST"])
 @admin_required
 def warehouses_edit(warehouse_id):
+    cid = current_user.company_id if hasattr(current_user, "company_id") and current_user.company_id else 1
     name = (request.form.get("name") or "").strip()
     location = (request.form.get("location") or "").strip()
     commission_applies = 1 if request.form.get("commission_applies") == "1" else 0
@@ -5739,10 +5843,14 @@ def warehouses_edit(warehouse_id):
         
     conn = get_connection()
     try:
-        conn.execute("UPDATE warehouses SET name = ?, location = ?, commission_applies = ? WHERE id = ?", (name, location, commission_applies, warehouse_id))
-        conn.commit()
-    except sqlite3.IntegrityError:
-        pass
+        cur = conn.execute("SELECT id FROM warehouses WHERE id = ? AND company_id = ?", (warehouse_id, cid)).fetchone()
+        if not cur:
+            abort(404)
+        try:
+            conn.execute("UPDATE warehouses SET name = ?, location = ?, commission_applies = ? WHERE id = ? AND company_id = ?", (name, location, commission_applies, warehouse_id, cid))
+            conn.commit()
+        except (sqlite3.IntegrityError, Exception):
+            pass
     finally:
         conn.close()
     return redirect(url_for("warehouses_list"))
@@ -5750,6 +5858,7 @@ def warehouses_edit(warehouse_id):
 @app.route("/users/reset_password", methods=["POST"])
 @admin_required
 def users_reset_password():
+    cid = current_user.company_id if hasattr(current_user, "company_id") and current_user.company_id else 1
     user_id = request.form.get("user_id")
     new_password = request.form.get("new_password")
     if not user_id or not new_password:
@@ -5757,9 +5866,13 @@ def users_reset_password():
     
     conn = get_connection()
     try:
+        target_user = conn.execute("SELECT id FROM users WHERE id = ? AND company_id = ?", (user_id, cid)).fetchone()
+        if not target_user:
+            return jsonify({"ok": False, "error": "User not found."}), 404
+
         conn.execute(
-            "UPDATE users SET password_hash = ? WHERE id = ?",
-            (generate_password_hash(new_password, method="pbkdf2:sha256"), user_id)
+            "UPDATE users SET password_hash = ? WHERE id = ? AND company_id = ?",
+            (generate_password_hash(new_password, method="pbkdf2:sha256"), user_id, cid)
         )
         conn.commit()
         return jsonify({"ok": True})
@@ -6015,6 +6128,7 @@ def pos_submit_order():
 @app.route("/expenses")
 @admin_required
 def expenses():
+    cid = current_user.company_id if hasattr(current_user, "company_id") and current_user.company_id else 1
     search      = request.args.get("search", "").strip()
     category    = request.args.get("category", "").strip()
     start_date  = request.args.get("start_date", "").strip()
@@ -6027,9 +6141,9 @@ def expenses():
                    u.username as added_by_name
             FROM expenses e
             LEFT JOIN users u ON e.added_by = u.id
-            WHERE 1=1
+            WHERE e.company_id = ?
         """
-        params = []
+        params = [cid]
         if search:
             query += " AND (e.description LIKE ? OR e.category LIKE ?)"
             params.extend([f"%{search}%", f"%{search}%"])
@@ -6047,15 +6161,15 @@ def expenses():
         rows = [dict(r) for r in conn.execute(query, params).fetchall()]
         total = sum(r["amount"] for r in rows)
 
-        total_all_row = conn.execute("SELECT COALESCE(SUM(amount), 0), COUNT(*) FROM expenses").fetchone()
+        total_all_row = conn.execute("SELECT COALESCE(SUM(amount), 0), COUNT(*) FROM expenses WHERE company_id = ?", (cid,)).fetchone()
         total_all = total_all_row[0] if total_all_row else 0
         total_all_count = total_all_row[1] if total_all_row else 0
 
         # Current month spending
         current_month_prefix = date.today().strftime("%Y-%m")
         month_row = conn.execute(
-            "SELECT COALESCE(SUM(amount), 0) FROM expenses WHERE date LIKE ?",
-            (f"{current_month_prefix}%",)
+            "SELECT COALESCE(SUM(amount), 0) FROM expenses WHERE date LIKE ? AND company_id = ?",
+            (f"{current_month_prefix}%", cid)
         ).fetchone()
         this_month_total = month_row[0] if month_row else 0
 
@@ -6068,7 +6182,8 @@ def expenses():
 
         # All distinct categories entered already in the DB
         categories = [r[0] for r in conn.execute(
-            "SELECT DISTINCT category FROM expenses WHERE category IS NOT NULL AND category != '' ORDER BY category COLLATE NOCASE"
+            "SELECT DISTINCT category FROM expenses WHERE category IS NOT NULL AND category != '' AND company_id = ? ORDER BY category ASC",
+            (cid,)
         ).fetchall()]
     finally:
         conn.close()
@@ -6091,6 +6206,7 @@ def expenses():
 @app.route("/expenses/add", methods=["POST"])
 @admin_required
 def expenses_add():
+    cid = current_user.company_id if hasattr(current_user, "company_id") and current_user.company_id else 1
     date_val    = request.form.get("date", "").strip()
     category    = request.form.get("category", "").strip()
     description = request.form.get("description", "").strip()
@@ -6108,8 +6224,8 @@ def expenses_add():
     conn = get_connection()
     try:
         conn.execute(
-            "INSERT INTO expenses (date, category, description, amount, added_by) VALUES (?, ?, ?, ?, ?)",
-            (date_val, category, description, amount, current_user.id),
+            "INSERT INTO expenses (date, category, description, amount, added_by, company_id) VALUES (?, ?, ?, ?, ?, ?)",
+            (date_val, category, description, amount, current_user.id, cid),
         )
         conn.commit()
     finally:
@@ -6121,6 +6237,7 @@ def expenses_add():
 @app.route("/expenses/edit/<int:expense_id>", methods=["POST"])
 @admin_required
 def expenses_edit(expense_id):
+    cid = current_user.company_id if hasattr(current_user, "company_id") and current_user.company_id else 1
     date_val    = request.form.get("date", "").strip()
     category    = request.form.get("category", "").strip()
     description = request.form.get("description", "").strip()
@@ -6137,9 +6254,12 @@ def expenses_edit(expense_id):
 
     conn = get_connection()
     try:
+        cur = conn.execute("SELECT id FROM expenses WHERE id = ? AND company_id = ?", (expense_id, cid)).fetchone()
+        if not cur:
+            abort(404)
         conn.execute(
-            "UPDATE expenses SET date=?, category=?, description=?, amount=? WHERE id=?",
-            (date_val, category, description, amount, expense_id),
+            "UPDATE expenses SET date=?, category=?, description=?, amount=? WHERE id=? AND company_id=?",
+            (date_val, category, description, amount, expense_id, cid),
         )
         conn.commit()
     finally:
@@ -6151,9 +6271,13 @@ def expenses_edit(expense_id):
 @app.route("/expenses/delete/<int:expense_id>", methods=["POST"])
 @admin_required
 def expenses_delete(expense_id):
+    cid = current_user.company_id if hasattr(current_user, "company_id") and current_user.company_id else 1
     conn = get_connection()
     try:
-        conn.execute("DELETE FROM expenses WHERE id=?", (expense_id,))
+        cur = conn.execute("SELECT id FROM expenses WHERE id = ? AND company_id = ?", (expense_id, cid)).fetchone()
+        if not cur:
+            abort(404)
+        conn.execute("DELETE FROM expenses WHERE id=? AND company_id=?", (expense_id, cid))
         conn.commit()
     finally:
         conn.close()
@@ -6164,7 +6288,7 @@ def expenses_delete(expense_id):
 @app.route("/purchases")
 @login_required
 def purchases():
-
+    cid = current_user.company_id if hasattr(current_user, "company_id") and current_user.company_id else 1
     search = request.args.get('search', '').strip()
     supplier_id = request.args.get('supplier_id', '')
     product_id = request.args.get('product_id', '')
@@ -6178,9 +6302,9 @@ def purchases():
             FROM purchases p
             LEFT JOIN suppliers s ON p.supplier_id = s.id
             LEFT JOIN warehouses w ON p.warehouse_id = w.id
-            WHERE 1=1
+            WHERE p.company_id = ?
         '''
-        params = []
+        params = [cid]
         
         if search:
             query += ' AND (p.reference_number LIKE ? OR p.id LIKE ?)'
@@ -6191,8 +6315,8 @@ def purchases():
             params.append(supplier_id)
             
         if product_id:
-            query += ' AND EXISTS (SELECT 1 FROM purchase_items pi WHERE pi.purchase_id = p.id AND pi.product_id = ?)'
-            params.append(product_id)
+            query += ' AND EXISTS (SELECT 1 FROM purchase_items pi WHERE pi.purchase_id = p.id AND pi.product_id = ? AND pi.company_id = ?)'
+            params.extend([product_id, cid])
             
         if start_date:
             query += ' AND p.purchase_date >= ?'
@@ -6213,8 +6337,8 @@ def purchases():
                 SELECT pi.purchase_id, pr.name as product_name, pi.qty 
                 FROM purchase_items pi
                 JOIN products pr ON pi.product_id = pr.id
-                WHERE pi.purchase_id IN ({','.join(purchase_ids)})
-            ''').fetchall()
+                WHERE pi.purchase_id IN ({','.join(purchase_ids)}) AND pi.company_id = ?
+            ''', (cid,)).fetchall()
             
             items_by_purchase = {}
             for item in items:
@@ -6226,8 +6350,8 @@ def purchases():
             for r in rows:
                 r["purchase_items"] = items_by_purchase.get(r["id"], [])
         
-        suppliers = conn.execute('SELECT id, name FROM suppliers ORDER BY name COLLATE NOCASE ASC').fetchall()
-        products = conn.execute('SELECT id, name FROM products ORDER BY name COLLATE NOCASE ASC').fetchall()
+        suppliers = conn.execute('SELECT id, name FROM suppliers WHERE company_id = ? ORDER BY name ASC', (cid,)).fetchall()
+        products = conn.execute('SELECT id, name FROM products WHERE company_id = ? ORDER BY name ASC', (cid,)).fetchall()
     finally:
         conn.close()
     return render_template("purchases.html", purchases=rows, suppliers=suppliers, products=products, filters={'search': search, 'supplier_id': supplier_id, 'product_id': product_id, 'start_date': start_date, 'end_date': end_date})
@@ -6235,12 +6359,12 @@ def purchases():
 @app.route("/purchases/new", methods=["GET"])
 @admin_required
 def new_purchase():
+    cid = current_user.company_id if hasattr(current_user, "company_id") and current_user.company_id else 1
     conn = get_connection()
     try:
-        suppliers = [dict(row) for row in conn.execute("SELECT id, name FROM suppliers ORDER BY name COLLATE NOCASE ASC").fetchall()]
-        products = [dict(row) for row in conn.execute("SELECT id, name, cost_price, unit FROM products ORDER BY name COLLATE NOCASE ASC").fetchall()]
-        warehouses = [dict(row) for row in conn.execute("SELECT id, name FROM warehouses ORDER BY name").fetchall()]
-        warehouses = [dict(row) for row in conn.execute("SELECT id, name FROM warehouses ORDER BY name").fetchall()]
+        suppliers = [dict(row) for row in conn.execute("SELECT id, name FROM suppliers WHERE company_id = ? ORDER BY name ASC", (cid,)).fetchall()]
+        products = [dict(row) for row in conn.execute("SELECT id, name, cost_price, unit FROM products WHERE company_id = ? ORDER BY name ASC", (cid,)).fetchall()]
+        warehouses = [dict(row) for row in conn.execute("SELECT id, name FROM warehouses WHERE company_id = ? ORDER BY name ASC", (cid,)).fetchall()]
     finally:
         conn.close()
     return render_template("purchase_new.html", suppliers=suppliers, products=products, warehouses=warehouses, purchase=None)
@@ -6248,11 +6372,12 @@ def new_purchase():
 @app.route("/purchases/edit/<int:purchase_id>", methods=["GET"])
 @admin_required
 def edit_purchase(purchase_id):
+    cid = current_user.company_id if hasattr(current_user, "company_id") and current_user.company_id else 1
     conn = get_connection()
     try:
-        purchase = conn.execute("SELECT * FROM purchases WHERE id = ?", (purchase_id,)).fetchone()
+        purchase = conn.execute("SELECT * FROM purchases WHERE id = ? AND company_id = ?", (purchase_id, cid)).fetchone()
         if not purchase:
-            return "Purchase not found", 404
+            abort(404)
         
         purchase = dict(purchase)
         
@@ -6260,13 +6385,13 @@ def edit_purchase(purchase_id):
             SELECT pi.product_id, pi.qty, pi.cost_price, p.name 
             FROM purchase_items pi
             JOIN products p ON p.id = pi.product_id
-            WHERE pi.purchase_id = ?
-        ''', (purchase_id,)).fetchall()
+            WHERE pi.purchase_id = ? AND pi.company_id = ?
+        ''', (purchase_id, cid)).fetchall()
         purchase['items'] = [dict(i) for i in items]
         
-        suppliers = [dict(row) for row in conn.execute("SELECT id, name FROM suppliers ORDER BY name COLLATE NOCASE ASC").fetchall()]
-        products = [dict(row) for row in conn.execute("SELECT id, name, cost_price, unit FROM products ORDER BY name COLLATE NOCASE ASC").fetchall()]
-        warehouses = [dict(row) for row in conn.execute("SELECT id, name FROM warehouses ORDER BY name").fetchall()]
+        suppliers = [dict(row) for row in conn.execute("SELECT id, name FROM suppliers WHERE company_id = ? ORDER BY name ASC", (cid,)).fetchall()]
+        products = [dict(row) for row in conn.execute("SELECT id, name, cost_price, unit FROM products WHERE company_id = ? ORDER BY name ASC", (cid,)).fetchall()]
+        warehouses = [dict(row) for row in conn.execute("SELECT id, name FROM warehouses WHERE company_id = ? ORDER BY name ASC", (cid,)).fetchall()]
     finally:
         conn.close()
     return render_template("purchase_new.html", suppliers=suppliers, products=products, purchase=purchase, warehouses=warehouses)
@@ -6274,7 +6399,7 @@ def edit_purchase(purchase_id):
 @app.route("/purchases/new", methods=["POST"])
 @admin_required
 def create_purchase():
-    # Save purchase logic
+    cid = current_user.company_id if hasattr(current_user, "company_id") and current_user.company_id else 1
     data = request.json
     supplier_id = data.get("supplier_id")
     purchase_date = data.get("purchase_date")
@@ -6291,6 +6416,23 @@ def create_purchase():
 
     conn = get_connection()
     try:
+        # Validate supplier belongs to company
+        supp_check = conn.execute("SELECT id FROM suppliers WHERE id = ? AND company_id = ?", (supplier_id, cid)).fetchone()
+        if not supp_check:
+            return jsonify({"ok": False, "error": "Invalid or unauthorized supplier."}), 400
+
+        # Validate warehouse belongs to company
+        wh_check = conn.execute("SELECT id FROM warehouses WHERE id = ? AND company_id = ?", (wid, cid)).fetchone()
+        if not wh_check:
+            return jsonify({"ok": False, "error": "Invalid or unauthorized warehouse."}), 400
+
+        # Validate all products belong to company
+        for item in items:
+            pid = int(item.get("product_id", 0))
+            p_check = conn.execute("SELECT id FROM products WHERE id = ? AND company_id = ?", (pid, cid)).fetchone()
+            if not p_check:
+                return jsonify({"ok": False, "error": f"Invalid or unauthorized product ID {pid}."}), 400
+
         conn.execute("BEGIN")
         
         subtotal = sum(float(item.get("qty", 0)) * float(item.get("cost_price", 0)) for item in items)
@@ -6306,17 +6448,17 @@ def create_purchase():
             status = 'partial'
 
         cur = conn.execute('''
-            INSERT INTO purchases (supplier_id, reference_number, purchase_date, subtotal, other_charges, grand_total, amount_paid, remaining_amount, status, warehouse_id)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        ''', (supplier_id, reference_number, purchase_date, subtotal, other_charges, grand_total, amount_paid, remaining_amount, status, wid))
+            INSERT INTO purchases (supplier_id, reference_number, purchase_date, subtotal, other_charges, grand_total, amount_paid, remaining_amount, status, warehouse_id, company_id)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ''', (supplier_id, reference_number, purchase_date, subtotal, other_charges, grand_total, amount_paid, remaining_amount, status, wid, cid))
         
         purchase_id = cur.lastrowid
         
         if amount_paid > 0:
             conn.execute('''
-                INSERT INTO supplier_payments (supplier_id, purchase_id, amount, payment_date, payment_method)
-                VALUES (?, ?, ?, ?, ?)
-            ''', (supplier_id, purchase_id, amount_paid, purchase_date, payment_method))
+                INSERT INTO supplier_payments (supplier_id, purchase_id, amount, payment_date, payment_method, company_id)
+                VALUES (?, ?, ?, ?, ?, ?)
+            ''', (supplier_id, purchase_id, amount_paid, purchase_date, payment_method, cid))
 
         for item in items:
             qty = round(float(item["qty"]), 4)
@@ -6325,26 +6467,26 @@ def create_purchase():
             amount = round(qty * cost, 2)
             
             conn.execute('''
-                INSERT INTO purchase_items (purchase_id, product_id, qty, cost_price, amount)
-                VALUES (?, ?, ?, ?, ?)
-            ''', (purchase_id, pid, qty, cost, amount))
+                INSERT INTO purchase_items (purchase_id, product_id, qty, cost_price, amount, company_id)
+                VALUES (?, ?, ?, ?, ?, ?)
+            ''', (purchase_id, pid, qty, cost, amount, cid))
             
             # Update inventory
-            cur = conn.execute("SELECT stock_quantity FROM warehouse_inventory WHERE product_id = ? AND warehouse_id = ?", (pid, wid))
+            cur = conn.execute("SELECT stock_quantity FROM warehouse_inventory WHERE product_id = ? AND warehouse_id = ? AND company_id = ?", (pid, wid, cid))
             row = cur.fetchone()
             old_stock = float(row["stock_quantity"] or 0) if row else 0
             new_stock = round(old_stock + qty, 4)
             
             conn.execute('''
-                INSERT INTO warehouse_inventory (product_id, warehouse_id, stock_quantity)
-                VALUES (?, ?, ?)
+                INSERT INTO warehouse_inventory (product_id, warehouse_id, stock_quantity, company_id)
+                VALUES (?, ?, ?, ?)
                 ON CONFLICT(warehouse_id, product_id) DO UPDATE SET stock_quantity = ?
-            ''', (pid, wid, new_stock, new_stock))
+            ''', (pid, wid, new_stock, cid, new_stock))
             
             conn.execute('''
-                INSERT INTO inventory_history (product_id, transaction_type, quantity_change, previous_stock, new_stock, reference, supplier_id, warehouse_id)
-                VALUES (?, 'IN', ?, ?, ?, ?, ?, ?)
-            ''', (pid, qty, old_stock, new_stock, f"Purchase #{purchase_id}", supplier_id, wid))
+                INSERT INTO inventory_history (product_id, transaction_type, quantity_change, previous_stock, new_stock, reference, supplier_id, warehouse_id, company_id)
+                VALUES (?, 'IN', ?, ?, ?, ?, ?, ?, ?)
+            ''', (pid, qty, old_stock, new_stock, f"Purchase #{purchase_id}", supplier_id, wid, cid))
 
         conn.commit()
         return jsonify({"ok": True, "purchase_id": purchase_id})
@@ -6357,6 +6499,7 @@ def create_purchase():
 @app.route("/api/purchases/<int:purchase_id>", methods=["POST"])
 @admin_required
 def update_purchase(purchase_id):
+    cid = current_user.company_id if hasattr(current_user, "company_id") and current_user.company_id else 1
     data = request.json
     supplier_id = data.get("supplier_id")
     purchase_date = data.get("purchase_date")
@@ -6370,19 +6513,31 @@ def update_purchase(purchase_id):
 
     conn = get_connection()
     try:
-        conn.execute("BEGIN")
-        
+        # Verify purchase belongs to tenant
+        old_purch = conn.execute("SELECT supplier_id, warehouse_id, amount_paid FROM purchases WHERE id = ? AND company_id = ?", (purchase_id, cid)).fetchone()
+        if not old_purch:
+            return jsonify({"ok": False, "error": "Purchase not found"}), 404
+
+        # Validate supplier belongs to company
+        supp_check = conn.execute("SELECT id FROM suppliers WHERE id = ? AND company_id = ?", (supplier_id, cid)).fetchone()
+        if not supp_check:
+            return jsonify({"ok": False, "error": "Invalid or unauthorized supplier."}), 400
+
         # Determine warehouse_id
         wid_raw = data.get("warehouse_id")
         if wid_raw:
             wid = int(wid_raw)
         else:
-            # Fallback to the purchase's existing warehouse_id
-            cur = conn.execute("SELECT warehouse_id FROM purchases WHERE id = ?", (purchase_id,))
-            row = cur.fetchone()
-            wid = int(row["warehouse_id"]) if row and row["warehouse_id"] else (current_user.warehouse_id or 1)
+            wid = int(old_purch["warehouse_id"]) if old_purch["warehouse_id"] else (current_user.warehouse_id or 1)
+
+        wh_check = conn.execute("SELECT id FROM warehouses WHERE id = ? AND company_id = ?", (wid, cid)).fetchone()
+        if not wh_check:
+            return jsonify({"ok": False, "error": "Invalid or unauthorized warehouse."}), 400
+
+        conn.execute("BEGIN")
+
         # 1. Fetch old items to calculate net stock changes
-        old_items_db = conn.execute("SELECT product_id, qty FROM purchase_items WHERE purchase_id = ?", (purchase_id,)).fetchall()
+        old_items_db = conn.execute("SELECT product_id, qty FROM purchase_items WHERE purchase_id = ? AND company_id = ?", (purchase_id, cid)).fetchall()
         old_items = {}
         for row in old_items_db:
             pid = str(row["product_id"])
@@ -6401,11 +6556,11 @@ def update_purchase(purchase_id):
             diff = round(new_qty - old_qty, 4)
             
             if diff < -1e-5:
-                cur_stock = conn.execute("SELECT stock_quantity FROM warehouse_inventory WHERE product_id = ? AND warehouse_id = ?", (pid, wid)).fetchone()
+                cur_stock = conn.execute("SELECT stock_quantity FROM warehouse_inventory WHERE product_id = ? AND warehouse_id = ? AND company_id = ?", (pid, wid, cid)).fetchone()
                 current_stock = float(cur_stock["stock_quantity"] or 0) if cur_stock else 0
                 projected_stock = round(current_stock + diff, 4)
                 if projected_stock < -1e-5:
-                    p_name = conn.execute("SELECT name FROM products WHERE id = ?", (pid,)).fetchone()["name"]
+                    p_name = conn.execute("SELECT name FROM products WHERE id = ? AND company_id = ?", (pid, cid)).fetchone()["name"]
                     warnings.append(f"{p_name} will drop to {projected_stock} stock.")
                         
         if warnings and not force:
@@ -6423,25 +6578,25 @@ def update_purchase(purchase_id):
             diff = round(new_qty - old_qty, 4)
             
             if abs(diff) > 1e-5:
-                cur_stock = conn.execute("SELECT stock_quantity FROM warehouse_inventory WHERE product_id = ? AND warehouse_id = ?", (pid, wid)).fetchone()
+                cur_stock = conn.execute("SELECT stock_quantity FROM warehouse_inventory WHERE product_id = ? AND warehouse_id = ? AND company_id = ?", (pid, wid, cid)).fetchone()
                 current_stock = float(cur_stock["stock_quantity"] or 0) if cur_stock else 0
                 new_stock = round(current_stock + diff, 4)
                 
                 conn.execute('''
-                    INSERT INTO warehouse_inventory (product_id, warehouse_id, stock_quantity)
-                    VALUES (?, ?, ?)
+                    INSERT INTO warehouse_inventory (product_id, warehouse_id, stock_quantity, company_id)
+                    VALUES (?, ?, ?, ?)
                     ON CONFLICT(warehouse_id, product_id) DO UPDATE SET stock_quantity = ?
-                ''', (pid, wid, new_stock, new_stock))
+                ''', (pid, wid, new_stock, cid, new_stock))
                 
                 # Log to history
                 trans_type = 'IN' if diff > 0 else 'OUT'
                 conn.execute('''
-                    INSERT INTO inventory_history (product_id, transaction_type, quantity_change, previous_stock, new_stock, reference, supplier_id, warehouse_id)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-                ''', (pid, trans_type, abs(diff), current_stock, new_stock, f"Edit Purchase #{purchase_id}", supplier_id, wid))
+                    INSERT INTO inventory_history (product_id, transaction_type, quantity_change, previous_stock, new_stock, reference, supplier_id, warehouse_id, company_id)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ''', (pid, trans_type, abs(diff), current_stock, new_stock, f"Edit Purchase #{purchase_id}", supplier_id, wid, cid))
                     
         # 4. Delete old items and insert new
-        conn.execute("DELETE FROM purchase_items WHERE purchase_id = ?", (purchase_id,))
+        conn.execute("DELETE FROM purchase_items WHERE purchase_id = ? AND company_id = ?", (purchase_id, cid))
         
         subtotal = 0
         for item in items:
@@ -6452,14 +6607,13 @@ def update_purchase(purchase_id):
             subtotal += amount
             
             conn.execute('''
-                INSERT INTO purchase_items (purchase_id, product_id, qty, cost_price, amount)
-                VALUES (?, ?, ?, ?, ?)
-            ''', (purchase_id, pid, qty, cost, amount))
+                INSERT INTO purchase_items (purchase_id, product_id, qty, cost_price, amount, company_id)
+                VALUES (?, ?, ?, ?, ?, ?)
+            ''', (purchase_id, pid, qty, cost, amount, cid))
             
         # 5. Update purchase master record
         grand_total = subtotal + other_charges
-        purchase_record = conn.execute("SELECT amount_paid FROM purchases WHERE id = ?", (purchase_id,)).fetchone()
-        amount_paid = float(purchase_record["amount_paid"] or 0) if purchase_record else 0
+        amount_paid = float(old_purch["amount_paid"] or 0)
         remaining_amount = grand_total - amount_paid
         
         status = 'unpaid'
@@ -6471,9 +6625,9 @@ def update_purchase(purchase_id):
             
         conn.execute('''
             UPDATE purchases
-            SET supplier_id = ?, purchase_date = ?, reference_number = ?, subtotal = ?, other_charges = ?, grand_total = ?, remaining_amount = ?, status = ?
-            WHERE id = ?
-        ''', (supplier_id, purchase_date, reference_number, subtotal, other_charges, grand_total, remaining_amount, status, purchase_id))
+            SET supplier_id = ?, purchase_date = ?, reference_number = ?, subtotal = ?, other_charges = ?, grand_total = ?, remaining_amount = ?, status = ?, warehouse_id = ?
+            WHERE id = ? AND company_id = ?
+        ''', (supplier_id, purchase_date, reference_number, subtotal, other_charges, grand_total, remaining_amount, status, wid, purchase_id, cid))
         
         conn.commit()
         return jsonify({"ok": True, "purchase_id": purchase_id})
@@ -6486,6 +6640,7 @@ def update_purchase(purchase_id):
 @app.route("/api/purchases/<int:purchase_id>/delete", methods=["POST"])
 @admin_required
 def delete_purchase(purchase_id):
+    cid = current_user.company_id if hasattr(current_user, "company_id") and current_user.company_id else 1
     data = request.json or {}
     force = data.get("force", False)
     
@@ -6493,14 +6648,14 @@ def delete_purchase(purchase_id):
     try:
         conn.execute("BEGIN")
         
-        purchase = conn.execute("SELECT supplier_id, warehouse_id FROM purchases WHERE id = ?", (purchase_id,)).fetchone()
+        purchase = conn.execute("SELECT supplier_id, warehouse_id FROM purchases WHERE id = ? AND company_id = ?", (purchase_id, cid)).fetchone()
         if not purchase:
             conn.execute("ROLLBACK")
             return jsonify({"ok": False, "error": "Purchase not found"}), 404
         supplier_id = purchase["supplier_id"]
         wid = purchase["warehouse_id"] or 1
             
-        items = conn.execute("SELECT product_id, qty FROM purchase_items WHERE purchase_id = ?", (purchase_id,)).fetchall()
+        items = conn.execute("SELECT product_id, qty FROM purchase_items WHERE purchase_id = ? AND company_id = ?", (purchase_id, cid)).fetchall()
         
         # 1. Check for negative inventory
         warnings = []
@@ -6508,11 +6663,11 @@ def delete_purchase(purchase_id):
             pid = item["product_id"]
             qty = round(float(item["qty"]), 4)
             
-            cur_stock = conn.execute("SELECT stock_quantity FROM warehouse_inventory WHERE product_id = ? AND warehouse_id = ?", (pid, wid)).fetchone()
+            cur_stock = conn.execute("SELECT stock_quantity FROM warehouse_inventory WHERE product_id = ? AND warehouse_id = ? AND company_id = ?", (pid, wid, cid)).fetchone()
             current_stock = float(cur_stock["stock_quantity"] or 0) if cur_stock else 0
             projected_stock = round(current_stock - qty, 4)
             if projected_stock < -1e-5:
-                p_name = conn.execute("SELECT name FROM products WHERE id = ?", (pid,)).fetchone()["name"]
+                p_name = conn.execute("SELECT name FROM products WHERE id = ? AND company_id = ?", (pid, cid)).fetchone()["name"]
                 warnings.append(f"{p_name} will drop to {projected_stock} stock.")
                     
         if warnings and not force:
@@ -6528,25 +6683,25 @@ def delete_purchase(purchase_id):
             pid = item["product_id"]
             qty = round(float(item["qty"]), 4)
             
-            cur_stock = conn.execute("SELECT stock_quantity FROM warehouse_inventory WHERE product_id = ? AND warehouse_id = ?", (pid, wid)).fetchone()
+            cur_stock = conn.execute("SELECT stock_quantity FROM warehouse_inventory WHERE product_id = ? AND warehouse_id = ? AND company_id = ?", (pid, wid, cid)).fetchone()
             current_stock = float(cur_stock["stock_quantity"] or 0) if cur_stock else 0
             new_stock = round(current_stock - qty, 4)
             
             conn.execute('''
-                INSERT INTO warehouse_inventory (product_id, warehouse_id, stock_quantity)
-                VALUES (?, ?, ?)
+                INSERT INTO warehouse_inventory (product_id, warehouse_id, stock_quantity, company_id)
+                VALUES (?, ?, ?, ?)
                 ON CONFLICT(warehouse_id, product_id) DO UPDATE SET stock_quantity = ?
-            ''', (pid, wid, new_stock, new_stock))
+            ''', (pid, wid, new_stock, cid, new_stock))
             
             conn.execute('''
-                INSERT INTO inventory_history (product_id, transaction_type, quantity_change, previous_stock, new_stock, reference, supplier_id, warehouse_id)
-                VALUES (?, 'OUT', ?, ?, ?, ?, ?, ?)
-            ''', (pid, qty, current_stock, new_stock, f"Delete Purchase #{purchase_id}", supplier_id, wid))
+                INSERT INTO inventory_history (product_id, transaction_type, quantity_change, previous_stock, new_stock, reference, supplier_id, warehouse_id, company_id)
+                VALUES (?, 'OUT', ?, ?, ?, ?, ?, ?, ?)
+            ''', (pid, qty, current_stock, new_stock, f"Delete Purchase #{purchase_id}", supplier_id, wid, cid))
                 
         # 3. Delete records
-        conn.execute("DELETE FROM supplier_payments WHERE purchase_id = ?", (purchase_id,))
-        conn.execute("DELETE FROM purchase_items WHERE purchase_id = ?", (purchase_id,))
-        conn.execute("DELETE FROM purchases WHERE id = ?", (purchase_id,))
+        conn.execute("DELETE FROM supplier_payments WHERE purchase_id = ? AND company_id = ?", (purchase_id, cid))
+        conn.execute("DELETE FROM purchase_items WHERE purchase_id = ? AND company_id = ?", (purchase_id, cid))
+        conn.execute("DELETE FROM purchases WHERE id = ? AND company_id = ?", (purchase_id, cid))
         
         conn.commit()
         return jsonify({"ok": True})
@@ -6560,36 +6715,38 @@ def delete_purchase(purchase_id):
 @app.route("/purchases/<int:purchase_id>")
 @login_required
 def purchase_detail(purchase_id):
+    cid = current_user.company_id if hasattr(current_user, "company_id") and current_user.company_id else 1
     conn = get_connection()
     try:
         purchase = conn.execute('''
             SELECT p.*, s.name as supplier_name 
             FROM purchases p 
             LEFT JOIN suppliers s ON p.supplier_id = s.id 
-            WHERE p.id = ?
-        ''', (purchase_id,)).fetchone()
+            WHERE p.id = ? AND p.company_id = ?
+        ''', (purchase_id, cid)).fetchone()
         
+        if not purchase:
+            abort(404)
+
         items = conn.execute('''
             SELECT pi.*, pr.name as product_name
             FROM purchase_items pi
             LEFT JOIN products pr ON pi.product_id = pr.id
-            WHERE pi.purchase_id = ?
-        ''', (purchase_id,)).fetchall()
+            WHERE pi.purchase_id = ? AND pi.company_id = ?
+        ''', (purchase_id, cid)).fetchall()
         
         payments = conn.execute('''
-            SELECT * FROM supplier_payments WHERE purchase_id = ? ORDER BY payment_date DESC, id DESC
-        ''', (purchase_id,)).fetchall()
+            SELECT * FROM supplier_payments WHERE purchase_id = ? AND company_id = ? ORDER BY payment_date DESC, id DESC
+        ''', (purchase_id, cid)).fetchall()
     finally:
         conn.close()
-        
-    if not purchase:
-        return "Purchase not found", 404
         
     return render_template("purchase_detail.html", purchase=purchase, items=items, payments=payments)
 
 @app.route("/api/supplier_payments", methods=["POST"])
 @admin_required
 def add_supplier_payment():
+    cid = current_user.company_id if hasattr(current_user, "company_id") and current_user.company_id else 1
     data = request.json
     supplier_id = data.get("supplier_id")
     purchase_id = data.get("purchase_id")
@@ -6603,14 +6760,19 @@ def add_supplier_payment():
 
     conn = get_connection()
     try:
+        # Validate supplier belongs to company
+        supp = conn.execute("SELECT id FROM suppliers WHERE id = ? AND company_id = ?", (supplier_id, cid)).fetchone()
+        if not supp:
+            return jsonify({"ok": False, "error": "Invalid supplier."}), 400
+
         conn.execute("BEGIN")
         conn.execute('''
-            INSERT INTO supplier_payments (supplier_id, purchase_id, amount, payment_date, payment_method, notes)
-            VALUES (?, ?, ?, ?, ?, ?)
-        ''', (supplier_id, purchase_id, amount, payment_date, payment_method, notes))
+            INSERT INTO supplier_payments (supplier_id, purchase_id, amount, payment_date, payment_method, notes, company_id)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+        ''', (supplier_id, purchase_id, amount, payment_date, payment_method, notes, cid))
         
         if purchase_id:
-            cur = conn.execute("SELECT grand_total, amount_paid FROM purchases WHERE id = ?", (purchase_id,))
+            cur = conn.execute("SELECT grand_total, amount_paid FROM purchases WHERE id = ? AND company_id = ?", (purchase_id, cid))
             purchase = cur.fetchone()
             if purchase:
                 new_paid = purchase["amount_paid"] + amount
@@ -6623,8 +6785,11 @@ def add_supplier_payment():
                     status = 'partial'
                 
                 conn.execute('''
-                    UPDATE purchases SET amount_paid = ?, remaining_amount = ?, status = ? WHERE id = ?
-                ''', (new_paid, new_remaining, status, purchase_id))
+                    UPDATE purchases SET amount_paid = ?, remaining_amount = ?, status = ? WHERE id = ? AND company_id = ?
+                ''', (new_paid, new_remaining, status, purchase_id, cid))
+            else:
+                conn.rollback()
+                return jsonify({"ok": False, "error": "Invalid purchase."}), 400
         conn.commit()
         return jsonify({"ok": True})
     except Exception as e:

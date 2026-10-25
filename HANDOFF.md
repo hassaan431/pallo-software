@@ -5,7 +5,7 @@ This project converts an existing single-business wholesale ERP ("AK Distributor
 
 All planning, architectural decisions, and requirement stress-testing were completed and approved via `/grill-with-docs`. The execution route is charted as a shared map of 11 decision/task tickets under `.scratch/pallo-saas/` via `/wayfinder`.
 
-**Current Status**: Tickets 01 through 07 are completely resolved and verified with 50 passing unit tests. The next session can claim and execute **Ticket 08** on the active frontier.
+**Current Status**: Tickets 01 through 08 are completely resolved, unit-tested (56 passing tests), committed, and verified. The next session can immediately claim and execute **Ticket 09** on the active frontier.
 
 ---
 
@@ -32,13 +32,17 @@ A production-ready **Pallo** multi-tenant SaaS running on PostgreSQL, where mult
   - Added `PooledCursorWrapper` to transparently translate `?` to `%s` for PostgreSQL cursor queries.
   - Implemented ADR 0003 commercial privacy: strictly masked `cost_price`, `stock_value`, and profit margin data for non-admin roles (`salesman`, `warehouse_manager`) across JSON APIs, HTML templates, and CSV downloads.
 - ✅ **Ticket 07** ([07-scope-customers-and-sales-pos.md](file:///.scratch/pallo-saas/issues/07-scope-customers-and-sales-pos.md)):
-  - Scoped all customer ledgers (`/customers`, `/customers/list`, `/customers/add`, `/customers/edit`, `/customers/delete`, `/customers/<id>/history`) by `company_id = current_user.company_id`.
-  - Upgraded `get_next_invoice_number(company_id)` to generate tenant-specific sequential invoice numbers with tenant prefixes (Company 1 preserves `AK-` sequence uninterrupted e.g. `AK-001012`, new companies default to `INV-` or custom).
-  - Scoped all sales routes: `/sales`, `/sales/next-invoice`, `/sales/new`, `/sales/data`, `/sales/<id>/details`, `/sales/by-invoice/<num>`, `/sales/<id>/invoice/pdf`, `/sales/<id>/mark_sale`, `/sales/update/<id>`, `/sales/delete/<id>`, `/sales/<id>/record_payment`, `/sales/export`, `/sales/import-csv`.
-  - Scoped POS checkout: `/pos`, `/pos/submit_order` with tenant customer auto-creation/validation, tenant stock verification, and tenant invoice sequence.
-  - Scoped `/dashboard` and all reporting queries (`parse_date_filters`, `/reports/stock-distribution/data`, `/reports/inventory-additions`, `/reports/supplier-purchases/<id>`, `/reports/profit`).
-  - Updated [invoice_generator.py](file:///invoice_generator.py) for dynamic tenant header info and [templates/sales.html](file:///templates/sales.html) for dynamic invoice prefix.
-  - Created [tests/test_customer_sales_scoping.py](file:///tests/test_customer_sales_scoping.py) with 6 passing unit tests (all 50 project tests passing).
+  - Scoped customer ledgers, sales CRUD, POS checkout, reports, and dashboard by `company_id`.
+  - Tenant-specific sequential invoice numbering (`AK-`, `INV-`, etc.) via `get_next_invoice_number(company_id)`.
+  - Dynamic invoice PDF branding in `invoice_generator.py` preserving Company 1 dual logos/formatting.
+  - Quotation conversion to tenant prefix and ADR 0003 sales profit margin masking for non-admins.
+- ✅ **Ticket 08** ([08-scope-warehouses-transfers-purchases-expenses.md](file:///.scratch/pallo-saas/issues/08-scope-warehouses-transfers-purchases-expenses.md)):
+  - Scoped warehouse facilities with `max_warehouses` plan limit enforcement.
+  - Scoped inter-warehouse transfers with strict validation that source and destination facilities belong to the same tenant company, preventing cross-tenant stock movement.
+  - Scoped suppliers and ledger history; scoped purchase orders and supplier payments.
+  - Scoped operational expenses strictly restricted to `admin` role per ADR 0003.
+  - Scoped staff/user management with self-deactivation protection and cross-tenant mutation blocks.
+  - Created test suite [tests/test_warehouse_purchases_scoping.py](file:///tests/test_warehouse_purchases_scoping.py) with 6 passing unit tests (56 total passing tests).
 
 ---
 
@@ -73,26 +77,25 @@ A production-ready **Pallo** multi-tenant SaaS running on PostgreSQL, where mult
 ## Wayfinder Issue Map & Next Immediate Task
 
 ### Active Frontier Ticket (Take this first)
-- 🟢 **[08-scope-warehouses-transfers-purchases-expenses.md](file:///.scratch/pallo-saas/issues/08-scope-warehouses-transfers-purchases-expenses.md)**
-  - *Status*: Open, Unblocked (07 resolved).
-  - *Goal*: Scope warehouses, inventory transfers, purchase orders, suppliers, expenses, and staff/user management by `company_id`.
+- 🟢 **[09-dynamic-pdf-invoicing-and-company-branding.md](file:///.scratch/pallo-saas/issues/09-dynamic-pdf-invoicing-and-company-branding.md)**
+  - *Status*: Open, Unblocked (08 resolved).
+  - *Goal*: Complete dynamic company profile and branding settings page (`/settings/company`) with 2MB logo upload guardrails, custom currency display, and sidebar white-label badge.
 
 ### Remaining Downstream Tickets
-- **09-dynamic-pdf-invoicing-and-company-branding.md** (Blocked by 08)
-- **10-superadmin-platform-governance.md** (Blocked by 04 - Ready to run after 08-09)
-- **11-tenant-isolation-automated-test-suite.md** (Blocked by 08, 09, 10)
+- **10-superadmin-platform-governance.md** (Unblocked - ready for execution)
+- **11-tenant-isolation-automated-test-suite.md** (Blocked by 09, 10)
 
 ---
 
 ## Suggested Skills for the Next Agent
 - `wayfinder`: To claim, execute, and resolve tickets one by one per `.scratch/pallo-saas/map.md`.
-- `security-and-hardening`: For parameterized SQL queries and cross-tenant data protection.
-- `test-driven-development`: For unit testing multi-tenant warehouse and purchase operations.
+- `security-and-hardening`: For file upload safety validation (image type, max 2MB, secure filename).
+- `test-driven-development`: For unit testing company settings and logo uploads.
 
 ---
 
 ## Prompt to Start Next Session
 Copy and paste this into the new window:
 ```text
-/wayfinder We are converting the ERP to Pallo Multi-Tenant SaaS on PostgreSQL. Review the handoff document at HANDOFF.md and .scratch/pallo-saas/map.md. Claim and start working on Ticket 08 (.scratch/pallo-saas/issues/08-scope-warehouses-transfers-purchases-expenses.md).
+/wayfinder We are converting the ERP to Pallo Multi-Tenant SaaS on PostgreSQL. Review the handoff document at HANDOFF.md and .scratch/pallo-saas/map.md. Claim and start working on Ticket 09 (.scratch/pallo-saas/issues/09-dynamic-pdf-invoicing-and-company-branding.md).
 ```
