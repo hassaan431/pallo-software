@@ -49,6 +49,13 @@ A production-ready **Pallo** multi-tenant SaaS running on PostgreSQL, where mult
   - Updated sidebar brand header and document title in [templates/base.html](file:///templates/base.html) to dynamically render current tenant's logo and company name (with initials monogram fallback), while preserving dual logos and branding for Company 1 ("AK Distributors LLC").
   - Updated invoice PDF generator [invoice_generator.py](file:///invoice_generator.py) to dynamically format rates, amounts, totals, and balances with the tenant's currency symbol and render tenant company headers while preserving Company 1 dual logos and contact details.
   - Added unit test suite [tests/test_company_branding_settings.py](file:///tests/test_company_branding_settings.py) with 7 passing unit tests (63 total passing tests across repo).
+- ✅ **Ticket 10** ([10-superadmin-platform-governance.md](file:///.scratch/pallo-saas/issues/10-superadmin-platform-governance.md)):
+  - Enforced SuperAdmin security gate (`@superadmin_required`) restricting platform management to `role == 'superadmin'`.
+  - Built Platform Governance Dashboard (`/superadmin` and [templates/superadmin.html](file:///templates/superadmin.html)) aggregating registered tenants, active/paused status, platform sales GMV, orders count, total catalog products, and total platform accounts.
+  - Implemented 1-click tenant soft-deactivation toggle (`/superadmin/company/<id>/toggle_status`) per ADR 0004 with immediate session interception while preserving transactional records.
+  - Protected Master Company 1 ("AK Distributors LLC") from deactivation.
+  - Added tenant warehouse plan capacity manager (`/superadmin/company/<id>/update_plan`).
+  - Added unit test suite [tests/test_superadmin_governance.py](file:///tests/test_superadmin_governance.py) with 4 passing unit tests (67 total passing tests across repo).
 
 ---
 
@@ -83,24 +90,21 @@ A production-ready **Pallo** multi-tenant SaaS running on PostgreSQL, where mult
 ## Wayfinder Issue Map & Next Immediate Task
 
 ### Active Frontier Ticket (Take this first)
-- 🟢 **[10-superadmin-platform-governance.md](file:///.scratch/pallo-saas/issues/10-superadmin-platform-governance.md)**
-  - *Status*: Open, Unblocked (08 & 09 resolved).
-  - *Goal*: SuperAdmin role, security gate (`@superadmin_required`), platform metrics dashboard (`/superadmin`), and soft-deactivation toggle (`is_active`) per ADR 0004.
-
-### Remaining Downstream Tickets
-- **11-tenant-isolation-automated-test-suite.md** (Blocked by 10)
+- 🟢 **[11-tenant-isolation-automated-test-suite.md](file:///.scratch/pallo-saas/issues/11-tenant-isolation-automated-test-suite.md)**
+  - *Status*: Open, Unblocked (08, 09, 10 resolved).
+  - *Goal*: Build comprehensive automated tenant isolation test suite (`test_saas_isolation.py`) asserting zero cross-company data leakage across inventory, customers, sales, and sequential invoice numbers.
 
 ---
 
 ## Suggested Skills for the Next Agent
 - `wayfinder`: To claim, execute, and resolve tickets one by one per `.scratch/pallo-saas/map.md`.
-- `security-and-hardening`: For superadmin gate access control and soft-deactivation session termination.
-- `test-driven-development`: For unit testing superadmin metrics and tenant deactivation flows.
+- `security-and-hardening`: For validating tenant isolation assertions and cross-company rejection.
+- `test-driven-development`: For end-to-end multi-tenant isolation testing.
 
 ---
 
 ## Prompt to Start Next Session
 Copy and paste this into the new window:
 ```text
-/wayfinder We are converting the ERP to Pallo Multi-Tenant SaaS on PostgreSQL. Review the handoff document at HANDOFF.md and .scratch/pallo-saas/map.md. Claim and start working on Ticket 10 (.scratch/pallo-saas/issues/10-superadmin-platform-governance.md).
+/wayfinder We are converting the ERP to Pallo Multi-Tenant SaaS on PostgreSQL. Review the handoff document at HANDOFF.md and .scratch/pallo-saas/map.md. Claim and start working on Ticket 11 (.scratch/pallo-saas/issues/11-tenant-isolation-automated-test-suite.md).
 ```

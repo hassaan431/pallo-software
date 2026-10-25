@@ -5968,6 +5968,95 @@ def settings_company():
     finally:
         conn.close()
 
+@app.route("/superadmin")
+@login_required
+@superadmin_required
+def superadmin_dashboard():
+    conn = get_connection()
+    try:
+        total_companies = conn.execute("SELECT COUNT(*) FROM companies").fetchone()[0]
+        # In SQLite 1/0, in Postgres true/false
+        active_companies = conn.execute("SELECT COUNT(*) FROM companies WHERE is_active = 1 OR is_active IS TRUE").fetchone()[0]
+        total_users = conn.execute("SELECT COUNT(*) FROM users").fetchone()[0]
+        total_products = conn.execute("SELECT COUNT(*) FROM products").fetchone()[0]
+
+        sales_agg = conn.execute("SELECT COUNT(*), COALESCE(SUM(grand_total), 0) FROM sales").fetchone()
+        total_sales_count = sales_agg[0] if sales_agg else 0
+        total_gmv = float(sales_agg[1]) if sales_agg and sales_agg[1] else 0.0
+
+        companies_raw = conn.execute(
+            """
+            SELECT 
+                c.id, c.name, c.slug, c.currency, c.is_active, c.created_at, c.max_warehouses, c.logo_url,
+                (SELECT COUNT(*) FROM users u WHERE u.company_id = c.id) AS user_count,
+                (SELECT COUNT(*) FROM products p WHERE p.company_id = c.id) AS product_count,
+                (SELECT COUNT(*) FROM sales s WHERE s.company_id = c.id) AS sale_count,
+                (SELECT COALESCE(SUM(s.grand_total), 0) FROM sales s WHERE s.company_id = c.id) AS gmv_sum
+            FROM companies c
+            ORDER BY c.id ASC
+            """
+        ).fetchall()
+
+        companies = [dict(c) for c in companies_raw]
+
+        metrics = {
+            "total_companies": total_companies,
+            "active_companies": active_companies,
+            "inactive_companies": total_companies - active_companies,
+            "total_users": total_users,
+            "total_products": total_products,
+            "total_sales_count": total_sales_count,
+            "total_gmv": total_gmv,
+        }
+
+        return render_template("superadmin.html", metrics=metrics, companies=companies)
+    finally:
+        conn.close()
+
+
+@app.route("/superadmin/company/<int:company_id>/toggle_status", methods=["POST"])
+@login_required
+@superadmin_required
+def superadmin_toggle_company(company_id):
+    if company_id == 1:
+        flash("Master company (AK Distributors LLC) cannot be deactivated.", "warning")
+        return redirect(url_for("superadmin_dashboard"))
+
+    conn = get_connection()
+    try:
+        co = conn.execute("SELECT id, name, is_active FROM companies WHERE id = ?", (company_id,)).fetchone()
+        if not co:
+            flash("Company not found.", "danger")
+            return redirect(url_for("superadmin_dashboard"))
+
+        curr_active = co["is_active"]
+        new_active = 0 if curr_active in (1, True, "1") else 1
+        conn.execute("UPDATE companies SET is_active = ? WHERE id = ?", (new_active, company_id))
+        conn.commit()
+
+        status_text = "reactivated" if new_active == 1 else "deactivated"
+        flash(f"Company '{co['name']}' has been {status_text} successfully.", "success")
+        return redirect(url_for("superadmin_dashboard"))
+    finally:
+        conn.close()
+
+
+@app.route("/superadmin/company/<int:company_id>/update_plan", methods=["POST"])
+@login_required
+@superadmin_required
+def superadmin_update_company_plan(company_id):
+    conn = get_connection()
+    try:
+        max_warehouses = int(request.form.get("max_warehouses", 5))
+        if max_warehouses < 1:
+            max_warehouses = 1
+        conn.execute("UPDATE companies SET max_warehouses = ? WHERE id = ?", (max_warehouses, company_id))
+        conn.commit()
+        flash("Tenant plan capacity updated successfully.", "success")
+        return redirect(url_for("superadmin_dashboard"))
+    finally:
+        conn.close()
+
 @app.route("/pos")
 @login_required
 def pos():

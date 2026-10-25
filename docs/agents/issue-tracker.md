@@ -48,9 +48,9 @@ This document tracks implementation items, technical decisions, and milestones f
   - [ ] Keep root `/catalogue` and `/brochure` backwards compatible to Company 1.
   - [ ] Apply 250-item safety cap on brochure PDF exports.
 
-- [ ] **M6: SuperAdmin Platform Management**
-  - [ ] Build `/superadmin` dashboard for platform metrics and soft-deactivation toggling.
-  - [ ] SuperAdmin role and security gate.
+- [x] **M6: SuperAdmin Platform Management**
+  - [x] Build `/superadmin` dashboard for platform metrics and soft-deactivation toggling.
+  - [x] SuperAdmin role and security gate.
 
 - [ ] **M7: Automated Verification & Isolation Assertions**
   - [ ] Automated tenant isolation test suite (`test_saas_isolation.py`).

@@ -1,0 +1,513 @@
+{% extends "base.html" %}
+
+{% block title %}SuperAdmin Platform Governance — Pallo SaaS{% endblock %}
+{% block page_heading %}Platform Governance{% endblock %}
+
+{% block content %}
+<style>
+  .superadmin-container {
+    max-width: 1200px;
+    margin: 0 auto;
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+    padding-bottom: 4rem;
+  }
+
+  .superadmin-topbar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 1rem;
+    background: #ffffff;
+    border: 1px solid var(--color-slate-200, #e2e8f0);
+    border-radius: var(--radius, 10px);
+    padding: 1.25rem 1.5rem;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+  }
+
+  .superadmin-title-group h2 {
+    font-family: var(--font-display, inherit);
+    font-size: 1.25rem;
+    font-weight: 700;
+    color: var(--color-slate-900, #0f172a);
+    margin: 0 0 0.25rem 0;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+  }
+
+  .superadmin-title-group p {
+    font-size: 0.85rem;
+    color: var(--color-slate-500, #64748b);
+    margin: 0;
+  }
+
+  /* Metric KPI Cards Grid */
+  .metrics-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 1rem;
+  }
+
+  .metric-card {
+    background: #ffffff;
+    border: 1px solid var(--color-slate-200, #e2e8f0);
+    border-radius: var(--radius, 10px);
+    padding: 1.25rem;
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+  }
+
+  .metric-info h3 {
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: var(--color-slate-500, #64748b);
+    margin: 0 0 0.4rem 0;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+
+  .metric-value {
+    font-size: 1.65rem;
+    font-weight: 800;
+    color: var(--color-slate-900, #0f172a);
+    margin: 0;
+    line-height: 1.2;
+  }
+
+  .metric-subnote {
+    font-size: 0.75rem;
+    color: var(--color-slate-500, #64748b);
+    margin-top: 0.35rem;
+  }
+
+  .metric-icon-box {
+    width: 42px;
+    height: 42px;
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+  }
+
+  .icon-purple {
+    background: rgba(99, 102, 241, 0.12);
+    color: #6366f1;
+  }
+
+  .icon-emerald {
+    background: rgba(16, 185, 129, 0.12);
+    color: #10b981;
+  }
+
+  .icon-blue {
+    background: rgba(37, 99, 235, 0.12);
+    color: #2563eb;
+  }
+
+  .icon-amber {
+    background: rgba(245, 158, 11, 0.12);
+    color: #f59e0b;
+  }
+
+  /* Tenants Table Card */
+  .tenants-card {
+    background: #ffffff;
+    border: 1px solid var(--color-slate-200, #e2e8f0);
+    border-radius: var(--radius, 10px);
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+    overflow: hidden;
+  }
+
+  .tenants-card-header {
+    padding: 1.25rem 1.5rem;
+    border-bottom: 1px solid var(--color-slate-200, #e2e8f0);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 1rem;
+  }
+
+  .tenants-table-wrapper {
+    overflow-x: auto;
+  }
+
+  .tenants-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.875rem;
+    text-align: left;
+  }
+
+  .tenants-table th {
+    background: var(--color-slate-50, #f8fafc);
+    color: var(--color-slate-600, #475569);
+    font-weight: 600;
+    padding: 0.75rem 1.25rem;
+    border-bottom: 1px solid var(--color-slate-200, #e2e8f0);
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    white-space: nowrap;
+  }
+
+  .tenants-table td {
+    padding: 0.875rem 1.25rem;
+    border-bottom: 1px solid var(--color-slate-100, #f1f5f9);
+    vertical-align: middle;
+    color: var(--color-slate-800, #1e293b);
+  }
+
+  .tenants-table tr:last-child td {
+    border-bottom: none;
+  }
+
+  .tenants-table tr:hover td {
+    background: var(--color-slate-50, #f8fafc);
+  }
+
+  .company-cell {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+  }
+
+  .company-avatar {
+    width: 36px;
+    height: 36px;
+    border-radius: 8px;
+    background: rgba(99, 102, 241, 0.1);
+    color: #6366f1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 700;
+    font-size: 0.85rem;
+    overflow: hidden;
+    flex-shrink: 0;
+    border: 1px solid rgba(99, 102, 241, 0.2);
+  }
+
+  .company-avatar img {
+    max-width: 100%;
+    max-height: 100%;
+    object-fit: contain;
+  }
+
+  .company-name {
+    font-weight: 700;
+    color: var(--color-slate-900, #0f172a);
+  }
+
+  .company-slug {
+    font-size: 0.75rem;
+    color: var(--color-slate-500, #64748b);
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+  }
+
+  .badge-status {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    padding: 0.25rem 0.6rem;
+    border-radius: 9999px;
+    font-size: 0.75rem;
+    font-weight: 600;
+  }
+
+  .badge-active {
+    background: rgba(16, 185, 129, 0.1);
+    color: #059669;
+    border: 1px solid rgba(16, 185, 129, 0.25);
+  }
+
+  .badge-paused {
+    background: rgba(239, 68, 68, 0.1);
+    color: #dc2626;
+    border: 1px solid rgba(239, 68, 68, 0.25);
+  }
+
+  .badge-master {
+    background: rgba(99, 102, 241, 0.1);
+    color: #4f46e5;
+    border: 1px solid rgba(99, 102, 241, 0.25);
+    font-size: 0.7rem;
+    padding: 0.15rem 0.45rem;
+    border-radius: 4px;
+    font-weight: 700;
+  }
+
+  .btn-toggle {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    padding: 0.4rem 0.75rem;
+    font-size: 0.75rem;
+    font-weight: 600;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: all 0.15s ease;
+    border: none;
+  }
+
+  .btn-deactivate {
+    background: rgba(239, 68, 68, 0.1);
+    color: #dc2626;
+    border: 1px solid rgba(239, 68, 68, 0.2);
+  }
+
+  .btn-deactivate:hover {
+    background: #dc2626;
+    color: #ffffff;
+  }
+
+  .btn-activate {
+    background: rgba(16, 185, 129, 0.1);
+    color: #059669;
+    border: 1px solid rgba(16, 185, 129, 0.2);
+  }
+
+  .btn-activate:hover {
+    background: #059669;
+    color: #ffffff;
+  }
+
+  .plan-capacity-form {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+  }
+
+  .plan-capacity-input {
+    width: 50px;
+    padding: 0.25rem 0.4rem;
+    border: 1px solid var(--color-slate-300, #cbd5e1);
+    border-radius: 4px;
+    font-size: 0.8rem;
+    text-align: center;
+  }
+</style>
+
+<div class="superadmin-container">
+  <!-- Flash Messages -->
+  {% with messages = get_flashed_messages(with_categories=true) %}
+    {% if messages %}
+      <div>
+        {% for cat, msg in messages %}
+          <div class="alert alert-{{ cat }}" style="margin-bottom: 0.75rem; padding: 0.75rem 1rem; border-radius: 6px; font-size: 0.875rem;">
+            {{ msg }}
+          </div>
+        {% endfor %}
+      </div>
+    {% endif %}
+  {% endwith %}
+
+  <!-- Top Bar -->
+  <div class="superadmin-topbar">
+    <div class="superadmin-title-group">
+      <h2>
+        <i data-lucide="shield-alert" style="width: 24px; height: 24px; color: #6366f1;"></i>
+        <span>Platform Governance &amp; Multi-Tenant Control</span>
+      </h2>
+      <p>Global oversight of registered business tenants, operational volumes, and soft-deactivation controls.</p>
+    </div>
+    <div style="display: flex; align-items: center; gap: 0.75rem;">
+      <span class="badge-status badge-active" style="background: rgba(99, 102, 241, 0.1); color: #4f46e5; border-color: rgba(99, 102, 241, 0.3);">
+        <i data-lucide="check-circle-2" style="width: 14px; height: 14px;"></i>
+        PostgreSQL Multi-Tenant Active
+      </span>
+    </div>
+  </div>
+
+  <!-- Metric KPI Cards -->
+  <div class="metrics-grid">
+    <div class="metric-card">
+      <div class="metric-info">
+        <h3>Registered Tenants</h3>
+        <p class="metric-value">{{ metrics.total_companies }}</p>
+        <div class="metric-subnote">
+          <span style="color: #059669; font-weight: 600;">{{ metrics.active_companies }} active</span>
+          {% if metrics.inactive_companies > 0 %}
+            &bull; <span style="color: #dc2626; font-weight: 600;">{{ metrics.inactive_companies }} paused</span>
+          {% endif %}
+        </div>
+      </div>
+      <div class="metric-icon-box icon-purple">
+        <i data-lucide="building-2"></i>
+      </div>
+    </div>
+
+    <div class="metric-card">
+      <div class="metric-info">
+        <h3>Platform Volume (GMV)</h3>
+        <p class="metric-value">${{ "{:,.2f}".format(metrics.total_gmv) }}</p>
+        <div class="metric-subnote">{{ metrics.total_sales_count }} sales transactions</div>
+      </div>
+      <div class="metric-icon-box icon-emerald">
+        <i data-lucide="dollar-sign"></i>
+      </div>
+    </div>
+
+    <div class="metric-card">
+      <div class="metric-info">
+        <h3>Catalog Products</h3>
+        <p class="metric-value">{{ "{:,}".format(metrics.total_products) }}</p>
+        <div class="metric-subnote">Stock items across tenants</div>
+      </div>
+      <div class="metric-icon-box icon-blue">
+        <i data-lucide="package"></i>
+      </div>
+    </div>
+
+    <div class="metric-card">
+      <div class="metric-info">
+        <h3>Total Users</h3>
+        <p class="metric-value">{{ metrics.total_users }}</p>
+        <div class="metric-subnote">Staff and admin logins</div>
+      </div>
+      <div class="metric-icon-box icon-amber">
+        <i data-lucide="users"></i>
+      </div>
+    </div>
+  </div>
+
+  <!-- Tenants List -->
+  <div class="tenants-card">
+    <div class="tenants-card-header">
+      <div>
+        <h3 style="font-size: 1rem; font-weight: 700; color: var(--color-slate-900, #0f172a); margin: 0 0 0.25rem 0;">
+          All Registered Tenant Workspaces
+        </h3>
+        <p style="font-size: 0.8rem; color: var(--color-slate-500, #64748b); margin: 0;">
+          1-click account suspension per ADR 0004 prevents login access while preserving tax &amp; transaction ledgers.
+        </p>
+      </div>
+    </div>
+
+    <div class="tenants-table-wrapper">
+      <table class="tenants-table">
+        <thead>
+          <tr>
+            <th>Tenant Organization</th>
+            <th>Registered</th>
+            <th>Users</th>
+            <th>Products</th>
+            <th>Orders</th>
+            <th>Sales Volume</th>
+            <th>Plan Capacity</th>
+            <th>Lifecycle Status</th>
+            <th style="text-align: right;">Action</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for co in companies %}
+          <tr>
+            <td>
+              <div class="company-cell">
+                <div class="company-avatar">
+                  {% if co.logo_url %}
+                    <img src="{{ co.logo_url }}" alt="{{ co.name }}">
+                  {% elif co.id == 1 %}
+                    <img src="{{ url_for('static', filename='logos/AK_Distributors_Logo.png') }}" alt="AK Logo">
+                  {% else %}
+                    {{ co.name[:2]|upper }}
+                  {% endif %}
+                </div>
+                <div>
+                  <div class="company-name">
+                    {{ co.name }}
+                    {% if co.id == 1 %}
+                      <span class="badge-master">MASTER</span>
+                    {% endif %}
+                  </div>
+                  <div class="company-slug">
+                    <span>#{{ co.id }}</span> &bull; <span>/c/{{ co.slug }}</span>
+                  </div>
+                </div>
+              </div>
+            </td>
+            <td style="color: var(--color-slate-600, #475569); white-space: nowrap;">
+              {{ (co.created_at|string)[:10] if co.created_at else 'Legacy' }}
+            </td>
+            <td style="font-weight: 600;">{{ co.user_count }}</td>
+            <td style="font-weight: 600;">{{ "{:,}".format(co.product_count) }}</td>
+            <td style="font-weight: 600;">{{ "{:,}".format(co.sale_count) }}</td>
+            <td style="font-weight: 700; color: var(--color-slate-900, #0f172a);">
+              {{ co.currency or '$' }}{{ "{:,.2f}".format(co.gmv_sum) }}
+            </td>
+            <td>
+              <form method="POST" action="{{ url_for('superadmin_update_company_plan', company_id=co.id) }}" class="plan-capacity-form">
+                <input
+                  type="number"
+                  name="max_warehouses"
+                  class="plan-capacity-input"
+                  min="1"
+                  max="100"
+                  value="{{ co.max_warehouses or 5 }}"
+                  title="Max Warehouses"
+                >
+                <button type="submit" class="btn btn-secondary" style="padding: 0.2rem 0.45rem; font-size: 0.7rem;" title="Save Limit">
+                  Save
+                </button>
+              </form>
+            </td>
+            <td>
+              {% if co.is_active in (1, True, '1') %}
+                <span class="badge-status badge-active">
+                  <i data-lucide="check" style="width: 12px; height: 12px;"></i>
+                  Active
+                </span>
+              {% else %}
+                <span class="badge-status badge-paused">
+                  <i data-lucide="pause-circle" style="width: 12px; height: 12px;"></i>
+                  Suspended
+                </span>
+              {% endif %}
+            </td>
+            <td style="text-align: right; white-space: nowrap;">
+              {% if co.id == 1 %}
+                <span style="font-size: 0.75rem; color: var(--color-slate-400, #94a3b8); font-style: italic;">
+                  Protected Master
+                </span>
+              {% else %}
+                <form method="POST" action="{{ url_for('superadmin_toggle_company', company_id=co.id) }}" style="display: inline;">
+                  {% if co.is_active in (1, True, '1') %}
+                    <button
+                      type="submit"
+                      class="btn-toggle btn-deactivate"
+                      onclick="return confirm('Are you sure you want to pause/suspend this tenant account? All company logins will be immediately intercepted.');"
+                      title="Suspend company access"
+                    >
+                      <i data-lucide="pause" style="width: 12px; height: 12px;"></i>
+                      <span>Suspend</span>
+                    </button>
+                  {% else %}
+                    <button
+                      type="submit"
+                      class="btn-toggle btn-activate"
+                      onclick="return confirm('Reactivate this tenant account and restore login access?');"
+                      title="Reactivate company access"
+                    >
+                      <i data-lucide="play" style="width: 12px; height: 12px;"></i>
+                      <span>Reactivate</span>
+                    </button>
+                  {% endif %}
+                </form>
+              {% endif %}
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+{% endblock %}

@@ -58,7 +58,7 @@
     <aside class="sidebar" id="appSidebar" aria-label="Sidebar navigation">
       <!-- Brand Header -->
       <div class="sidebar-brand-wrapper">
-        <a href="{{ url_for('dashboard') if current_user.role == 'admin' else url_for('pos') }}" class="sidebar-brand-inner">
+        <a href="{{ url_for('superadmin_dashboard') if is_superadmin else (url_for('dashboard') if current_user.role == 'admin' else url_for('pos')) }}" class="sidebar-brand-inner">
           {% if current_company and current_company.id != 1 and current_company.logo_url %}
             <img
               src="{{ current_company.logo_url }}"
@@ -79,7 +79,7 @@
           {% endif %}
           <div class="sidebar-brand-text">
             <span class="sidebar-brand-title">{{ current_company.name if current_company else 'AK Distributors' }}</span>
-            <span class="sidebar-brand-badge">{{ 'PORTAL' if not current_company or current_company.id == 1 else 'PRO' }}</span>
+            <span class="sidebar-brand-badge">{{ 'SUPERADMIN' if is_superadmin else ('PORTAL' if not current_company or current_company.id == 1 else 'PRO') }}</span>
           </div>
         </a>
         <button id="sidebarCollapseBtn" class="sidebar-collapse-btn" type="button" title="Collapse sidebar">
@@ -89,7 +89,15 @@
 
       <!-- Navigation Links Container - Strictly Left Aligned -->
       <nav class="sidebar-nav" aria-label="Main navigation">
-        {% if current_user.role == 'admin' %}
+        {% if is_superadmin %}
+        <div class="sidebar-section" style="color: #6366f1;">SuperAdmin</div>
+        <a href="{{ url_for('superadmin_dashboard') }}" class="{{ 'is-active' if request.endpoint == 'superadmin_dashboard' else '' }}" title="SuperAdmin Console" style="{% if request.endpoint == 'superadmin_dashboard' %}background: rgba(99, 102, 241, 0.12); color: #4338ca; font-weight: 600;{% endif %}">
+          <div class="sidebar-nav-icon" style="color: #6366f1;"><i data-lucide="shield-alert"></i></div>
+          <span class="nav-label" style="font-weight: 600; color: #4338ca;">Platform Console</span>
+        </a>
+        {% endif %}
+
+        {% if current_user.role in ('admin', 'superadmin') %}
         <div class="sidebar-section">Dashboards</div>
         <a href="{{ url_for('dashboard') }}" class="{{ 'is-active' if request.endpoint == 'dashboard' else '' }}" title="Dashboard">
           <div class="sidebar-nav-icon"><i data-lucide="layout-dashboard"></i></div>
@@ -257,7 +265,14 @@
                 <span class="menu-ext-badge"><i data-lucide="external-link"></i></span>
               </a>
 
-              {% if current_user.role == 'admin' %}
+              {% if is_superadmin %}
+              <a href="{{ url_for('superadmin_dashboard') }}" class="user-menu-item" style="color: #4338ca; font-weight: 600;">
+                <i data-lucide="shield-alert" style="color: #6366f1;"></i>
+                <span>SuperAdmin Console</span>
+              </a>
+              {% endif %}
+
+              {% if current_user.role in ('admin', 'superadmin') %}
               <a href="{{ url_for('brochure_settings') }}" class="user-menu-item">
                 <i data-lucide="book-open"></i>
                 <span>Brochure Settings</span>
