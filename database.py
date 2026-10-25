@@ -787,6 +787,173 @@ def get_user_by_username(username: str):
         conn.close()
 
 
+def generate_company_slug(name: str) -> str:
+    """Generate a collision-proof URL slug for a newly registered company."""
+    base = re.sub(r"[^a-z0-9]+", "-", name.lower()).strip("-")
+    if not base:
+        base = "company"
+
+    conn = get_connection()
+    try:
+        placeholder = "%s" if is_postgres_configured() else "?"
+        cur = conn.cursor()
+        slug = base
+        counter = 2
+        while True:
+            try:
+                cur.execute(f"SELECT id FROM companies WHERE slug = {placeholder}", (slug,))
+                row = cur.fetchone()
+                if not row:
+                    return slug
+            except Exception:
+                return slug
+            slug = f"{base}-{counter}"
+            counter += 1
+    finally:
+        conn.close()
+
+
+def _ensure_sqlite_companies_support(conn):
+    """Ensure companies table and company_id columns exist when running in SQLite fallback mode."""
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS companies (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT NOT NULL,
+            slug TEXT UNIQUE NOT NULL,
+            currency TEXT DEFAULT '$',
+            invoice_prefix TEXT DEFAULT 'INV-',
+            starting_invoice_number INTEGER DEFAULT 1,
+            bill_address TEXT,
+            ship_address TEXT,
+            phone TEXT,
+            email TEXT,
+            tax_id TEXT,
+            logo_url TEXT,
+            max_warehouses INTEGER DEFAULT 5,
+            is_active INTEGER DEFAULT 1,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        );
+        """
+    )
+    for tbl in ["users", "warehouses", "categories"]:
+        try:
+            conn.execute(f"ALTER TABLE {tbl} ADD COLUMN company_id INTEGER REFERENCES companies(id)")
+        except sqlite3.OperationalError:
+            pass
+    conn.commit()
+
+
+def register_company_with_admin(
+    company_name: str,
+    admin_username: str,
+    admin_password_hash: str,
+    currency: str = "$",
+    invoice_prefix: str = "INV-",
+) -> tuple[int, int]:
+    """
+    Registers a new company and its root admin user in a single atomic transaction.
+    Provisions a default 'Main Warehouse' and starter categories.
+    Returns (company_id, user_id).
+    """
+    slug = generate_company_slug(company_name)
+    conn = get_connection()
+    try:
+        is_pg = is_postgres_configured()
+        if not is_pg:
+            _ensure_sqlite_companies_support(conn)
+
+        cur = conn.cursor()
+        p = "%s" if is_pg else "?"
+
+        # 1. Insert Company
+        if is_pg:
+            cur.execute(
+                f"""
+                INSERT INTO companies (name, slug, currency, invoice_prefix, starting_invoice_number, is_active)
+                VALUES ({p}, {p}, {p}, {p}, 1, TRUE)
+                RETURNING id
+                """,
+                (company_name, slug, currency, invoice_prefix),
+            )
+            company_id = cur.fetchone()["id"]
+        else:
+            cur.execute(
+                f"""
+                INSERT INTO companies (name, slug, currency, invoice_prefix, starting_invoice_number, is_active)
+                VALUES ({p}, {p}, {p}, {p}, 1, 1)
+                """,
+                (company_name, slug, currency, invoice_prefix),
+            )
+            company_id = cur.lastrowid
+
+        # 2. Insert Default 'Main Warehouse'
+        if is_pg:
+            cur.execute(
+                f"""
+                INSERT INTO warehouses (company_id, name, location)
+                VALUES ({p}, {p}, {p})
+                RETURNING id
+                """,
+                (company_id, "Main Warehouse", "Headquarters"),
+            )
+            warehouse_id = cur.fetchone()["id"]
+        else:
+            cur.execute(
+                f"""
+                INSERT INTO warehouses (company_id, name, location)
+                VALUES ({p}, {p}, {p})
+                """,
+                (company_id, "Main Warehouse", "Headquarters"),
+            )
+            warehouse_id = cur.lastrowid
+
+        # 3. Insert Starter Categories
+        starter_categories = ["General", "Food", "Beverages", "Spices", "Other"]
+        for cat in starter_categories:
+            cur.execute(
+                f"INSERT INTO categories (company_id, name) VALUES ({p}, {p})",
+                (company_id, cat),
+            )
+
+        # 4. Insert Root Admin User
+        if is_pg:
+            cur.execute(
+                f"""
+                INSERT INTO users (company_id, username, password_hash, role, is_active, warehouse_id)
+                VALUES ({p}, {p}, {p}, 'admin', TRUE, {p})
+                RETURNING id
+                """,
+                (company_id, admin_username, admin_password_hash, warehouse_id),
+            )
+            user_id = cur.fetchone()["id"]
+        else:
+            cur.execute(
+                f"""
+                INSERT INTO users (company_id, username, password_hash, role, is_active, warehouse_id)
+                VALUES ({p}, {p}, {p}, 'admin', 1, {p})
+                """,
+                (company_id, admin_username, admin_password_hash, warehouse_id),
+            )
+            user_id = cur.lastrowid
+
+        conn.commit()
+        logger.info(
+            "Successfully provisioned new company '%s' (id=%d, slug='%s') with admin '%s'",
+            company_name,
+            company_id,
+            slug,
+            admin_username,
+        )
+        return company_id, user_id
+    except Exception as e:
+        conn.rollback()
+        logger.error("Failed to register company '%s': %s", company_name, e)
+        raise
+    finally:
+        conn.close()
+
+
 def get_public_products():
     conn = get_connection()
     try:

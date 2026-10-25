@@ -2,7 +2,7 @@
 
 Type: task
 Status: open
-Blocked by: 04
+Blocked by: none (04 resolved)
 
 ## Question
 

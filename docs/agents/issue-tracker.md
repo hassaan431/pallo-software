@@ -22,11 +22,11 @@ This document tracks implementation items, technical decisions, and milestones f
   - [x] Write and run `migrate_sqlite_to_postgres.py` to transfer 100% of AK Distributors data to `company_id = 1`.
   - [ ] Add query helpers in `database.py` with `RealDictCursor`.
 
-- [ ] **M2: Authentication, Tenant Scoping & Self-Serve Signup**
+- [x] **M2: Authentication, Tenant Scoping & Self-Serve Signup**
   - [x] Extend Flask-Login `User` with `company_id`.
   - [x] Implement `@app.context_processor` for `current_company`.
-  - [ ] Create `/register` self-serve onboarding page with auto-slug generation.
-  - [ ] Seed default "Main Warehouse" and starter categories for newly registered companies.
+  - [x] Create `/register` self-serve onboarding page with auto-slug generation.
+  - [x] Seed default "Main Warehouse" and starter categories for newly registered companies.
   - [x] Update `/login` for unified sign-in with active company validation.
 
 - [ ] **M3: Query Scoping & Commercial Privacy (app.py)**

@@ -20,6 +20,7 @@ A fully functional, production-ready Pallo multi-tenant SaaS running on PostgreS
 - [PostgreSQL Multi-Tenant Schema](issues/02-define-postgres-multi-tenant-schema.md): Complete DDL schema covering all 18 tables with `company_id` CASCADE FKs, `companies` master table, exact `NUMERIC(14, 4)` types, and composite performance indices.
 - [SQLite to PostgreSQL Migration](issues/03-build-sqlite-to-postgres-migration-script.md): Standalone migration tool (`migrate_sqlite_to_postgres.py`) with topological sequencing, FK sanitization, sequence synchronization, and 100% parity verification.
 - [Unified Auth & Tenant Context](issues/04-unified-auth-session-scoping-and-context.md): User model scoped by `company_id`, soft-deactivation session termination, and global template context injection (`current_company`, `app_name = 'Pallo'`).
+- [Self-Serve Registration & Provisioning](issues/05-self-serve-company-registration.md): Collision-proof slug generator, atomic workspace initialization (warehouse, categories, admin user), and responsive `/register` onboarding flow.
 
 ## Not yet specified
 

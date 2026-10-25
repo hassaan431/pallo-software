@@ -9,7 +9,7 @@ from datetime import date, timedelta
 
 from collections import defaultdict
 
-from database import get_connection, get_next_invoice_number, get_user_by_id, get_user_by_username, get_company, init_db, DB_PATH
+from database import get_connection, get_next_invoice_number, get_user_by_id, get_user_by_username, get_company, register_company_with_admin, init_db, DB_PATH
 
 import urllib.parse
 
@@ -240,6 +240,102 @@ def login():
 def logout():
     logout_user()
     return redirect(url_for("login"))
+
+
+@app.route("/register", methods=["GET", "POST"])
+def register():
+    if current_user.is_authenticated:
+        return redirect(url_for("dashboard"))
+
+    if request.method == "POST":
+        company_name = (request.form.get("company_name") or "").strip()
+        username = (request.form.get("username") or "").strip()
+        password = request.form.get("password") or ""
+        confirm_password = request.form.get("confirm_password") or ""
+        currency = (request.form.get("currency") or "$").strip()
+
+        # Input validation
+        if len(company_name) < 2:
+            return render_template(
+                "register.html",
+                error="Business / Company name must be at least 2 characters long.",
+                company_name=company_name,
+                username=username,
+                currency=currency,
+            )
+
+        if len(username) < 3:
+            return render_template(
+                "register.html",
+                error="Username must be at least 3 characters long.",
+                company_name=company_name,
+                username=username,
+                currency=currency,
+            )
+
+        # Global uniqueness check per ADR 0002
+        existing_user = get_user_by_username(username)
+        if existing_user is not None:
+            return render_template(
+                "register.html",
+                error="That username is already taken. Please choose another username.",
+                company_name=company_name,
+                username=username,
+                currency=currency,
+            )
+
+        if len(password) < 6:
+            return render_template(
+                "register.html",
+                error="Password must be at least 6 characters long.",
+                company_name=company_name,
+                username=username,
+                currency=currency,
+            )
+
+        if password != confirm_password:
+            return render_template(
+                "register.html",
+                error="Passwords do not match.",
+                company_name=company_name,
+                username=username,
+                currency=currency,
+            )
+
+        try:
+            password_hash = generate_password_hash(password, method="pbkdf2:sha256")
+            prefix = company_name[:3].upper() + "-" if len(company_name) >= 3 else "INV-"
+            company_id, user_id = register_company_with_admin(
+                company_name=company_name,
+                admin_username=username,
+                admin_password_hash=password_hash,
+                currency=currency,
+                invoice_prefix=prefix,
+            )
+
+            # Auto-login newly registered company owner
+            user_obj = User(
+                db_id=user_id,
+                username=username,
+                role="admin",
+                warehouse_id=None,
+                company_id=company_id,
+            )
+            login_user(user_obj, remember=True)
+            flash(f"Welcome to Pallo! Your company workspace '{company_name}' has been created.", "success")
+            return redirect(url_for("dashboard"))
+
+        except Exception as e:
+            app.logger.error("Registration error: %s", e)
+            return render_template(
+                "register.html",
+                error="An unexpected error occurred while creating your workspace. Please try again.",
+                company_name=company_name,
+                username=username,
+                currency=currency,
+            )
+
+    return render_template("register.html")
 
 
 import traceback
