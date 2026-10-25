@@ -31,15 +31,15 @@ This document tracks implementation items, technical decisions, and milestones f
 
 - [ ] **M3: Query Scoping & Commercial Privacy (app.py)**
   - [x] Scope Products, Categories, Brands (`company_id`). Mask `cost_price` for non-admins.
-  - [ ] Scope Customers & Ledgers (`company_id`).
-  - [ ] Scope Sales, POS, and Invoices (`company_id`).
+  - [x] Scope Customers & Ledgers (`company_id`).
+  - [x] Scope Sales, POS, and Invoices (`company_id`).
   - [ ] Scope Warehouses & Inventory Transfers (`company_id`).
   - [ ] Scope Purchases & Suppliers (`company_id`).
   - [ ] Scope Expenses & Financial Reports (`company_id`, admin-only).
   - [ ] Scope User/Staff Management (`company_id`).
 
 - [ ] **M4: Dynamic White-Labeling & Invoicing**
-  - [ ] Dynamic invoice PDF generation (`invoice_generator.py`) based on company settings (preserving AK Distributors formatting for Company 1).
+  - [x] Dynamic invoice PDF generation (`invoice_generator.py`) based on company settings (preserving AK Distributors formatting for Company 1).
   - [ ] Company profile & branding settings page (`/settings/company`) with 2MB logo upload guardrails.
   - [ ] Dynamic sidebar branding and company name badge.
 

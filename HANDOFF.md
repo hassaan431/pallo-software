@@ -5,7 +5,7 @@ This project converts an existing single-business wholesale ERP ("AK Distributor
 
 All planning, architectural decisions, and requirement stress-testing were completed and approved via `/grill-with-docs`. The execution route is charted as a shared map of 11 decision/task tickets under `.scratch/pallo-saas/` via `/wayfinder`.
 
-**Current Status**: Tickets 01 through 06 are completely resolved, unit-tested (44 passing tests), committed, and pushed to GitHub `main` (`277695f`). The next session can immediately claim and execute **Ticket 07** on the active frontier.
+**Current Status**: Tickets 01 through 07 are completely resolved and verified with 50 passing unit tests. The next session can claim and execute **Ticket 08** on the active frontier.
 
 ---
 
@@ -14,7 +14,7 @@ A production-ready **Pallo** multi-tenant SaaS running on PostgreSQL, where mult
 
 ---
 
-## Progress So Far (Resolved & Pushed)
+## Progress So Far (Resolved)
 
 - ✅ **Ticket 01** ([01-provision-postgres-connection-and-pooling.md](file:///.scratch/pallo-saas/issues/01-provision-postgres-connection-and-pooling.md)):
   - Added `psycopg2-binary`, `python-dotenv`.
@@ -31,11 +31,19 @@ A production-ready **Pallo** multi-tenant SaaS running on PostgreSQL, where mult
   - Scoped `/inventory`, categories, brands, product APIs, and public catalogue/brochure helpers by `company_id`.
   - Added `PooledCursorWrapper` to transparently translate `?` to `%s` for PostgreSQL cursor queries.
   - Implemented ADR 0003 commercial privacy: strictly masked `cost_price`, `stock_value`, and profit margin data for non-admin roles (`salesman`, `warehouse_manager`) across JSON APIs, HTML templates, and CSV downloads.
+- ✅ **Ticket 07** ([07-scope-customers-and-sales-pos.md](file:///.scratch/pallo-saas/issues/07-scope-customers-and-sales-pos.md)):
+  - Scoped all customer ledgers (`/customers`, `/customers/list`, `/customers/add`, `/customers/edit`, `/customers/delete`, `/customers/<id>/history`) by `company_id = current_user.company_id`.
+  - Upgraded `get_next_invoice_number(company_id)` to generate tenant-specific sequential invoice numbers with tenant prefixes (Company 1 preserves `AK-` sequence uninterrupted e.g. `AK-001012`, new companies default to `INV-` or custom).
+  - Scoped all sales routes: `/sales`, `/sales/next-invoice`, `/sales/new`, `/sales/data`, `/sales/<id>/details`, `/sales/by-invoice/<num>`, `/sales/<id>/invoice/pdf`, `/sales/<id>/mark_sale`, `/sales/update/<id>`, `/sales/delete/<id>`, `/sales/<id>/record_payment`, `/sales/export`, `/sales/import-csv`.
+  - Scoped POS checkout: `/pos`, `/pos/submit_order` with tenant customer auto-creation/validation, tenant stock verification, and tenant invoice sequence.
+  - Scoped `/dashboard` and all reporting queries (`parse_date_filters`, `/reports/stock-distribution/data`, `/reports/inventory-additions`, `/reports/supplier-purchases/<id>`, `/reports/profit`).
+  - Updated [invoice_generator.py](file:///invoice_generator.py) for dynamic tenant header info and [templates/sales.html](file:///templates/sales.html) for dynamic invoice prefix.
+  - Created [tests/test_customer_sales_scoping.py](file:///tests/test_customer_sales_scoping.py) with 6 passing unit tests (all 50 project tests passing).
 
 ---
 
 ## Standing Context & Established Rules
-1. **Database Engine**: Centralized PostgreSQL with `ThreadedConnectionPool` using `DATABASE_URL` (supports local Postgres and free serverless cloud Postgres like Neon/Supabase) with seamless fallback to SQLite.
+1. **Database Engine**: Centralized PostgreSQL with `ThreadedConnectionPool` using `DATABASE_URL` with seamless fallback to SQLite.
 2. **Multi-Tenancy**: Single shared database partitioned by `company_id`. All queries strictly scoped (`WHERE company_id = ?`).
 3. **Preserve AK Distributors**: Existing `database.db` SQLite data is preserved under `company_id = 1` ("AK Distributors LLC") with zero downtime/data loss.
 4. **Branding & UI**: Keep the software's existing emerald (`#10b981`) and slate design system tokens. Do not alter color tokens. Global app brand is **Pallo**.
@@ -65,14 +73,13 @@ A production-ready **Pallo** multi-tenant SaaS running on PostgreSQL, where mult
 ## Wayfinder Issue Map & Next Immediate Task
 
 ### Active Frontier Ticket (Take this first)
-- 🟢 **[07-scope-customers-and-sales-pos.md](file:///.scratch/pallo-saas/issues/07-scope-customers-and-sales-pos.md)**
-  - *Status*: Open, Unblocked (06 resolved).
-  - *Goal*: Scope customer records, customer ledgers/payments, POS checkout (`/pos`), and sales history (`/sales`, `/sale/<id>`) by `company_id`. Route sequential invoice number generation to tenant-specific prefix and sequence counter via `get_next_invoice_number(company_id)`.
+- 🟢 **[08-scope-warehouses-transfers-purchases-expenses.md](file:///.scratch/pallo-saas/issues/08-scope-warehouses-transfers-purchases-expenses.md)**
+  - *Status*: Open, Unblocked (07 resolved).
+  - *Goal*: Scope warehouses, inventory transfers, purchase orders, suppliers, expenses, and staff/user management by `company_id`.
 
 ### Remaining Downstream Tickets
-- **08-scope-warehouses-transfers-purchases-expenses.md** (Blocked by 07)
-- **09-dynamic-pdf-invoicing-and-company-branding.md** (Blocked by 07)
-- **10-superadmin-platform-governance.md** (Blocked by 04 - Ready to run after 07-09)
+- **09-dynamic-pdf-invoicing-and-company-branding.md** (Blocked by 08)
+- **10-superadmin-platform-governance.md** (Blocked by 04 - Ready to run after 08-09)
 - **11-tenant-isolation-automated-test-suite.md** (Blocked by 08, 09, 10)
 
 ---
@@ -80,12 +87,12 @@ A production-ready **Pallo** multi-tenant SaaS running on PostgreSQL, where mult
 ## Suggested Skills for the Next Agent
 - `wayfinder`: To claim, execute, and resolve tickets one by one per `.scratch/pallo-saas/map.md`.
 - `security-and-hardening`: For parameterized SQL queries and cross-tenant data protection.
-- `test-driven-development`: For expanding unit tests for customer ledgers and sales isolation.
+- `test-driven-development`: For unit testing multi-tenant warehouse and purchase operations.
 
 ---
 
 ## Prompt to Start Next Session
 Copy and paste this into the new window:
 ```text
-/wayfinder We are converting the ERP to Pallo Multi-Tenant SaaS on PostgreSQL. Review the handoff document at HANDOFF.md and .scratch/pallo-saas/map.md. Claim and start working on Ticket 07 (.scratch/pallo-saas/issues/07-scope-customers-and-sales-pos.md).
+/wayfinder We are converting the ERP to Pallo Multi-Tenant SaaS on PostgreSQL. Review the handoff document at HANDOFF.md and .scratch/pallo-saas/map.md. Claim and start working on Ticket 08 (.scratch/pallo-saas/issues/08-scope-warehouses-transfers-purchases-expenses.md).
 ```

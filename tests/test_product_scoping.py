@@ -19,6 +19,10 @@ class TestProductScopingAndCostMasking(unittest.TestCase):
         database.init_db()
 
     def _clean_test_data(self, conn):
+        try:
+            conn.execute("PRAGMA foreign_keys = OFF")
+        except Exception:
+            pass
         co_ids = [r[0] for r in conn.execute("SELECT id FROM companies WHERE slug IN ('test-co-1', 'test-co-2')").fetchall()]
         if co_ids:
             ph = ",".join("?" * len(co_ids))
@@ -36,6 +40,10 @@ class TestProductScopingAndCostMasking(unittest.TestCase):
                         conn.execute(f"DELETE FROM {tbl} WHERE company_id IN ({ph})", co_ids)
             conn.execute(f"DELETE FROM companies WHERE id IN ({ph})", co_ids)
         conn.commit()
+        try:
+            conn.execute("PRAGMA foreign_keys = ON")
+        except Exception:
+            pass
 
     def setUp(self):
         self.app = app.app

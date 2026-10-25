@@ -738,12 +738,34 @@ def _seed_default_data(conn):
     conn.commit()
 
 
-def get_next_invoice_number():
+def get_next_invoice_number(company_id: int = 1) -> str:
+    """
+    Generate the next sequential invoice number for the specified company.
+    Routes sequential generation to tenant-specific prefix (e.g. 'AK-', 'INV-')
+    and starting sequence counter configured on the company.
+    """
+    if not company_id:
+        company_id = 1
+
+    comp = get_company(company_id) or {}
+    prefix = comp.get("invoice_prefix") or "INV-"
+    starting_num = int(comp.get("starting_invoice_number") or 1)
+
     conn = get_connection()
     try:
-        rows = conn.execute(
-            "SELECT invoice_number FROM sales WHERE invoice_number LIKE 'AK-%' OR invoice_number LIKE 'Q-%'"
-        ).fetchall()
+        placeholder = "%s" if is_postgres_configured() else "?"
+        cur = conn.cursor()
+        try:
+            cur.execute(
+                f"SELECT invoice_number FROM sales WHERE company_id = {placeholder}",
+                (company_id,),
+            )
+            rows = cur.fetchall()
+        except Exception:
+            # Fallback if company_id column not present in unmigrated environment
+            cur.execute("SELECT invoice_number FROM sales")
+            rows = cur.fetchall()
+
         nums = []
         for r in rows:
             inv = str(r["invoice_number"]).strip()
@@ -752,8 +774,11 @@ def get_next_invoice_number():
                 nums.append(int(m.group(1)))
 
         if not nums:
-            return "AK-000001"
-        return f"AK-{(max(nums) + 1):06d}"
+            next_num = starting_num
+        else:
+            next_num = max(max(nums) + 1, starting_num)
+
+        return f"{prefix}{next_num:06d}"
     finally:
         conn.close()
 
@@ -891,9 +916,12 @@ def _ensure_sqlite_companies_support(conn):
         conn.execute(
             """
             INSERT INTO companies (id, name, slug, currency, invoice_prefix, starting_invoice_number, is_active)
-            VALUES (1, 'AK Distributors LLC', 'ak-distributors', '$', 'INV-', 1, 1)
+            VALUES (1, 'AK Distributors LLC', 'ak-distributors', '$', 'AK-', 1, 1)
             """
         )
+    else:
+        # Ensure Company 1 preserves AK- prefix
+        conn.execute("UPDATE companies SET invoice_prefix = 'AK-' WHERE id = 1 AND (invoice_prefix = 'INV-' OR invoice_prefix IS NULL)")
 
     multi_tenant_tables = [
         "users", "warehouses", "categories", "brands", "suppliers", "customers",

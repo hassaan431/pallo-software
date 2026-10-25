@@ -13,7 +13,7 @@ from database import get_connection, get_next_invoice_number, get_user_by_id, ge
 
 import urllib.parse
 
-from flask import Flask, Response, flash, jsonify, redirect, render_template, request, url_for, send_from_directory
+from flask import Flask, Response, abort, flash, jsonify, redirect, render_template, request, url_for, send_from_directory
 from flask_login import LoginManager, UserMixin, current_user, login_required, login_user, logout_user
 from werkzeug.security import check_password_hash, generate_password_hash
 from werkzeug.exceptions import HTTPException
@@ -561,9 +561,10 @@ def dashboard():
     if current_user.role != 'admin':
         warehouse_id = current_user.warehouse_id
         
+    cid = current_user.company_id if hasattr(current_user, "company_id") and current_user.company_id else 1
     conn = get_connection()
     try:
-        warehouses = conn.execute("SELECT id, name FROM warehouses ORDER BY name").fetchall()
+        warehouses = conn.execute("SELECT id, name FROM warehouses WHERE company_id = ? ORDER BY name", (cid,)).fetchall()
         
         # Build conditions
         today = date.today().isoformat()
@@ -571,10 +572,10 @@ def dashboard():
         current_month = f"{now.month:02d}"
         current_year = str(now.year)
         
-        daily_cond = "invoice_date = ?"
-        daily_params = [today]
-        month_cond = "strftime('%m', invoice_date) = ? AND strftime('%Y', invoice_date) = ?"
-        month_params = [current_month, current_year]
+        daily_cond = "company_id = ? AND invoice_date = ?"
+        daily_params = [cid, today]
+        month_cond = "company_id = ? AND strftime('%m', invoice_date) = ? AND strftime('%Y', invoice_date) = ?"
+        month_params = [cid, current_month, current_year]
         
         if warehouse_id:
             daily_cond += " AND warehouse_id = ?"
@@ -589,10 +590,10 @@ def dashboard():
         ).fetchone()
         
         # For joins involving sales:
-        daily_cost_cond = "s.invoice_date = ?"
-        daily_cost_params = [today]
-        month_cost_cond = "strftime('%m', s.invoice_date) = ? AND strftime('%Y', s.invoice_date) = ?"
-        month_cost_params = [current_month, current_year]
+        daily_cost_cond = "s.company_id = ? AND s.invoice_date = ?"
+        daily_cost_params = [cid, today]
+        month_cost_cond = "s.company_id = ? AND strftime('%m', s.invoice_date) = ? AND strftime('%Y', s.invoice_date) = ?"
+        month_cost_params = [cid, current_month, current_year]
         
         if warehouse_id:
             daily_cost_cond += " AND s.warehouse_id = ?"
@@ -634,26 +635,26 @@ def dashboard():
         
         # Get daily expenses
         daily_expenses_row = conn.execute(
-            "SELECT COALESCE(SUM(amount), 0) as total FROM expenses WHERE date = ?",
-            (today,)
+            "SELECT COALESCE(SUM(amount), 0) as total FROM expenses WHERE company_id = ? AND date = ?",
+            (cid, today)
         ).fetchone()
         daily_expenses = float(daily_expenses_row["total"] or 0)
         daily_net_profit = daily_profit - daily_expenses
 
         # Get monthly expenses
         monthly_expenses_row = conn.execute(
-            "SELECT COALESCE(SUM(amount), 0) as total FROM expenses WHERE strftime('%m', date) = ? AND strftime('%Y', date) = ?",
-            (current_month, str(current_year))
+            "SELECT COALESCE(SUM(amount), 0) as total FROM expenses WHERE company_id = ? AND strftime('%m', date) = ? AND strftime('%Y', date) = ?",
+            (cid, current_month, str(current_year))
         ).fetchone()
         monthly_expenses = float(monthly_expenses_row["total"] or 0)
         monthly_net_profit = monthly_profit - monthly_expenses
         monthly_net_margin = round((monthly_net_profit / monthly_revenue * 100), 2) if monthly_revenue > 0 else 0
 
         
-        recent_sales_cond = ""
-        recent_sales_params = []
+        recent_sales_cond = "WHERE s.company_id = ?"
+        recent_sales_params = [cid]
         if warehouse_id:
-            recent_sales_cond = "WHERE s.warehouse_id = ?"
+            recent_sales_cond += " AND s.warehouse_id = ?"
             recent_sales_params.append(warehouse_id)
             
         recent_sales_rows = conn.execute(
@@ -696,10 +697,11 @@ def dashboard():
                 s.remaining_amount
             FROM sales s
             LEFT JOIN customers c ON c.id = s.customer_id
-            WHERE s.remaining_amount > 0 OR s.status = 'unpaid'
+            WHERE s.company_id = ? AND (s.remaining_amount > 0 OR s.status = 'unpaid')
             ORDER BY COALESCE(NULLIF(s.due_date, ''), s.invoice_date) ASC
             LIMIT 10
-            """
+            """,
+            (cid,)
         ).fetchall()
         upcoming_payments = [dict(r) for r in upcoming_payments_rows]
         
@@ -709,11 +711,11 @@ def dashboard():
             """
             SELECT invoice_date, SUM(grand_total) as daily_total
             FROM sales
-            WHERE invoice_date >= ?
+            WHERE company_id = ? AND invoice_date >= ?
             GROUP BY invoice_date
             ORDER BY invoice_date ASC
             """,
-            (thirty_days_ago,)
+            (cid, thirty_days_ago)
         ).fetchall()
         
         daily_sales_labels = [row["invoice_date"] for row in daily_sales_rows]
@@ -2326,6 +2328,7 @@ def backup_download():
 @app.route("/customers")
 @admin_required
 def customers():
+    cid = current_user.company_id
     conn = get_connection()
     try:
         cur = conn.execute(
@@ -2349,24 +2352,28 @@ def customers():
                 COALESCE(SUM(s.remaining_amount), 0) as total_receivable
             FROM customers c
             LEFT JOIN users u ON c.salesman_id = u.id
-            LEFT JOIN sales s ON c.id = s.customer_id AND s.status != 'quote'
-            GROUP BY c.id
+            LEFT JOIN sales s ON c.id = s.customer_id AND s.status != 'quote' AND s.company_id = c.company_id
+            WHERE c.company_id = ?
+            GROUP BY c.id, u.username
             ORDER BY c.created_at DESC, c.id DESC
-            """
+            """,
+            (cid,)
         )
         customers_list = [dict(row) for row in cur.fetchall()]
 
-        cur = conn.execute("SELECT COUNT(*) AS c FROM customers")
+        cur = conn.execute("SELECT COUNT(*) AS c FROM customers WHERE company_id = ?", (cid,))
         total_customers = int(cur.fetchone()["c"] or 0)
 
         cur = conn.execute(
             """
             SELECT COUNT(DISTINCT NULLIF(TRIM(area), '')) AS c
             FROM customers
-            """
+            WHERE company_id = ?
+            """,
+            (cid,)
         )
         areas_covered = int(cur.fetchone()["c"] or 0)
-        cur = conn.execute("SELECT id, username FROM users WHERE is_active = 1 ORDER BY username")
+        cur = conn.execute("SELECT id, username FROM users WHERE company_id = ? AND is_active = 1 ORDER BY username", (cid,))
         users_list = [dict(row) for row in cur.fetchall()]
     finally:
         conn.close()
@@ -2412,16 +2419,17 @@ def customers_add():
     warehouse_id_raw = (request.form.get("warehouse_id") or "").strip()
     salesman_id = int(salesman_id_raw) if salesman_id_raw else None
 
+    cid = current_user.company_id
     conn = get_connection()
     try:
         conn.execute(
             """
             INSERT INTO customers
-                (name, bill_address, ship_address, area, state, phone, email, terms, salesman_id)
+                (company_id, name, bill_address, ship_address, area, state, phone, email, terms, salesman_id)
             VALUES
-                (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
-            (full_name, bill_address or None, ship_address or None, area, state, phone, email, terms, salesman_id),
+            (cid, full_name, bill_address or None, ship_address or None, area, state, phone, email, terms, salesman_id),
         )
         conn.commit()
     finally:
@@ -2460,8 +2468,12 @@ def customers_edit(customer_id: int):
     warehouse_id_raw = (request.form.get("warehouse_id") or "").strip()
     salesman_id = int(salesman_id_raw) if salesman_id_raw else None
 
+    cid = current_user.company_id
     conn = get_connection()
     try:
+        cur = conn.execute("SELECT id FROM customers WHERE id = ? AND company_id = ?", (customer_id, cid)).fetchone()
+        if not cur:
+            abort(404)
         conn.execute(
             """
             UPDATE customers
@@ -2475,9 +2487,9 @@ def customers_edit(customer_id: int):
                 email = ?,
                 terms = ?,
                 salesman_id = ?
-            WHERE id = ?
+            WHERE id = ? AND company_id = ?
             """,
-            (full_name, bill_address or None, ship_address or None, area, state, phone, email, terms, salesman_id, customer_id),
+            (full_name, bill_address or None, ship_address or None, area, state, phone, email, terms, salesman_id, customer_id, cid),
         )
         conn.commit()
     finally:
@@ -2489,11 +2501,15 @@ def customers_edit(customer_id: int):
 @app.route("/customers/delete/<int:customer_id>", methods=["POST"])
 @admin_required
 def customers_delete(customer_id: int):
+    cid = current_user.company_id
     conn = get_connection()
     try:
+        cur = conn.execute("SELECT id FROM customers WHERE id = ? AND company_id = ?", (customer_id, cid)).fetchone()
+        if not cur:
+            abort(404)
         # Keep sales history rows, but detach them from the deleted customer.
-        conn.execute("UPDATE sales SET customer_id = NULL WHERE customer_id = ?", (customer_id,))
-        conn.execute("DELETE FROM customers WHERE id = ?", (customer_id,))
+        conn.execute("UPDATE sales SET customer_id = NULL WHERE customer_id = ? AND company_id = ?", (customer_id, cid))
+        conn.execute("DELETE FROM customers WHERE id = ? AND company_id = ?", (customer_id, cid))
         conn.commit()
     finally:
         conn.close()
@@ -2503,12 +2519,13 @@ def customers_delete(customer_id: int):
 @app.route("/customers/list", methods=["GET"])
 @login_required
 def customers_list():
+    cid = current_user.company_id
     conn = get_connection()
     try:
-        if current_user.role == 'admin':
-            cur = conn.execute("SELECT * FROM customers ORDER BY name")
+        if current_user.role in ('admin', 'superadmin'):
+            cur = conn.execute("SELECT * FROM customers WHERE company_id = ? ORDER BY name", (cid,))
         else:
-            cur = conn.execute("SELECT * FROM customers WHERE salesman_id = ? ORDER BY name", (current_user.id,))
+            cur = conn.execute("SELECT * FROM customers WHERE company_id = ? AND salesman_id = ? ORDER BY name", (cid, current_user.id))
         cust_list = [dict(r) for r in cur.fetchall()]
         return jsonify(cust_list)
     finally:
@@ -2518,8 +2535,12 @@ def customers_list():
 @app.route("/customers/<int:customer_id>/history", methods=["GET"])
 @admin_required
 def customers_history(customer_id: int):
+    cid = current_user.company_id
     conn = get_connection()
     try:
+        cust = conn.execute("SELECT id FROM customers WHERE id = ? AND company_id = ?", (customer_id, cid)).fetchone()
+        if not cust:
+            return jsonify([])
         cur = conn.execute(
             """
             SELECT 
@@ -2532,12 +2553,12 @@ def customers_history(customer_id: int):
               s.remaining_amount,
               COUNT(si.id) as item_count
             FROM sales s
-            LEFT JOIN sale_items si ON si.sale_id = s.id
-            WHERE s.customer_id = ?
+            LEFT JOIN sale_items si ON si.sale_id = s.id AND si.company_id = s.company_id
+            WHERE s.customer_id = ? AND s.company_id = ?
             GROUP BY s.id
             ORDER BY s.invoice_date DESC
             """,
-            (customer_id,),
+            (customer_id, cid),
         )
         rows = cur.fetchall()
         return jsonify([dict(r) for r in rows])
@@ -2548,31 +2569,34 @@ def customers_history(customer_id: int):
 @app.route("/sales")
 @admin_required
 def sales():
+    cid = current_user.company_id
     conn = get_connection()
     try:
-        if current_user.role == 'admin':
+        if current_user.role in ('admin', 'superadmin'):
             customers = conn.execute(
                 """
                 SELECT id, name, terms
                 FROM customers
+                WHERE company_id = ?
                 ORDER BY name COLLATE NOCASE
-                """
+                """,
+                (cid,)
             ).fetchall()
         else:
             customers = conn.execute(
                 """
                 SELECT id, name, terms
                 FROM customers
-                WHERE salesman_id = ?
+                WHERE company_id = ? AND salesman_id = ?
                 ORDER BY name COLLATE NOCASE
                 """,
-                (current_user.id,)
+                (cid, current_user.id)
             ).fetchall()
         customers_list = [dict(r) for r in customers]
-        users_rows = conn.execute("SELECT id, username, role FROM users ORDER BY username").fetchall()
+        users_rows = conn.execute("SELECT id, username, role FROM users WHERE company_id = ? AND is_active = 1 ORDER BY username", (cid,)).fetchall()
         users_list = [dict(r) for r in users_rows]
         
-        products_rows = conn.execute("SELECT id, name FROM products ORDER BY name COLLATE NOCASE").fetchall()
+        products_rows = conn.execute("SELECT id, name FROM products WHERE company_id = ? ORDER BY name COLLATE NOCASE", (cid,)).fetchall()
         products_list = [dict(r) for r in products_rows]
 
         query = """
@@ -2593,26 +2617,32 @@ def sales():
                 u.username AS salesman_name
             FROM sales s
             LEFT JOIN customers c ON c.id = s.customer_id
-            LEFT JOIN sale_items si ON si.sale_id = s.id
+            LEFT JOIN sale_items si ON si.sale_id = s.id AND si.company_id = s.company_id
             LEFT JOIN users u ON u.id = s.salesman_id
-            { "WHERE s.salesman_id = ?" if current_user.role != 'admin' else "" }
-            GROUP BY s.id
+            WHERE s.company_id = ? {salesman_extra}
+            GROUP BY s.id, c.name, u.username
             ORDER BY s.invoice_date DESC, s.id DESC
             LIMIT 10
             """
-        if current_user.role != 'admin':
-            recent_sales_rows = conn.execute(query.replace('{ "WHERE s.salesman_id = ?" if current_user.role != \'admin\' else "" }', 'WHERE s.salesman_id = ?'), (current_user.id,)).fetchall()
+        is_admin = current_user.role in ('admin', 'superadmin')
+        if not is_admin:
+            recent_sales_rows = conn.execute(query.format(salesman_extra="AND s.salesman_id = ?"), (cid, current_user.id)).fetchall()
         else:
-            recent_sales_rows = conn.execute(query.replace('{ "WHERE s.salesman_id = ?" if current_user.role != \'admin\' else "" }', '')).fetchall()
+            recent_sales_rows = conn.execute(query.format(salesman_extra=""), (cid,)).fetchall()
         recent_sales = []
         for r in recent_sales_rows:
             d = dict(r)
             rev = float(d["grand_total"] or 0)
             cost = float(d["total_cost"] or 0)
-            d["profit_margin"] = round(((rev - cost) / rev * 100), 2) if rev > 0 else 0
-            d["profit_amount"] = round(rev - cost, 2)
+            if is_admin:
+                d["profit_margin"] = round(((rev - cost) / rev * 100), 2) if rev > 0 else 0
+                d["profit_amount"] = round(rev - cost, 2)
+            else:
+                d["total_cost"] = None
+                d["profit_margin"] = None
+                d["profit_amount"] = None
             recent_sales.append(d)
-        warehouses_rows = conn.execute("SELECT id, name FROM warehouses ORDER BY name").fetchall()
+        warehouses_rows = conn.execute("SELECT id, name FROM warehouses WHERE company_id = ? ORDER BY name", (cid,)).fetchall()
         warehouses_list = [dict(r) for r in warehouses_rows]
     finally:
         conn.close()
@@ -2621,7 +2651,7 @@ def sales():
         "sales.html",
         customers=customers_list,
         recent_sales=recent_sales,
-        next_invoice_number=get_next_invoice_number(),
+        next_invoice_number=get_next_invoice_number(cid),
         today=date.today().isoformat(),
         all_users=users_list,
         warehouses=warehouses_list,
@@ -2630,7 +2660,7 @@ def sales():
 @app.route("/sales/next-invoice", methods=["GET"])
 @login_required
 def sales_next_invoice():
-    return jsonify({"invoice_number": get_next_invoice_number()})
+    return jsonify({"invoice_number": get_next_invoice_number(current_user.company_id)})
 
 
 @app.route("/products/search", methods=["GET"])
@@ -2714,8 +2744,9 @@ def sales_data():
     product_id = (request.args.get("product_id") or "").strip()
     search = (request.args.get("search") or "").strip()
 
-    conditions = []
-    params = []
+    cid = current_user.company_id
+    conditions = ["s.company_id = ?"]
+    params = [cid]
 
     if date_from:
         conditions.append("s.invoice_date >= ?")
@@ -2734,12 +2765,12 @@ def sales_data():
     if product_id and product_id not in ("all", ""):
         try:
             product_id_int = int(product_id)
-            conditions.append("s.id IN (SELECT sale_id FROM sale_items WHERE product_id = ?)")
-            params.append(product_id_int)
+            conditions.append("s.id IN (SELECT sale_id FROM sale_items WHERE product_id = ? AND company_id = ?)")
+            params.extend([product_id_int, cid])
         except ValueError:
             pass
             
-    if current_user.role != 'admin':
+    if current_user.role not in ('admin', 'superadmin'):
         conditions.append("s.salesman_id = ?")
         params.append(current_user.id)
     else:
@@ -2774,9 +2805,7 @@ def sales_data():
         conditions.append("(LOWER(s.invoice_number) LIKE ? OR LOWER(c.name) LIKE ?)")
         params.extend([search_term, search_term])
 
-    where_sql = ""
-    if conditions:
-        where_sql = "WHERE " + " AND ".join(conditions)
+    where_sql = "WHERE " + " AND ".join(conditions)
 
     conn = get_connection()
     try:
@@ -2799,7 +2828,7 @@ def sales_data():
                 c.name as customer_name,
                 c.terms as customer_terms,
                 u.username as salesman_name,
-                (SELECT COALESCE(SUM((si.qty * COALESCE(si.packing_multiplier, 1.0) * si.cost_price) + COALESCE(si.commission_amount, 0)), 0) FROM sale_items si WHERE si.sale_id = s.id) as total_cost
+                (SELECT COALESCE(SUM((si.qty * COALESCE(si.packing_multiplier, 1.0) * si.cost_price) + COALESCE(si.commission_amount, 0)), 0) FROM sale_items si WHERE si.sale_id = s.id AND si.company_id = s.company_id) as total_cost
             FROM sales s
             LEFT JOIN customers c ON c.id = s.customer_id
             LEFT JOIN users u ON u.id = s.salesman_id
@@ -2808,14 +2837,19 @@ def sales_data():
             """
         , params)
         sales_list = []
+        is_admin = current_user.role in ('admin', 'superadmin')
         for r in cur.fetchall():
             d = dict(r)
             rev = float(d["grand_total"] or 0)
             cost = float(d["total_cost"] or 0)
-            commission = float(d["commission_amount"] or 0)
-            profit = rev - cost
-            d["profit_margin"] = round((profit / rev * 100), 2) if rev > 0 else 0
-            d["profit_amount"] = round(profit, 2)
+            if is_admin:
+                profit = rev - cost
+                d["profit_margin"] = round((profit / rev * 100), 2) if rev > 0 else 0
+                d["profit_amount"] = round(profit, 2)
+            else:
+                d["total_cost"] = None
+                d["profit_margin"] = None
+                d["profit_amount"] = None
             sales_list.append(d)
         return jsonify(sales_list)
     finally:
@@ -2836,8 +2870,9 @@ def sales_export():
     search = (request.args.get("search") or "").strip()
     warehouse_id = (request.args.get("warehouse_id") or "").strip()
 
-    conditions = []
-    params = []
+    cid = current_user.company_id
+    conditions = ["s.company_id = ?"]
+    params = [cid]
 
     if date_from:
         conditions.append("s.invoice_date >= ?")
@@ -2868,9 +2903,7 @@ def sales_export():
         conditions.append("(LOWER(s.invoice_number) LIKE ? OR LOWER(c.name) LIKE ?)")
         params.extend([search_term, search_term])
 
-    where_sql = ""
-    if conditions:
-        where_sql = "WHERE " + " AND ".join(conditions)
+    where_sql = "WHERE " + " AND ".join(conditions)
 
     conn = get_connection()
     try:
@@ -2891,8 +2924,8 @@ def sales_export():
                 s.remaining_amount,
                 s.commission_amount,
                 c.name as customer_name,
-                (SELECT COUNT(si.id) FROM sale_items si WHERE si.sale_id = s.id) as item_count,
-                (SELECT COALESCE(SUM((si.qty * COALESCE(si.packing_multiplier, 1.0) * si.cost_price) + COALESCE(si.commission_amount, 0)), 0) FROM sale_items si WHERE si.sale_id = s.id) as total_cost
+                (SELECT COUNT(si.id) FROM sale_items si WHERE si.sale_id = s.id AND si.company_id = s.company_id) as item_count,
+                (SELECT COALESCE(SUM((si.qty * COALESCE(si.packing_multiplier, 1.0) * si.cost_price) + COALESCE(si.commission_amount, 0)), 0) FROM sale_items si WHERE si.sale_id = s.id AND si.company_id = s.company_id) as total_cost
             FROM sales s
             LEFT JOIN customers c ON c.id = s.customer_id
             {where_sql}
@@ -3027,30 +3060,32 @@ def sales_import_csv():
                 except ValueError:
                     return jsonify({"success": False, "error": f"Row {i}: Quantity and Rate must be numbers."})
                 
+                cid = current_user.company_id
+
                 # Validate Customer
                 if c_name not in customers_cache:
-                    c_row = conn.execute("SELECT id FROM customers WHERE name = ?", (c_name,)).fetchone()
+                    c_row = conn.execute("SELECT id FROM customers WHERE name = ? AND company_id = ?", (c_name, cid)).fetchone()
                     if not c_row:
                         return jsonify({"success": False, "error": f"Row {i}: Customer '{c_name}' not found in database."})
                     customers_cache[c_name] = c_row["id"]
                     
                 # Validate Product
                 if p_name not in products_cache:
-                    p_row = conn.execute("SELECT id, cost_price FROM products WHERE name = ?", (p_name,)).fetchone()
+                    p_row = conn.execute("SELECT id, cost_price FROM products WHERE name = ? AND company_id = ?", (p_name, cid)).fetchone()
                     if not p_row:
                         return jsonify({"success": False, "error": f"Row {i}: Product '{p_name}' not found in database."})
                     products_cache[p_name] = p_row
                     
                 # Validate Warehouse
                 if w_name not in warehouses_cache:
-                    w_row = conn.execute("SELECT id, commission_applies FROM warehouses WHERE name = ?", (w_name,)).fetchone()
+                    w_row = conn.execute("SELECT id, commission_applies FROM warehouses WHERE name = ? AND company_id = ?", (w_name, cid)).fetchone()
                     if not w_row:
                         return jsonify({"success": False, "error": f"Row {i}: Warehouse '{w_name}' not found in database."})
                     warehouses_cache[w_name] = w_row
                     
                 # Validate Salesman
                 if s_name not in users_cache:
-                    u_row = conn.execute("SELECT id FROM users WHERE username = ?", (s_name,)).fetchone()
+                    u_row = conn.execute("SELECT id FROM users WHERE username = ? AND company_id = ?", (s_name, cid)).fetchone()
                     if not u_row:
                         return jsonify({"success": False, "error": f"Row {i}: Salesman '{s_name}' not found in database (username)."})
                     users_cache[s_name] = u_row["id"]
@@ -3077,7 +3112,7 @@ def sales_import_csv():
                 # Pre-calculate item commission if applies
                 comm_amount = 0.0
                 if invoices[inv_num]["commission_applies"]:
-                    br_row = conn.execute("SELECT b.commission_rate FROM products p LEFT JOIN brands b ON LOWER(p.brand) = LOWER(b.name) WHERE p.id = ?", (products_cache[p_name]["id"],)).fetchone()
+                    br_row = conn.execute("SELECT b.commission_rate FROM products p LEFT JOIN brands b ON LOWER(p.brand) = LOWER(b.name) AND (b.company_id = p.company_id OR b.company_id IS NULL) WHERE p.id = ? AND p.company_id = ?", (products_cache[p_name]["id"], cid)).fetchone()
                     item_comm_rate = float(br_row["commission_rate"] or 0) if br_row and br_row["commission_rate"] is not None else 0
                     comm_amount = round((qty * rate) * (item_comm_rate / 100), 2)
                     
@@ -3091,9 +3126,14 @@ def sales_import_csv():
                     "commission_amount": comm_amount
                 })
 
-            # 2. Insertion Pass: Auto-generate sequential invoice numbers continuing after last sale
+            # 2. Insertion Pass: Auto-generate sequential invoice numbers continuing after last sale for this company
+            cid = current_user.company_id
+            comp = get_company(cid) or {}
+            prefix = comp.get("invoice_prefix") or "INV-"
+            starting_num = int(comp.get("starting_invoice_number") or 1)
+
             rows = conn.execute(
-                "SELECT invoice_number FROM sales WHERE invoice_number LIKE 'AK-%' OR invoice_number LIKE 'Q-%'"
+                "SELECT invoice_number FROM sales WHERE company_id = ?", (cid,)
             ).fetchall()
             nums = []
             for r in rows:
@@ -3101,11 +3141,11 @@ def sales_import_csv():
                 m = re.search(r"(\d+)$", inv)
                 if m:
                     nums.append(int(m.group(1)))
-            next_num = (max(nums) + 1) if nums else 1
+            next_num = max(max(nums) + 1, starting_num) if nums else starting_num
 
             generated_invoices = []
             for club_key, data in invoices.items():
-                auto_inv_number = f"AK-{next_num:06d}"
+                auto_inv_number = f"{prefix}{next_num:06d}"
                 next_num += 1
                 generated_invoices.append(auto_inv_number)
 
@@ -3115,24 +3155,24 @@ def sales_import_csv():
                 # Note: Defaulting payment to cash and fully paid for old invoices
                 sale_cur = conn.execute(
                     '''INSERT INTO sales 
-                       (invoice_number, customer_id, invoice_date, payment_type, subtotal, grand_total, amount_paid, remaining_amount, status, warehouse_id, salesman_id, commission_amount, commission_rate, notes) 
-                       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)''',
-                    (auto_inv_number, data["customer_id"], data["date"], 'cash', subtotal, subtotal, subtotal, 0, 'paid', data["warehouse_id"], data["salesman_id"], total_comm, 0, f"Bulk import (Old ref: {club_key})")
+                       (company_id, invoice_number, customer_id, invoice_date, payment_type, subtotal, grand_total, amount_paid, remaining_amount, status, warehouse_id, salesman_id, commission_amount, commission_rate, notes) 
+                       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)''',
+                    (cid, auto_inv_number, data["customer_id"], data["date"], 'cash', subtotal, subtotal, subtotal, 0, 'paid', data["warehouse_id"], data["salesman_id"], total_comm, 0, f"Bulk import (Old ref: {club_key})")
                 )
                 sale_id = sale_cur.lastrowid
                 
                 for item in data["items"]:
                     conn.execute(
                         '''INSERT INTO sale_items 
-                           (sale_id, product_id, qty, rate, amount, cost_price, packing_multiplier, commission_amount) 
-                           VALUES (?, ?, ?, ?, ?, ?, ?, ?)''',
-                        (sale_id, item["product_id"], item["qty"], item["rate"], item["amount"], item["cost_price"], item["packing_multiplier"], item["commission_amount"])
+                           (company_id, sale_id, product_id, qty, rate, amount, cost_price, packing_multiplier, commission_amount) 
+                           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)''',
+                        (cid, sale_id, item["product_id"], item["qty"], item["rate"], item["amount"], item["cost_price"], item["packing_multiplier"], item["commission_amount"])
                     )
                     
                     # Fetch old stock for inventory tracking
                     wh_stock_row = conn.execute(
-                        "SELECT stock_quantity FROM warehouse_inventory WHERE warehouse_id = ? AND product_id = ?",
-                        (data["warehouse_id"], item["product_id"])
+                        "SELECT stock_quantity FROM warehouse_inventory WHERE warehouse_id = ? AND product_id = ? AND company_id = ?",
+                        (data["warehouse_id"], item["product_id"], cid)
                     ).fetchone()
                     old_stock = wh_stock_row["stock_quantity"] if wh_stock_row and wh_stock_row["stock_quantity"] is not None else 0
                     new_stock = old_stock - item["qty"]
@@ -3141,19 +3181,19 @@ def sales_import_csv():
                     conn.execute(
                         '''UPDATE warehouse_inventory 
                            SET stock_quantity = stock_quantity - ? 
-                           WHERE warehouse_id = ? AND product_id = ?''',
-                        (item["qty"], data["warehouse_id"], item["product_id"])
+                           WHERE warehouse_id = ? AND product_id = ? AND company_id = ?''',
+                        (item["qty"], data["warehouse_id"], item["product_id"], cid)
                     )
                     # Adjust global stock in products table
                     conn.execute(
-                        "UPDATE products SET stock_quantity = stock_quantity - ? WHERE id = ?",
-                        (item["qty"], item["product_id"])
+                        "UPDATE products SET stock_quantity = stock_quantity - ? WHERE id = ? AND company_id = ?",
+                        (item["qty"], item["product_id"], cid)
                     )
                     # Add to inventory history
                     conn.execute('''
-                        INSERT INTO inventory_history (product_id, transaction_type, quantity_change, previous_stock, new_stock, reference, warehouse_id)
-                        VALUES (?, ?, ?, ?, ?, ?, ?)
-                    ''', (item["product_id"], 'OUT', -item["qty"], old_stock, new_stock, f'Invoice #{auto_inv_number}', data["warehouse_id"]))
+                        INSERT INTO inventory_history (company_id, product_id, transaction_type, quantity_change, previous_stock, new_stock, reference, warehouse_id)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                    ''', (cid, item["product_id"], 'OUT', -item["qty"], old_stock, new_stock, f'Invoice #{auto_inv_number}', data["warehouse_id"]))
             
             conn.commit()
             if generated_invoices:
@@ -3193,6 +3233,8 @@ def sales_new():
 
     error = None
 
+    cid = current_user.company_id
+
     try:
         is_quote = "generate_quote" in request.form
         if is_quote and not customer_id_raw:
@@ -3215,16 +3257,16 @@ def sales_new():
             try:
                 if invoice_number:
                     row = conn_check.execute(
-                        "SELECT id FROM sales WHERE invoice_number = ?",
-                        (invoice_number,),
+                        "SELECT id FROM sales WHERE invoice_number = ? AND company_id = ?",
+                        (invoice_number, cid),
                     ).fetchone()
                     if row is not None:
                         raise ValueError(f"Invoice number {invoice_number} already exists.")
 
                 if customer_id is not None:
                     row = conn_check.execute(
-                        "SELECT id FROM customers WHERE id = ?",
-                        (customer_id,),
+                        "SELECT id FROM customers WHERE id = ? AND company_id = ?",
+                        (customer_id, cid),
                     ).fetchone()
                     if row is None:
                         raise ValueError("Customer not found.")
@@ -3289,12 +3331,18 @@ def sales_new():
             grand_total = 0.00
 
         is_quote = "generate_quote" in request.form
+        comp = get_company(cid) or {}
+        prefix = comp.get("invoice_prefix") or "INV-"
         
         # Use provided invoice number or generate one
         if is_quote:
             status = 'quote'
             if not invoice_number:
-                invoice_number = f"Q-{get_next_invoice_number().replace('AK-', '')}"
+                next_inv = get_next_invoice_number(cid)
+                num_part = next_inv.replace(prefix, "") if prefix in next_inv else next_inv
+                invoice_number = f"Q-{num_part}"
+            elif invoice_number.startswith(prefix):
+                invoice_number = "Q-" + invoice_number[len(prefix):]
             elif invoice_number.startswith("AK-"):
                 invoice_number = "Q-" + invoice_number[3:]
             elif not invoice_number.startswith("Q-"):
@@ -3303,7 +3351,7 @@ def sales_new():
             remaining_amount = grand_total
         else:
             if not invoice_number:
-                invoice_number = get_next_invoice_number()
+                invoice_number = get_next_invoice_number(cid)
 
             # Calculate amount_paid and remaining_amount based on payment_type
             if payment_type == 'cash':
@@ -3344,7 +3392,7 @@ def sales_new():
             if not is_quote:
                 for product_id, qty_total in qty_total_by_product.items():
                     wid = int(warehouse_id_raw) if warehouse_id_raw else (current_user.warehouse_id or 1)
-                    cur = conn.execute("SELECT p.name, COALESCE((SELECT stock_quantity FROM warehouse_inventory WHERE product_id = p.id AND warehouse_id = ?), 0) as stock_quantity FROM products p WHERE p.id = ?", (wid, product_id,))
+                    cur = conn.execute("SELECT p.name, COALESCE((SELECT stock_quantity FROM warehouse_inventory WHERE product_id = p.id AND warehouse_id = ? AND company_id = ?), 0) as stock_quantity FROM products p WHERE p.id = ? AND p.company_id = ?", (wid, cid, product_id, cid))
                     row = cur.fetchone()
                     if row is None:
                         raise ValueError("One or more selected products are invalid.")
@@ -3360,13 +3408,13 @@ def sales_new():
                 salesman_id = current_user.id
                 
             wid = int(warehouse_id_raw) if warehouse_id_raw else (current_user.warehouse_id or 1)
-            wh_row = conn.execute("SELECT commission_applies FROM warehouses WHERE id = ?", (wid,)).fetchone()
+            wh_row = conn.execute("SELECT commission_applies FROM warehouses WHERE id = ? AND company_id = ?", (wid, cid)).fetchone()
             commission_applies = int(wh_row["commission_applies"] or 0) if wh_row else 0
             
             commission_amount = 0
             for li in parsed_items:
                 if commission_applies:
-                    br_row = conn.execute("SELECT b.commission_rate FROM products p LEFT JOIN brands b ON LOWER(p.brand) = LOWER(b.name) WHERE p.id = ?", (li["product_id"],)).fetchone()
+                    br_row = conn.execute("SELECT b.commission_rate FROM products p LEFT JOIN brands b ON LOWER(p.brand) = LOWER(b.name) AND (b.company_id = p.company_id OR b.company_id IS NULL) WHERE p.id = ? AND p.company_id = ?", (li["product_id"], cid)).fetchone()
                     item_comm_rate = float(br_row["commission_rate"] or 0) if br_row and br_row["commission_rate"] is not None else 0
                 else:
                     item_comm_rate = 0
@@ -3379,12 +3427,13 @@ def sales_new():
             cur = conn.execute(
                 """
                 INSERT INTO sales
-                    (invoice_number, customer_id, invoice_date, due_date, terms, payment_type,
+                    (company_id, invoice_number, customer_id, invoice_date, due_date, terms, payment_type,
                      discount_amount, subtotal, grand_total, notes, status, amount_paid, remaining_amount, salesman_id, warehouse_id, commission_rate, commission_amount)
                 VALUES
-                    (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
+                    cid,
                     invoice_number,
                     customer_id,
                     invoice_date,
@@ -3410,11 +3459,12 @@ def sales_new():
                 conn.execute(
                     """
                     INSERT INTO sale_items
-                        (sale_id, product_id, description, qty, rate, amount, cost_price, print_dual_units, packing_multiplier, commission_amount, notes)
+                        (company_id, sale_id, product_id, description, qty, rate, amount, cost_price, print_dual_units, packing_multiplier, commission_amount, notes)
                     VALUES
-                        (?, ?, ?, ?, ?, ?, COALESCE((SELECT cost_price FROM products WHERE id = ?), 0), ?, ?, ?, ?)
+                        (?, ?, ?, ?, ?, ?, ?, COALESCE((SELECT cost_price FROM products WHERE id = ? AND company_id = ?), 0), ?, ?, ?, ?)
                     """,
                     (
+                        cid,
                         sale_id,
                         li["product_id"],
                         li["description"],
@@ -3422,6 +3472,7 @@ def sales_new():
                         li["rate"],
                         li["amount"],
                         li["product_id"],
+                        cid,
                         li["print_dual_units"],
                         li["packing_multiplier"],
                         li["commission_amount"],
@@ -3434,32 +3485,32 @@ def sales_new():
                 for product_id, qty_total in qty_total_by_product.items():
                     wid = int(warehouse_id_raw) if warehouse_id_raw else (current_user.warehouse_id or 1)
                     
-                    cur_stock = conn.execute("SELECT stock_quantity FROM warehouse_inventory WHERE product_id = ? AND warehouse_id = ?", (product_id, wid)).fetchone()
+                    cur_stock = conn.execute("SELECT stock_quantity FROM warehouse_inventory WHERE product_id = ? AND warehouse_id = ? AND company_id = ?", (product_id, wid, cid)).fetchone()
                     old_stock = float(cur_stock["stock_quantity"] or 0) if cur_stock else 0
                     
                     is_admin = getattr(current_user, 'role', '') == 'admin'
                     if is_admin:
                         conn.execute(
                             """
-                            INSERT INTO warehouse_inventory (product_id, warehouse_id, stock_quantity)
-                            VALUES (?, ?, ?)
+                            INSERT INTO warehouse_inventory (company_id, product_id, warehouse_id, stock_quantity)
+                            VALUES (?, ?, ?, ?)
                             ON CONFLICT(warehouse_id, product_id) DO UPDATE SET stock_quantity = stock_quantity - ?
                             """,
-                            (product_id, wid, -qty_total, qty_total),
+                            (cid, product_id, wid, -qty_total, qty_total),
                         )
                     else:
                         upd = conn.execute(
                             """
                             UPDATE warehouse_inventory
                             SET stock_quantity = stock_quantity - ?
-                            WHERE product_id = ? AND warehouse_id = ? AND stock_quantity >= ?
+                            WHERE product_id = ? AND warehouse_id = ? AND company_id = ? AND stock_quantity >= ?
                             """,
-                            (qty_total, product_id, wid, qty_total),
+                            (qty_total, product_id, wid, cid, qty_total),
                         )
                         if upd.rowcount == 0:
                             cur = conn.execute(
-                                "SELECT name FROM products WHERE id = ?",
-                                (product_id,),
+                                "SELECT name FROM products WHERE id = ? AND company_id = ?",
+                                (product_id, cid),
                             )
                             row = cur.fetchone()
                             product_name = row["name"] if row else "Unknown Product"
@@ -3467,9 +3518,9 @@ def sales_new():
                     
                     new_stock = old_stock - qty_total
                     conn.execute("""
-                        INSERT INTO inventory_history (product_id, transaction_type, quantity_change, previous_stock, new_stock, reference, warehouse_id)
-                        VALUES (?, ?, ?, ?, ?, ?, ?)
-                    """, (product_id, 'OUT', -qty_total, old_stock, new_stock, f'Invoice #{invoice_number}', wid))
+                        INSERT INTO inventory_history (company_id, product_id, transaction_type, quantity_change, previous_stock, new_stock, reference, warehouse_id)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                    """, (cid, product_id, 'OUT', -qty_total, old_stock, new_stock, f'Invoice #{invoice_number}', wid))
 
             conn.commit()
         except Exception as e:
@@ -3499,8 +3550,8 @@ def sales_check_invoice():
     conn = get_connection()
     try:
         row = conn.execute(
-            "SELECT id FROM sales WHERE invoice_number = ?",
-            (invoice_number,),
+            "SELECT id FROM sales WHERE invoice_number = ? AND company_id = ?",
+            (invoice_number, current_user.company_id),
         ).fetchone()
         return jsonify({"exists": row is not None})
     finally:
@@ -3510,6 +3561,7 @@ def sales_check_invoice():
 @app.route("/sales/edit/<int:sale_id>", methods=["GET"])
 @admin_required
 def sales_edit(sale_id: int):
+    cid = current_user.company_id
     conn = get_connection()
     try:
         # Get sale data
@@ -3535,9 +3587,9 @@ def sales_edit(sale_id: int):
                 u.username AS salesman_name
             FROM sales s
             LEFT JOIN users u ON u.id = s.salesman_id
-            WHERE s.id = ?
+            WHERE s.id = ? AND s.company_id = ?
             """,
-            (sale_id,),
+            (sale_id, cid),
         ).fetchone()
         
         if sale is None:
@@ -3546,8 +3598,8 @@ def sales_edit(sale_id: int):
         
         # Get customer data
         customer = conn.execute(
-            "SELECT id, name FROM customers WHERE id = ?",
-            (sale["customer_id"],),
+            "SELECT id, name FROM customers WHERE id = ? AND company_id = ?",
+            (sale["customer_id"], cid),
         ).fetchone()
         
         # Get sale items
@@ -3562,15 +3614,15 @@ def sales_edit(sale_id: int):
                 si.print_dual_units,
                 COALESCE(si.packing_multiplier, 1.0) as packing_multiplier,
                 si.notes,
-                COALESCE((SELECT stock_quantity FROM warehouse_inventory WHERE product_id = p.id AND warehouse_id = ?), 0) AS stock_quantity,
+                COALESCE((SELECT stock_quantity FROM warehouse_inventory WHERE product_id = p.id AND warehouse_id = ? AND company_id = ?), 0) AS stock_quantity,
                 p.is_open,
                 p.unit,
                 p.name
             FROM sale_items si
             LEFT JOIN products p ON p.id = si.product_id
-            WHERE si.sale_id = ?
+            WHERE si.sale_id = ? AND si.company_id = ?
             """,
-            (sale["warehouse_id"] or 1, sale_id,),
+            (sale["warehouse_id"] or 1, cid, sale_id, cid),
         ).fetchall()
         
         # Convert to dict and add stock quantity
@@ -3581,7 +3633,8 @@ def sales_edit(sale_id: int):
         
         # Get other data for the form
         customers = conn.execute(
-            "SELECT id, name, terms FROM customers ORDER BY name COLLATE NOCASE"
+            "SELECT id, name, terms FROM customers WHERE company_id = ? ORDER BY name COLLATE NOCASE",
+            (cid,)
         ).fetchall()
         
         recent_sales = conn.execute(
@@ -3603,19 +3656,21 @@ def sales_edit(sale_id: int):
             FROM sales s
             LEFT JOIN users u ON u.id = s.salesman_id
             LEFT JOIN customers c ON c.id = s.customer_id
-            LEFT JOIN sale_items si ON si.sale_id = s.id
-            GROUP BY s.id
+            LEFT JOIN sale_items si ON si.sale_id = s.id AND si.company_id = s.company_id
+            WHERE s.company_id = ?
+            GROUP BY s.id, c.name, u.username
             ORDER BY s.invoice_date DESC, s.id DESC
             LIMIT 10
-            """
+            """,
+            (cid,)
         ).fetchall()
         
         # Get users for dropdown
-        users_rows = conn.execute("SELECT id, username, role FROM users ORDER BY username").fetchall()
+        users_rows = conn.execute("SELECT id, username, role FROM users WHERE company_id = ? AND is_active = 1 ORDER BY username", (cid,)).fetchall()
         users_list = [dict(r) for r in users_rows]
         
         # Get warehouses
-        warehouses = conn.execute("SELECT id, name FROM warehouses ORDER BY name").fetchall()
+        warehouses = conn.execute("SELECT id, name FROM warehouses WHERE company_id = ? ORDER BY name", (cid,)).fetchall()
         
     finally:
         conn.close()
@@ -3626,7 +3681,7 @@ def sales_edit(sale_id: int):
         recent_sales=[dict(r) for r in recent_sales],
         all_users=users_list,
         warehouses=[dict(w) for w in warehouses],
-        next_invoice_number=get_next_invoice_number(),
+        next_invoice_number=get_next_invoice_number(cid),
         today=date.today().isoformat(),
         edit_mode=True,
         edit_sale=edit_sale,
@@ -3636,6 +3691,7 @@ def sales_edit(sale_id: int):
 @app.route("/sales/update/<int:sale_id>", methods=["POST"])
 @admin_required
 def sales_update(sale_id: int):
+    cid = current_user.company_id if hasattr(current_user, "company_id") and current_user.company_id else 1
     customer_id_raw = (request.form.get("customer_id") or "").strip()
     invoice_date = (request.form.get("invoice_date") or "").strip()
     due_date = (request.form.get("due_date") or "").strip()
@@ -3675,16 +3731,16 @@ def sales_update(sale_id: int):
             try:
                 if invoice_number:
                     row = conn_check.execute(
-                        "SELECT id FROM sales WHERE invoice_number = ? AND id != ?",
-                        (invoice_number, sale_id),
+                        "SELECT id FROM sales WHERE invoice_number = ? AND id != ? AND company_id = ?",
+                        (invoice_number, sale_id, cid),
                     ).fetchone()
                     if row is not None:
                         raise ValueError(f"Invoice number {invoice_number} already exists.")
 
                 if customer_id is not None:
                     row = conn_check.execute(
-                        "SELECT id FROM customers WHERE id = ?",
-                        (customer_id,),
+                        "SELECT id FROM customers WHERE id = ? AND company_id = ?",
+                        (customer_id, cid),
                     ).fetchone()
                     if row is None:
                         raise ValueError("Customer not found.")
@@ -3781,13 +3837,14 @@ def sales_update(sale_id: int):
             else:
                 status = 'unpaid'
 
-        if "generate_quote" in request.form:
-            # We don't generate inline anymore. Let it save to the DB, then redirect to sales_invoice_pdf at the end.
-            pass
-
         conn = get_connection()
         try:
             conn.execute("BEGIN")
+
+            sale_info = conn.execute("SELECT warehouse_id, status FROM sales WHERE id = ? AND company_id = ?", (sale_id, cid)).fetchone()
+            if not sale_info:
+                raise ValueError("Sale not found.")
+            was_quote = (sale_info["status"] == "quote")
 
             # Get old sale items to restore stock
             old_items = conn.execute(
@@ -3798,9 +3855,6 @@ def sales_update(sale_id: int):
                 """,
                 (sale_id,),
             ).fetchall()
-
-            sale_info = conn.execute("SELECT warehouse_id, status FROM sales WHERE id = ?", (sale_id,)).fetchone()
-            was_quote = (sale_info["status"] == "quote") if sale_info else False
 
             try:
                 salesman_id = int(salesman_id_raw) if salesman_id_raw else current_user.id
@@ -3833,7 +3887,7 @@ def sales_update(sale_id: int):
                 if net_deduct != 0:
                     net_deductions[product_id] = net_deduct
                     
-                cur = conn.execute("SELECT name FROM products WHERE id = ?", (product_id,))
+                cur = conn.execute("SELECT name FROM products WHERE id = ? AND company_id = ?", (product_id, cid))
                 row = cur.fetchone()
                 if row is None:
                     raise ValueError("One or more selected products are invalid.")
@@ -3855,27 +3909,31 @@ def sales_update(sale_id: int):
                             if stock_quantity + 1e-9 < new_qty:
                                 raise ValueError(f"Insufficient stock for {product_name} (requested {new_qty}, available {stock_quantity}).")
 
-            # If converting a quote to a sale, we must assign a new AK- invoice number
+            # If converting a quote to a sale, assign sequential tenant invoice number
             if was_quote and not is_quote:
+                company = conn.execute("SELECT invoice_prefix FROM companies WHERE id = ?", (cid,)).fetchone()
+                prefix = company["invoice_prefix"] if company and company["invoice_prefix"] else "INV-"
                 if invoice_number and invoice_number.startswith("Q-"):
-                    potential_invoice_num = "AK-" + invoice_number[2:]
-                    exists = conn.execute("SELECT 1 FROM sales WHERE invoice_number = ? AND id != ?", (potential_invoice_num, sale_id)).fetchone()
+                    potential_invoice_num = prefix + invoice_number[2:]
+                    exists = conn.execute("SELECT 1 FROM sales WHERE invoice_number = ? AND id != ? AND company_id = ?", (potential_invoice_num, sale_id, cid)).fetchone()
                     if not exists:
                         invoice_number = potential_invoice_num
                     else:
-                        invoice_number = get_next_invoice_number()
+                        invoice_number = get_next_invoice_number(cid)
                 else:
-                    # Just in case it was blank or not Q-
-                    invoice_number = get_next_invoice_number()
+                    invoice_number = get_next_invoice_number(cid)
 
             # Calculate commission for the updated sale
-            wh_row = conn.execute("SELECT commission_applies FROM warehouses WHERE id = ?", (new_wid,)).fetchone()
+            wh_row = conn.execute("SELECT commission_applies FROM warehouses WHERE id = ? AND company_id = ?", (new_wid, cid)).fetchone()
             commission_applies = int(wh_row["commission_applies"] or 0) if wh_row else 0
             
             commission_amount = 0
             for li in parsed_items:
                 if commission_applies:
-                    br_row = conn.execute("SELECT b.commission_rate FROM products p LEFT JOIN brands b ON LOWER(p.brand) = LOWER(b.name) WHERE p.id = ?", (li["product_id"],)).fetchone()
+                    br_row = conn.execute(
+                        "SELECT b.commission_rate FROM products p LEFT JOIN brands b ON LOWER(p.brand) = LOWER(b.name) AND b.company_id = ? WHERE p.id = ? AND p.company_id = ?",
+                        (cid, li["product_id"], cid),
+                    ).fetchone()
                     item_comm_rate = float(br_row["commission_rate"] or 0) if br_row and br_row["commission_rate"] is not None else 0
                 else:
                     item_comm_rate = 0
@@ -3888,7 +3946,7 @@ def sales_update(sale_id: int):
                 SET invoice_number = ?, customer_id = ?, invoice_date = ?, due_date = ?,
                     terms = ?, payment_type = ?, discount_amount = ?, subtotal = ?,
                     grand_total = ?, notes = ?, status = ?, amount_paid = ?, remaining_amount = ?, salesman_id = ?, warehouse_id = ?, commission_amount = ?
-                WHERE id = ?
+                WHERE id = ? AND company_id = ?
                 """,
                 (
                     invoice_number,
@@ -3908,6 +3966,7 @@ def sales_update(sale_id: int):
                     new_wid,
                     commission_amount,
                     sale_id,
+                    cid,
                 ),
             )
 
@@ -3919,9 +3978,9 @@ def sales_update(sale_id: int):
                 conn.execute(
                     """
                     INSERT INTO sale_items
-                        (sale_id, product_id, description, qty, rate, amount, cost_price, print_dual_units, packing_multiplier, commission_amount, notes)
+                        (sale_id, product_id, description, qty, rate, amount, cost_price, print_dual_units, packing_multiplier, commission_amount, notes, company_id)
                     VALUES
-                        (?, ?, ?, ?, ?, ?, COALESCE((SELECT cost_price FROM products WHERE id = ?), 0), ?, ?, ?, ?)
+                        (?, ?, ?, ?, ?, ?, COALESCE((SELECT cost_price FROM products WHERE id = ? AND company_id = ?), 0), ?, ?, ?, ?, ?)
                     """,
                     (
                         sale_id,
@@ -3931,15 +3990,17 @@ def sales_update(sale_id: int):
                         li["rate"],
                         li["amount"],
                         li["product_id"],
+                        cid,
                         li["print_dual_units"],
                         li["packing_multiplier"],
                         li["commission_amount"],
                         li.get("notes", None),
+                        cid,
                     ),
                 )
 
             # Apply stock changes depending on warehouse change
-            sale_info_stock = conn.execute("SELECT invoice_number FROM sales WHERE id = ?", (sale_id,)).fetchone()
+            sale_info_stock = conn.execute("SELECT invoice_number FROM sales WHERE id = ? AND company_id = ?", (sale_id, cid)).fetchone()
             invoice_number = sale_info_stock["invoice_number"] if sale_info_stock else str(sale_id)
             
             # If we are keeping it as a quote, do NOT touch inventory
@@ -3957,11 +4018,11 @@ def sales_update(sale_id: int):
                             if is_admin:
                                 conn.execute(
                                     """
-                                    INSERT INTO warehouse_inventory (product_id, warehouse_id, stock_quantity)
-                                    VALUES (?, ?, ?)
+                                    INSERT INTO warehouse_inventory (product_id, warehouse_id, stock_quantity, company_id)
+                                    VALUES (?, ?, ?, ?)
                                     ON CONFLICT(warehouse_id, product_id) DO UPDATE SET stock_quantity = stock_quantity - ?
                                     """,
-                                    (product_id, new_wid, -net_deduct, net_deduct),
+                                    (product_id, new_wid, -net_deduct, cid, net_deduct),
                                 )
                             else:
                                 upd = conn.execute(
@@ -3977,11 +4038,11 @@ def sales_update(sale_id: int):
                         else:
                             conn.execute(
                                 """
-                                INSERT INTO warehouse_inventory (product_id, warehouse_id, stock_quantity)
-                                VALUES (?, ?, ?)
+                                INSERT INTO warehouse_inventory (product_id, warehouse_id, stock_quantity, company_id)
+                                VALUES (?, ?, ?, ?)
                                 ON CONFLICT(warehouse_id, product_id) DO UPDATE SET stock_quantity = stock_quantity - ?
                                 """,
-                                (product_id, new_wid, -net_deduct, net_deduct),
+                                (product_id, new_wid, -net_deduct, cid, net_deduct),
                             )
                         
                         new_stock = old_stock - net_deduct
@@ -3989,9 +4050,9 @@ def sales_update(sale_id: int):
                         qty_change = -net_deduct if net_deduct > 0 else abs(net_deduct)
                         
                         conn.execute("""
-                            INSERT INTO inventory_history (product_id, transaction_type, quantity_change, previous_stock, new_stock, reference, warehouse_id)
-                            VALUES (?, ?, ?, ?, ?, ?, ?)
-                        """, (product_id, trans_type, qty_change, old_stock, new_stock, f'Invoice #{invoice_number} Edit', new_wid))
+                            INSERT INTO inventory_history (product_id, transaction_type, quantity_change, previous_stock, new_stock, reference, warehouse_id, company_id)
+                            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                        """, (product_id, trans_type, qty_change, old_stock, new_stock, f'Invoice #{invoice_number} Edit', new_wid, cid))
                 else:
                     # Warehouse changed. Restore all old items to old_wid, deduct all new items from new_wid.
                     # 1. Restore old
@@ -4003,17 +4064,17 @@ def sales_update(sale_id: int):
                         
                         conn.execute(
                             """
-                            INSERT INTO warehouse_inventory (product_id, warehouse_id, stock_quantity)
-                            VALUES (?, ?, ?)
+                            INSERT INTO warehouse_inventory (product_id, warehouse_id, stock_quantity, company_id)
+                            VALUES (?, ?, ?, ?)
                             ON CONFLICT(warehouse_id, product_id) DO UPDATE SET stock_quantity = stock_quantity + ?
                             """,
-                            (product_id, old_wid, qty, qty),
+                            (product_id, old_wid, qty, cid, qty),
                         )
                         new_stock = old_stock + qty
                         conn.execute("""
-                            INSERT INTO inventory_history (product_id, transaction_type, quantity_change, previous_stock, new_stock, reference, warehouse_id)
-                            VALUES (?, ?, ?, ?, ?, ?, ?)
-                        """, (product_id, 'IN', qty, old_stock, new_stock, f'Invoice #{invoice_number} Edit (Restored)', old_wid))
+                            INSERT INTO inventory_history (product_id, transaction_type, quantity_change, previous_stock, new_stock, reference, warehouse_id, company_id)
+                            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                        """, (product_id, 'IN', qty, old_stock, new_stock, f'Invoice #{invoice_number} Edit (Restored)', old_wid, cid))
                         
                     # 2. Deduct new
                     for product_id, qty in new_qty_by_product.items():
@@ -4026,11 +4087,11 @@ def sales_update(sale_id: int):
                         if is_admin:
                             conn.execute(
                                 """
-                                INSERT INTO warehouse_inventory (product_id, warehouse_id, stock_quantity)
-                                VALUES (?, ?, ?)
+                                INSERT INTO warehouse_inventory (product_id, warehouse_id, stock_quantity, company_id)
+                                VALUES (?, ?, ?, ?)
                                 ON CONFLICT(warehouse_id, product_id) DO UPDATE SET stock_quantity = stock_quantity - ?
                                 """,
-                                (product_id, new_wid, -qty, qty),
+                                (product_id, new_wid, -qty, cid, qty),
                             )
                         else:
                             upd = conn.execute(
@@ -4046,9 +4107,9 @@ def sales_update(sale_id: int):
                             
                         new_stock = old_stock - qty
                         conn.execute("""
-                            INSERT INTO inventory_history (product_id, transaction_type, quantity_change, previous_stock, new_stock, reference, warehouse_id)
-                            VALUES (?, ?, ?, ?, ?, ?, ?)
-                        """, (product_id, 'OUT', -qty, old_stock, new_stock, f'Invoice #{invoice_number} Edit', new_wid))
+                            INSERT INTO inventory_history (product_id, transaction_type, quantity_change, previous_stock, new_stock, reference, warehouse_id, company_id)
+                            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                        """, (product_id, 'OUT', -qty, old_stock, new_stock, f'Invoice #{invoice_number} Edit', new_wid, cid))
 
             conn.commit()
         except Exception as e:
@@ -4071,6 +4132,8 @@ def sales_update(sale_id: int):
 @app.route("/sales/<int:sale_id>/details", methods=["GET"])
 @login_required
 def sale_details(sale_id: int):
+    cid = current_user.company_id if hasattr(current_user, "company_id") and current_user.company_id else 1
+    is_admin = getattr(current_user, 'role', '') == 'admin'
     conn = get_connection()
     try:
         # Get sale details
@@ -4090,19 +4153,23 @@ def sale_details(sale_id: int):
                 s.amount_paid,
                 s.remaining_amount,
                 s.commission_amount,
+                s.salesman_id,
                 c.name as customer_name,
                 u.username as salesman_name,
                 (SELECT COALESCE(SUM((si.qty * COALESCE(si.packing_multiplier, 1.0) * si.cost_price) + COALESCE(si.commission_amount, 0)), 0) FROM sale_items si WHERE si.sale_id = s.id) as total_cost
             FROM sales s
             LEFT JOIN customers c ON c.id = s.customer_id
             LEFT JOIN users u ON u.id = s.salesman_id
-            WHERE s.id = ?
+            WHERE s.id = ? AND s.company_id = ?
             """,
-            (sale_id,),
+            (sale_id, cid),
         ).fetchone()
         
         if not sale:
             return jsonify({"error": "Sale not found"}), 404
+
+        if not is_admin and sale["salesman_id"] != current_user.id:
+            return jsonify({"error": "Unauthorized"}), 403
         
         # Get sale items
         items = conn.execute(
@@ -4122,8 +4189,16 @@ def sale_details(sale_id: int):
         
         rev = float(sale["grand_total"] or 0)
         cost = float(sale["total_cost"] or 0)
-        profit_margin = round(((rev - cost) / rev * 100), 2) if rev > 0 else 0
-        profit_amount = round(rev - cost, 2)
+
+        # Commercial privacy per ADR 0003
+        if is_admin:
+            profit_margin = round(((rev - cost) / rev * 100), 2) if rev > 0 else 0
+            profit_amount = round(rev - cost, 2)
+            total_cost = cost
+        else:
+            profit_margin = None
+            profit_amount = None
+            total_cost = None
 
         return jsonify({
             "id": sale["id"],
@@ -4143,6 +4218,7 @@ def sale_details(sale_id: int):
             "commission_amount": sale["commission_amount"],
             "profit_margin": profit_margin,
             "profit_amount": profit_amount,
+            "total_cost": total_cost,
             "items": [dict(item) for item in items]
         })
     finally:
@@ -4152,9 +4228,10 @@ def sale_details(sale_id: int):
 @app.route("/sales/by-invoice/<invoice_number>", methods=["GET"])
 @admin_required
 def sale_by_invoice(invoice_number: str):
+    cid = current_user.company_id if hasattr(current_user, "company_id") and current_user.company_id else 1
     conn = get_connection()
     try:
-        # Get sale details by invoice number
+        # Get sale details by invoice number scoped to company
         sale = conn.execute(
             """
             SELECT 
@@ -4172,9 +4249,9 @@ def sale_by_invoice(invoice_number: str):
                 c.name as customer_name
             FROM sales s
             LEFT JOIN customers c ON c.id = s.customer_id
-            WHERE s.invoice_number = ?
+            WHERE s.invoice_number = ? AND s.company_id = ?
             """,
-            (invoice_number,),
+            (invoice_number, cid),
         ).fetchone()
         
         if not sale:
@@ -4194,11 +4271,11 @@ def sale_by_invoice(invoice_number: str):
             LEFT JOIN products p ON p.id = si.product_id
             WHERE si.sale_id = (
                 SELECT id FROM sales 
-                WHERE invoice_number = ?
+                WHERE invoice_number = ? AND company_id = ?
             )
             ORDER BY si.id
             """,
-            (invoice_number,),
+            (invoice_number, cid),
         ).fetchall()
         
         return jsonify({
@@ -4219,6 +4296,7 @@ def sale_by_invoice(invoice_number: str):
 @app.route("/sales/<int:id>/invoice/pdf", methods=["GET"])
 @login_required
 def sales_invoice_pdf(id: int):
+    cid = current_user.company_id if hasattr(current_user, "company_id") and current_user.company_id else 1
     conn = get_connection()
     try:
         sale = conn.execute(
@@ -4227,11 +4305,12 @@ def sales_invoice_pdf(id: int):
                 s.id,
                 s.invoice_number,
                 s.customer_id,
-                s.salesman_id
+                s.salesman_id,
+                s.company_id
             FROM sales s
-            WHERE s.id = ?
+            WHERE s.id = ? AND s.company_id = ?
             """,
-            (id,),
+            (id, cid),
         ).fetchone()
         if sale is None:
             return Response("Sale not found", status=404)
@@ -4243,9 +4322,9 @@ def sales_invoice_pdf(id: int):
             """
             SELECT id, name, bill_address, ship_address
             FROM customers
-            WHERE id = ?
+            WHERE id = ? AND company_id = ?
             """,
-            (sale["customer_id"],),
+            (sale["customer_id"], cid),
         ).fetchone()
         if customer is None:
             customer = {"id": None, "name": "Quotation", "bill_address": "", "ship_address": ""}
@@ -4270,7 +4349,7 @@ def sales_invoice_pdf(id: int):
 
     pdf_bytes = generate_invoice_pdf(id)
     invoice_number = sale["invoice_number"] if sale else None
-    filename = f"{invoice_number}.pdf" if invoice_number else f"AK-invoice-{id}.pdf"
+    filename = f"{invoice_number}.pdf" if invoice_number else f"invoice-{id}.pdf"
 
     resp = Response(pdf_bytes, mimetype="application/pdf")
     resp.headers["Content-Disposition"] = f'inline; filename="{filename}"'
@@ -4280,10 +4359,11 @@ def sales_invoice_pdf(id: int):
 @app.route("/sales/<int:sale_id>/mark_sale", methods=["POST"])
 @login_required
 def sales_mark_sale(sale_id: int):
+    cid = current_user.company_id if hasattr(current_user, "company_id") and current_user.company_id else 1
     conn = get_connection()
     try:
         conn.execute("BEGIN")
-        sale = conn.execute("SELECT * FROM sales WHERE id = ?", (sale_id,)).fetchone()
+        sale = conn.execute("SELECT * FROM sales WHERE id = ? AND company_id = ?", (sale_id, cid)).fetchone()
         if not sale:
             conn.rollback()
             return jsonify({"success": False, "message": "Sale not found"})
@@ -4292,17 +4372,19 @@ def sales_mark_sale(sale_id: int):
             conn.rollback()
             return jsonify({"success": False, "message": "Only quotes can be marked as sales."})
 
-        # Generate actual invoice number
+        # Generate actual invoice number using company's prefix
         quote_invoice_num = sale["invoice_number"]
+        company = conn.execute("SELECT invoice_prefix FROM companies WHERE id = ?", (cid,)).fetchone()
+        prefix = company["invoice_prefix"] if company and company["invoice_prefix"] else "INV-"
         if quote_invoice_num and quote_invoice_num.startswith("Q-"):
-            potential_invoice_num = "AK-" + quote_invoice_num[2:]
-            exists = conn.execute("SELECT 1 FROM sales WHERE invoice_number = ?", (potential_invoice_num,)).fetchone()
+            potential_invoice_num = prefix + quote_invoice_num[2:]
+            exists = conn.execute("SELECT 1 FROM sales WHERE invoice_number = ? AND company_id = ?", (potential_invoice_num, cid)).fetchone()
             if not exists:
                 invoice_number = potential_invoice_num
             else:
-                invoice_number = get_next_invoice_number()
+                invoice_number = get_next_invoice_number(cid)
         else:
-            invoice_number = get_next_invoice_number()
+            invoice_number = get_next_invoice_number(cid)
 
         items = conn.execute("SELECT product_id, qty, packing_multiplier FROM sale_items WHERE sale_id = ?", (sale_id,)).fetchall()
 
@@ -4315,7 +4397,7 @@ def sales_mark_sale(sale_id: int):
             qty_total_by_product[it["product_id"]] += float(it["qty"]) * packing_multiplier
             
         for product_id, qty_total in qty_total_by_product.items():
-            cur = conn.execute("SELECT p.name, COALESCE((SELECT stock_quantity FROM warehouse_inventory WHERE product_id = p.id AND warehouse_id = ?), 0) as stock_quantity FROM products p WHERE p.id = ?", (wid, product_id,))
+            cur = conn.execute("SELECT p.name, COALESCE((SELECT stock_quantity FROM warehouse_inventory WHERE product_id = p.id AND warehouse_id = ?), 0) as stock_quantity FROM products p WHERE p.id = ? AND p.company_id = ?", (wid, product_id, cid))
             row = cur.fetchone()
             if row is None:
                 raise ValueError("Invalid product found in quote.")
@@ -4333,11 +4415,11 @@ def sales_mark_sale(sale_id: int):
             if is_admin:
                 conn.execute(
                     """
-                    INSERT INTO warehouse_inventory (product_id, warehouse_id, stock_quantity)
-                    VALUES (?, ?, ?)
+                    INSERT INTO warehouse_inventory (product_id, warehouse_id, stock_quantity, company_id)
+                    VALUES (?, ?, ?, ?)
                     ON CONFLICT(warehouse_id, product_id) DO UPDATE SET stock_quantity = stock_quantity - ?
                     """,
-                    (product_id, wid, -qty_total, qty_total),
+                    (product_id, wid, -qty_total, cid, qty_total),
                 )
             else:
                 upd = conn.execute(
@@ -4353,18 +4435,18 @@ def sales_mark_sale(sale_id: int):
             
             new_stock = old_stock - qty_total
             conn.execute("""
-                INSERT INTO inventory_history (product_id, transaction_type, quantity_change, previous_stock, new_stock, reference, warehouse_id)
-                VALUES (?, ?, ?, ?, ?, ?, ?)
-            """, (product_id, 'OUT', -qty_total, old_stock, new_stock, f'Invoice #{invoice_number}', wid))
+                INSERT INTO inventory_history (product_id, transaction_type, quantity_change, previous_stock, new_stock, reference, warehouse_id, company_id)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            """, (product_id, 'OUT', -qty_total, old_stock, new_stock, f'Invoice #{invoice_number}', wid, cid))
             
         # Update sale record to unpaid and new invoice number
         conn.execute(
             """
             UPDATE sales
             SET status = 'unpaid', invoice_number = ?
-            WHERE id = ?
+            WHERE id = ? AND company_id = ?
             """,
-            (invoice_number, sale_id)
+            (invoice_number, sale_id, cid)
         )
 
         data = request.get_json(silent=True) or {}
@@ -4381,8 +4463,8 @@ def sales_mark_sale(sale_id: int):
             
             conn.execute('''UPDATE sales 
                           SET amount_paid = ?, remaining_amount = ?, status = ?, payment_type = ?
-                          WHERE id = ?''',
-                       (new_amount_paid, new_remaining, new_status, payment_method.lower(), sale_id))
+                          WHERE id = ? AND company_id = ?''',
+                       (new_amount_paid, new_remaining, new_status, payment_method.lower(), sale_id, cid))
 
         conn.commit()
         return jsonify({"success": True, "new_invoice_number": invoice_number, "remaining_amount": sale["remaining_amount"]})
@@ -4396,9 +4478,17 @@ def sales_mark_sale(sale_id: int):
 @app.route("/sales/delete/<int:id>", methods=["POST"])
 @admin_required
 def sales_delete(id: int):
+    cid = current_user.company_id if hasattr(current_user, "company_id") and current_user.company_id else 1
     conn = get_connection()
     try:
         conn.execute("BEGIN")
+
+        cur = conn.execute("SELECT invoice_number, warehouse_id FROM sales WHERE id = ? AND company_id = ?", (id, cid))
+        row = cur.fetchone()
+        if not row:
+            conn.rollback()
+            flash("Sale not found.", "error")
+            return redirect(url_for("sales"))
 
         items = conn.execute(
             """
@@ -4409,13 +4499,11 @@ def sales_delete(id: int):
             (id,),
         ).fetchall()
 
-        cur = conn.execute("SELECT invoice_number, warehouse_id FROM sales WHERE id = ?", (id,))
-        row = cur.fetchone()
         invoice_number = row["invoice_number"] if row else str(id)
         wid = int(row["warehouse_id"]) if row and row["warehouse_id"] else (current_user.warehouse_id or 1)
         
         conn.execute("DELETE FROM sale_items WHERE sale_id = ?", (id,))
-        conn.execute("DELETE FROM sales WHERE id = ?", (id,))
+        conn.execute("DELETE FROM sales WHERE id = ? AND company_id = ?", (id, cid))
 
         for it in items:
             cur = conn.execute("SELECT stock_quantity FROM warehouse_inventory WHERE product_id = ? AND warehouse_id = ?", (it["product_id"], wid))
@@ -4426,17 +4514,17 @@ def sales_delete(id: int):
             
             conn.execute(
                 """
-                INSERT INTO warehouse_inventory (product_id, warehouse_id, stock_quantity)
-                VALUES (?, ?, ?)
+                INSERT INTO warehouse_inventory (product_id, warehouse_id, stock_quantity, company_id)
+                VALUES (?, ?, ?, ?)
                 ON CONFLICT(warehouse_id, product_id) DO UPDATE SET stock_quantity = ?
                 """,
-                (it["product_id"], wid, new_stock, new_stock),
+                (it["product_id"], wid, new_stock, cid, new_stock),
             )
             
             conn.execute("""
-                INSERT INTO inventory_history (product_id, transaction_type, quantity_change, previous_stock, new_stock, reference, warehouse_id)
-                VALUES (?, ?, ?, ?, ?, ?, ?)
-            """, (it["product_id"], 'IN', restored_qty, old_stock, new_stock, f'Invoice #{invoice_number} Deleted', wid))
+                INSERT INTO inventory_history (product_id, transaction_type, quantity_change, previous_stock, new_stock, reference, warehouse_id, company_id)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            """, (it["product_id"], 'IN', restored_qty, old_stock, new_stock, f'Invoice #{invoice_number} Deleted', wid, cid))
 
         conn.commit()
     except Exception:
@@ -4453,6 +4541,7 @@ def sales_delete(id: int):
 @app.route('/sales/<int:sale_id>/record_payment', methods=['POST'])
 @admin_required
 def record_payment(sale_id):
+    cid = current_user.company_id if hasattr(current_user, "company_id") and current_user.company_id else 1
     conn = get_connection()
     try:
         data = request.get_json(silent=True) or {}
@@ -4460,7 +4549,7 @@ def record_payment(sale_id):
         payment_method = data.get('payment_method', 'Cash')
         notes = data.get('notes', '')
 
-        sale = conn.execute('SELECT * FROM sales WHERE id = ?', (sale_id,)).fetchone()
+        sale = conn.execute('SELECT * FROM sales WHERE id = ? AND company_id = ?', (sale_id, cid)).fetchone()
 
         if not sale:
             return jsonify({'success': False, 'error': 'Sale not found'})
@@ -4477,8 +4566,8 @@ def record_payment(sale_id):
 
         conn.execute('''UPDATE sales 
                       SET amount_paid = ?, remaining_amount = ?, status = ?, payment_type = ?
-                      WHERE id = ?''',
-                   (new_amount_paid, new_remaining, new_status, payment_method.lower(), sale_id))
+                      WHERE id = ? AND company_id = ?''',
+                   (new_amount_paid, new_remaining, new_status, payment_method.lower(), sale_id, cid))
 
         conn.commit()
         return jsonify({'success': True})
@@ -4492,6 +4581,7 @@ def record_payment(sale_id):
 @app.route("/reports/stock-distribution/data", methods=["GET"])
 @admin_required
 def stock_distribution_data():
+    cid = current_user.company_id if hasattr(current_user, "company_id") and current_user.company_id else 1
     brand_filter = request.args.get("brand", "").strip()
     stock_level = request.args.get("stock_level", "").strip()
     product_search = request.args.get("product", "").strip()
@@ -4499,16 +4589,16 @@ def stock_distribution_data():
 
     conn = get_connection()
     try:
-        warehouses = conn.execute("SELECT id, name FROM warehouses ORDER BY id").fetchall()
+        warehouses = conn.execute("SELECT id, name FROM warehouses WHERE company_id = ? ORDER BY id", (cid,)).fetchall()
         wh_list = [{"id": w["id"], "name": w["name"]} for w in warehouses]
 
         query = """
             SELECT 
                 p.id, p.name, p.brand, p.cost_price
             FROM products p
-            WHERE 1=1
+            WHERE p.company_id = ?
         """
-        params = []
+        params = [cid]
         if brand_filter:
             query += " AND p.brand = ?"
             params.append(brand_filter)
@@ -4520,8 +4610,16 @@ def stock_distribution_data():
         
         products = conn.execute(query, params).fetchall()
         
-        # Now fetch all inventory
-        inv_rows = conn.execute("SELECT product_id, warehouse_id, stock_quantity FROM warehouse_inventory").fetchall()
+        # Now fetch all inventory for this company's products
+        inv_rows = conn.execute(
+            """
+            SELECT wi.product_id, wi.warehouse_id, wi.stock_quantity
+            FROM warehouse_inventory wi
+            JOIN products p ON p.id = wi.product_id
+            WHERE p.company_id = ?
+            """,
+            (cid,)
+        ).fetchall()
         
         inv_map = {} # product_id -> warehouse_id -> qty
         for r in inv_rows:
@@ -4573,21 +4671,22 @@ def stock_distribution_data():
 @app.route("/reports")
 @admin_required
 def reports():
+    cid = current_user.company_id if hasattr(current_user, "company_id") and current_user.company_id else 1
     conn = get_connection()
     try:
-        cur_c = conn.execute("SELECT id, name FROM customers ORDER BY name COLLATE NOCASE")
+        cur_c = conn.execute("SELECT id, name FROM customers WHERE company_id = ? ORDER BY name COLLATE NOCASE", (cid,))
         customers = [dict(r) for r in cur_c.fetchall()]
 
-        cur_p = conn.execute("SELECT id, name FROM products ORDER BY name COLLATE NOCASE")
+        cur_p = conn.execute("SELECT id, name FROM products WHERE company_id = ? ORDER BY name COLLATE NOCASE", (cid,))
         products = [dict(r) for r in cur_p.fetchall()]
 
-        cur_b = conn.execute("SELECT DISTINCT brand FROM products WHERE brand IS NOT NULL AND brand != '' ORDER BY brand COLLATE NOCASE")
+        cur_b = conn.execute("SELECT DISTINCT brand FROM products WHERE company_id = ? AND brand IS NOT NULL AND brand != '' ORDER BY brand COLLATE NOCASE", (cid,))
         brands = [r["brand"] for r in cur_b.fetchall()]
 
-        cur_s = conn.execute("SELECT id, name FROM suppliers ORDER BY name COLLATE NOCASE")
+        cur_s = conn.execute("SELECT id, name FROM suppliers WHERE company_id = ? ORDER BY name COLLATE NOCASE", (cid,))
         suppliers = [dict(r) for r in cur_s.fetchall()]
 
-        cur_w = conn.execute("SELECT id, name FROM warehouses ORDER BY name COLLATE NOCASE")
+        cur_w = conn.execute("SELECT id, name FROM warehouses WHERE company_id = ? ORDER BY name COLLATE NOCASE", (cid,))
         warehouses = [dict(r) for r in cur_w.fetchall()]
     finally:
         conn.close()
@@ -4604,6 +4703,9 @@ def reports():
 
 
 def parse_date_filters(conditions, params):
+    cid = current_user.company_id if hasattr(current_user, "company_id") and current_user.company_id else 1
+    conditions.append("s.company_id = ?")
+    params.append(cid)
     date_from = (request.args.get("date_from") or "").strip()
     date_to = (request.args.get("date_to") or "").strip()
     if date_from:
@@ -4988,11 +5090,13 @@ def reports_by_product():
 @app.route("/reports/inventory-additions", methods=["GET"])
 @admin_required
 def reports_inventory_additions():
+    cid = current_user.company_id if hasattr(current_user, "company_id") and current_user.company_id else 1
     conditions = [
         "ih.transaction_type = 'IN'",
         "ih.reference IN ('Initial Stock', 'Initial Stock (Legacy)', 'Manual Edit', 'Manual Edit (Edit Product)')",
+        "p.company_id = ?",
     ]
-    params = []
+    params = [cid]
     
     date_from = request.args.get("date_from", "").strip()
     date_to = request.args.get("date_to", "").strip()
@@ -5128,11 +5232,12 @@ def _export_csv_bytes(rows, header):
 @app.route("/reports/supplier-purchases/<int:supplier_id>", methods=["GET"])
 @admin_required
 def reports_supplier_purchases(supplier_id):
+    cid = current_user.company_id if hasattr(current_user, "company_id") and current_user.company_id else 1
     date_from = request.args.get("date_from", "").strip()
     date_to = request.args.get("date_to", "").strip()
     
-    conditions = ["p.supplier_id = ?"]
-    params = [supplier_id]
+    conditions = ["p.supplier_id = ?", "p.company_id = ?"]
+    params = [supplier_id, cid]
     
     if date_from:
         conditions.append("date(p.purchase_date) >= ?")
@@ -5183,6 +5288,7 @@ def reports_supplier_purchases(supplier_id):
 @app.route("/reports/profit")
 @admin_required
 def reports_profit():
+    cid = current_user.company_id if hasattr(current_user, "company_id") and current_user.company_id else 1
     from_date = request.args.get("from_date", "")
     to_date = request.args.get("to_date", "")
     brand = request.args.get("brand", "")
@@ -5200,9 +5306,9 @@ def reports_profit():
             FROM sales s
             JOIN sale_items si ON si.sale_id = s.id
             JOIN products p ON si.product_id = p.id
-            WHERE 1=1
+            WHERE s.company_id = ?
         '''
-        params = []
+        params = [cid]
         if from_date:
             query += " AND s.invoice_date >= ?"
             params.append(from_date)
@@ -5530,6 +5636,7 @@ def users_edit(user_id):
 @app.route("/warehouses")
 @admin_required
 def warehouses_list():
+    cid = current_user.company_id if hasattr(current_user, "company_id") and current_user.company_id else 1
     conn = get_connection()
     try:
         warehouses = conn.execute("""
@@ -5539,10 +5646,11 @@ def warehouses_list():
                    COALESCE(SUM(wi.stock_quantity * p.cost_price), 0) as total_inventory_value
             FROM warehouses w
             LEFT JOIN warehouse_inventory wi ON w.id = wi.warehouse_id
-            LEFT JOIN products p ON wi.product_id = p.id
+            LEFT JOIN products p ON wi.product_id = p.id AND p.company_id = ?
+            WHERE w.company_id = ?
             GROUP BY w.id
             ORDER BY w.name
-        """).fetchall()
+        """, (cid, cid)).fetchall()
         return render_template("warehouses.html", warehouses=[dict(w) for w in warehouses])
     finally:
         conn.close()
@@ -5550,6 +5658,7 @@ def warehouses_list():
 @app.route("/api/warehouse/recent_sales")
 @admin_required
 def api_warehouse_recent_sales():
+    cid = current_user.company_id if hasattr(current_user, "company_id") and current_user.company_id else 1
     warehouse_id = request.args.get("warehouse_id")
     if not warehouse_id:
         return jsonify([])
@@ -5563,10 +5672,10 @@ def api_warehouse_recent_sales():
             FROM sales s
             LEFT JOIN customers c ON s.customer_id = c.id
             LEFT JOIN users u ON s.salesman_id = u.id
-            WHERE s.warehouse_id = ? AND s.status != 'quote'
+            WHERE s.warehouse_id = ? AND s.company_id = ? AND s.status != 'quote'
             ORDER BY s.invoice_date DESC, s.id DESC
             LIMIT 5
-        """, (warehouse_id,))
+        """, (warehouse_id, cid))
         sales = [dict(row) for row in cur.fetchall()]
         return jsonify(sales)
     finally:
@@ -5575,6 +5684,7 @@ def api_warehouse_recent_sales():
 @app.route("/api/warehouse/inventory")
 @admin_required
 def api_warehouse_inventory():
+    cid = current_user.company_id if hasattr(current_user, "company_id") and current_user.company_id else 1
     warehouse_id = request.args.get("warehouse_id")
     if not warehouse_id:
         return jsonify([])
@@ -5591,9 +5701,9 @@ def api_warehouse_inventory():
                 (COALESCE(wi.stock_quantity, 0) * COALESCE(p.cost_price, 0)) as total_value
             FROM products p
             JOIN warehouse_inventory wi ON p.id = wi.product_id
-            WHERE wi.warehouse_id = ?
+            WHERE wi.warehouse_id = ? AND p.company_id = ?
             ORDER BY p.name COLLATE NOCASE
-        """, (warehouse_id,))
+        """, (warehouse_id, cid))
         inventory = [dict(row) for row in cur.fetchall()]
         return jsonify(inventory)
     finally:
@@ -5661,9 +5771,10 @@ def users_reset_password():
 @app.route("/pos")
 @login_required
 def pos():
+    cid = current_user.company_id if hasattr(current_user, "company_id") and current_user.company_id else 1
     conn = get_connection()
     try:
-        warehouses = conn.execute("SELECT id, name FROM warehouses ORDER BY name").fetchall()
+        warehouses = conn.execute("SELECT id, name FROM warehouses WHERE company_id = ? ORDER BY name", (cid,)).fetchall()
         return render_template("catalogue.html", warehouses=[dict(w) for w in warehouses])
     finally:
         conn.close()
@@ -5671,6 +5782,7 @@ def pos():
 @app.route("/pos/submit_order", methods=["POST"])
 @login_required
 def pos_submit_order():
+    cid = current_user.company_id if hasattr(current_user, "company_id") and current_user.company_id else 1
     data = request.json
     if not data:
         return jsonify({"ok": False, "error": "Invalid request format."}), 400
@@ -5693,7 +5805,7 @@ def pos_submit_order():
         return jsonify({"ok": False, "error": "Cart is empty."}), 400
 
     invoice_date = date.today().isoformat()
-    invoice_number = get_next_invoice_number()
+    invoice_number = get_next_invoice_number(cid)
     warehouse_id_raw = data.get("warehouse_id")
     wid = int(warehouse_id_raw) if warehouse_id_raw else (current_user.warehouse_id or 1)
     
@@ -5706,12 +5818,15 @@ def pos_submit_order():
             if not customer_name:
                 raise ValueError("Customer name is required.")
             cur = conn.execute(
-                "INSERT INTO customers (name, bill_address, ship_address, area, state, phone, email, terms, salesman_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
-                (customer_name, customer_bill, customer_ship, customer_area, customer_state, customer_phone, customer_email, customer_terms, current_user.id)
+                "INSERT INTO customers (name, bill_address, ship_address, area, state, phone, email, terms, salesman_id, company_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                (customer_name, customer_bill, customer_ship, customer_area, customer_state, customer_phone, customer_email, customer_terms, current_user.id, cid)
             )
             customer_id = int(cur.lastrowid)
         else:
             customer_id = int(customer_id)
+            cust_row = conn.execute("SELECT id FROM customers WHERE id = ? AND company_id = ?", (customer_id, cid)).fetchone()
+            if not cust_row:
+                raise ValueError("Customer not found.")
 
         # Parse items and calculate totals
         subtotal = 0
@@ -5735,7 +5850,7 @@ def pos_submit_order():
                     "amount": amount
                 })
             else:
-                cur = conn.execute("SELECT name, selling_price, cost_price, is_open FROM products WHERE id = ?", (product_id,))
+                cur = conn.execute("SELECT name, selling_price, cost_price, is_open FROM products WHERE id = ? AND company_id = ?", (product_id, cid))
                 row = cur.fetchone()
                 if not row:
                     raise ValueError(f"Invalid product ID {product_id}")
@@ -5771,7 +5886,7 @@ def pos_submit_order():
                 qty_total_by_product[li["product_id"]] += li["qty"] * li["packing_multiplier"]
             
         for product_id, qty_total in qty_total_by_product.items():
-            cur = conn.execute("SELECT p.name, COALESCE((SELECT stock_quantity FROM warehouse_inventory WHERE product_id = p.id AND warehouse_id = ?), 0) as stock_quantity FROM products p WHERE p.id = ?", (wid, product_id,))
+            cur = conn.execute("SELECT p.name, COALESCE((SELECT stock_quantity FROM warehouse_inventory WHERE product_id = p.id AND warehouse_id = ?), 0) as stock_quantity FROM products p WHERE p.id = ? AND p.company_id = ?", (wid, product_id, cid))
             row = cur.fetchone()
             if not row:
                 raise ValueError("One or more selected products are invalid.")
@@ -5801,13 +5916,16 @@ def pos_submit_order():
         print(f"DEBUG pos_submit_order: grand_total={grand_total}, amount_paid={amount_paid}, payment_type={payment_type}, remaining={remaining_amount}, status={status}")
 
         # Fetch commission rate
-        wh_row = conn.execute("SELECT commission_applies FROM warehouses WHERE id = ?", (wid,)).fetchone()
+        wh_row = conn.execute("SELECT commission_applies FROM warehouses WHERE id = ? AND company_id = ?", (wid, cid)).fetchone()
         commission_applies = int(wh_row["commission_applies"] or 0) if wh_row else 0
         
         commission_amount = 0
         for li in parsed_items:
-            if commission_applies:
-                br_row = conn.execute("SELECT b.commission_rate FROM products p LEFT JOIN brands b ON LOWER(p.brand) = LOWER(b.name) WHERE p.id = ?", (li["product_id"],)).fetchone()
+            if commission_applies and li["product_id"] != -1:
+                br_row = conn.execute(
+                    "SELECT b.commission_rate FROM products p LEFT JOIN brands b ON LOWER(p.brand) = LOWER(b.name) AND b.company_id = ? WHERE p.id = ? AND p.company_id = ?",
+                    (cid, li["product_id"], cid),
+                ).fetchone()
                 item_comm_rate = float(br_row["commission_rate"] or 0) if br_row and br_row["commission_rate"] is not None else 0
             else:
                 item_comm_rate = 0
@@ -5816,18 +5934,18 @@ def pos_submit_order():
 
         commission_rate = 0
 
-        # Insert sale
+        # Insert sale with company_id
         cur = conn.execute(
             """
             INSERT INTO sales
                 (invoice_number, customer_id, invoice_date, due_date, terms, payment_type,
-                 subtotal, grand_total, status, amount_paid, remaining_amount, salesman_id, warehouse_id, commission_rate, commission_amount)
+                 subtotal, grand_total, status, amount_paid, remaining_amount, salesman_id, warehouse_id, commission_rate, commission_amount, company_id)
             VALUES
-                (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 invoice_number, customer_id, invoice_date, data.get("due_date"), data.get("customer_terms"), payment_type,
-                subtotal, grand_total, status, amount_paid, remaining_amount, current_user.id, wid, commission_rate, commission_amount
+                subtotal, grand_total, status, amount_paid, remaining_amount, current_user.id, wid, commission_rate, commission_amount, cid
             )
         )
         sale_id = int(cur.lastrowid)
@@ -5837,9 +5955,9 @@ def pos_submit_order():
             conn.execute(
                 """
                 INSERT INTO sale_items
-                    (sale_id, product_id, description, qty, rate, amount, cost_price, packing_multiplier, commission_amount, notes)
+                    (sale_id, product_id, description, qty, rate, amount, cost_price, packing_multiplier, commission_amount, notes, company_id)
                 VALUES
-                    (?, ?, ?, ?, ?, ?, COALESCE((SELECT cost_price FROM products WHERE id = ?), 0.0), ?, ?, ?)
+                    (?, ?, ?, ?, ?, ?, COALESCE((SELECT cost_price FROM products WHERE id = ? AND company_id = ?), 0.0), ?, ?, ?, ?)
                 """,
                 (
                     sale_id, 
@@ -5849,31 +5967,33 @@ def pos_submit_order():
                     li["rate"], 
                     li["amount"], 
                     li["product_id"], 
-                    li["packing_multiplier"],
+                    cid,
+                    li.get("packing_multiplier", 1.0),
                     li["commission_amount"],
-                    li.get("notes", None)
+                    li.get("notes", None),
+                    cid,
                 )
             )
             
             if li["product_id"] != -1:
                 cur_stock = conn.execute("SELECT stock_quantity FROM warehouse_inventory WHERE product_id = ? AND warehouse_id = ?", (li["product_id"], wid)).fetchone()
                 old_stock = float(cur_stock["stock_quantity"] or 0) if cur_stock else 0
-                qty_deduct = li["qty"] * li["packing_multiplier"]
+                qty_deduct = li["qty"] * li.get("packing_multiplier", 1.0)
                 new_stock = old_stock - qty_deduct
                 
                 conn.execute(
                     """
-                    UPDATE warehouse_inventory
-                    SET stock_quantity = COALESCE(stock_quantity, 0) - ?
-                    WHERE product_id = ? AND warehouse_id = ?
+                    INSERT INTO warehouse_inventory (product_id, warehouse_id, stock_quantity, company_id)
+                    VALUES (?, ?, ?, ?)
+                    ON CONFLICT(warehouse_id, product_id) DO UPDATE SET stock_quantity = COALESCE(stock_quantity, 0) - ?
                     """,
-                    (qty_deduct, li["product_id"], wid)
+                    (li["product_id"], wid, -qty_deduct, cid, qty_deduct)
                 )
                 
                 conn.execute("""
-                    INSERT INTO inventory_history (product_id, transaction_type, quantity_change, previous_stock, new_stock, reference, warehouse_id)
-                    VALUES (?, 'OUT', ?, ?, ?, ?, ?)
-                """, (li["product_id"], -qty_deduct, old_stock, new_stock, f'Invoice #{invoice_number}', wid))
+                    INSERT INTO inventory_history (product_id, transaction_type, quantity_change, previous_stock, new_stock, reference, warehouse_id, company_id)
+                    VALUES (?, 'OUT', ?, ?, ?, ?, ?, ?)
+                """, (li["product_id"], -qty_deduct, old_stock, new_stock, f'Invoice #{invoice_number}', wid, cid))
 
         conn.commit()
         return jsonify({"ok": True, "sale_id": sale_id, "invoice_number": invoice_number})

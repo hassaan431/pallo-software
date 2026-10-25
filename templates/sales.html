@@ -2145,7 +2145,7 @@ function markAsSale(saleId) {
   // Update modal UI to reflect the conversion
   const rpTitle = document.getElementById('recordPaymentModal').querySelector('h3');
   rpTitle.textContent = 'Confirm Sale & Payment';
-  document.getElementById('rpInvoiceNumber').textContent = data.invoice_number + ' (Will convert to AK-)';
+  document.getElementById('rpInvoiceNumber').textContent = data.invoice_number + ' (Will convert to {{ current_company.invoice_prefix or "INV-" }})';
   
   currentSaleId = saleId;
   currentRemaining = data.remaining_amount;

@@ -155,7 +155,8 @@ def generate_invoice_pdf(sale_id: int) -> bytes:
                 s.payment_type,
                 s.amount_paid,
                 s.remaining_amount,
-                s.status
+                s.status,
+                s.company_id
             FROM sales s
             WHERE s.id = ?
             """,
@@ -163,6 +164,10 @@ def generate_invoice_pdf(sale_id: int) -> bytes:
         ).fetchone()
         if sale is None:
             raise ValueError(f"Sale not found: {sale_id}")
+
+        cid = sale["company_id"] if "company_id" in sale.keys() and sale["company_id"] else 1
+        company_row = conn.execute("SELECT * FROM companies WHERE id = ?", (cid,)).fetchone()
+        company = dict(company_row) if company_row else None
 
         customer = conn.execute(
             """
@@ -207,9 +212,9 @@ def generate_invoice_pdf(sale_id: int) -> bytes:
         conn.close()
 
     status = sale["status"] if "status" in sale.keys() else None
-    return generate_pdf_from_data(sale, customer, sale_items, is_quote=(status == "quote"))
+    return generate_pdf_from_data(sale, customer, sale_items, is_quote=(status == "quote"), company=company)
 
-def generate_pdf_from_data(sale: dict, customer: dict, sale_items: list, is_quote: bool = False) -> bytes:
+def generate_pdf_from_data(sale: dict, customer: dict, sale_items: list, is_quote: bool = False, company: dict = None) -> bytes:
     sale = dict(sale) if sale else {}
     customer = dict(customer) if customer else {}
     # Page setup
@@ -334,15 +339,21 @@ def generate_pdf_from_data(sale: dict, customer: dict, sale_items: list, is_quot
             company_x = zain_x + max_size + 18
             company_y = y_top - 18
     
+            comp_name = (company.get("name") if company else None) or "AK DISTRIBUTORS LLC"
+            comp_address = (company.get("bill_address") if company else None) or "Sacramento California 95838"
+            comp_country = "U.S.A"
+            comp_phone = (company.get("phone") if company else None) or "9163545678"
+            comp_email = (company.get("email") if company else None) or "akdistributorsusa@gmail.com"
+
             cnv.setFont("Helvetica-Bold", 13)
             cnv.setFillColor(_DARK_NAVY)
-            cnv.drawString(company_x, company_y, "AK DISTRIBUTORS LLC")
+            cnv.drawString(company_x, company_y, comp_name.upper())
             cnv.setFont("Helvetica", 10)
             cnv.setFillColor(_TEXT_GREY)
-            cnv.drawString(company_x, company_y - 15, "Sacramento California 95838")
-            cnv.drawString(company_x, company_y - 30, "U.S.A")
-            cnv.drawString(company_x, company_y - 45, "9163545678")
-            cnv.drawString(company_x, company_y - 60, "akdistributorsusa@gmail.com")
+            cnv.drawString(company_x, company_y - 15, comp_address)
+            cnv.drawString(company_x, company_y - 30, comp_country)
+            cnv.drawString(company_x, company_y - 45, comp_phone)
+            cnv.drawString(company_x, company_y - 60, comp_email)
     
             # INVOICE label far right
             cnv.setFont("Helvetica-Bold", 28)
