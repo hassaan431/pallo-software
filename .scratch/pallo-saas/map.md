@@ -1,0 +1,32 @@
+## Destination
+
+A fully functional, production-ready Pallo multi-tenant SaaS running on PostgreSQL, where multiple independent businesses can self-register, manage multi-warehouse inventory, execute sales/POS, and generate custom-branded PDF invoices, with AK Distributors preserved as Company 1 with 100% data fidelity and zero cross-tenant leakage.
+
+## Notes
+
+- **Domain**: Wholesale & Retail ERP, Multi-Tenant SaaS, PostgreSQL, Flask/Python, Jinja2, ReportLab.
+- **Skills to consult**: `domain-modeling`, `grilling`, `security-and-hardening`, `test-driven-development`, `dashboard-ui-charts`.
+- **Standing preferences**: Preserve existing emerald (`#10b981`) & slate UI design tokens; zero breaking changes to AK Distributors; no data loss; strict commercial privacy for margins.
+- **Issue Tracker**: Local Markdown tracker under `.scratch/pallo-saas/`.
+
+## Decisions so far
+
+- [Multi-tenancy Architecture](docs/adr/0001-shared-db-multi-tenancy-and-flask-evolution.md): Centralized single shared database partitioned by `company_id`.
+- [Global User Identity](docs/adr/0002-global-user-identity-and-unified-auth.md): Globally unique credentials for zero-friction unified login (`/login`).
+- [Role-Based Protection](docs/adr/0003-role-based-financial-and-cost-protection.md): Three standardized roles (`admin`, `salesman`, `warehouse_manager`) with sensitive supplier costs and profit margins strictly hidden from staff.
+- [Tenant Lifecycle Policy](docs/adr/0004-tenant-lifecycle-and-soft-deactivation.md): Soft-deactivation (`is_active = 0`) on account pause/suspension, preserving tax and accounting audit records.
+- [Database Engine Transition](docs/adr/0005-database-engine-transition-to-postgresql.md): Transition from SQLite to PostgreSQL with `ThreadedConnectionPool` and exact `NUMERIC` financial precision.
+- [PostgreSQL Connection & Pooling](issues/01-provision-postgres-connection-and-pooling.md): Thread-safe `ThreadedConnectionPool` with `PooledConnectionWrapper` auto-returning connections and defaulting to `RealDictCursor`, driven by `DATABASE_URL` with SQLite fallback.
+
+## Not yet specified
+
+- **Automated Cloud Backup & Point-in-Time Recovery**: S3/GCS automated WAL-archiving for automated daily tenant backups.
+- **Billing & Stripe Integration**: Self-serve checkout portal and subscription webhook listeners when transitioning from free launch to paid tiers.
+- **Custom Domains & White-label Vanity URLs**: Supporting custom DNS CNAME routing (`app.companyname.com`).
+- **Multi-Currency Real-time FX Rates**: Dynamic currency exchange rate conversion if tenants trade across international borders.
+
+## Out of scope
+
+- **Database-per-Tenant Architecture**: Ruled out in ADR 0001 in favor of centralized PostgreSQL shared database.
+- **Granular Custom Permission Matrix (Custom ACL)**: Ruled out in ADR 0003 in favor of three robust, opinionated roles.
+- **Hard-Deletion of Tenant Accounts on Suspension**: Ruled out in ADR 0004 to preserve commercial compliance and audit integrity.

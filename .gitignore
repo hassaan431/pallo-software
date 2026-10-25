@@ -1,5 +1,7 @@
-# Database (contains real data - never commit)
+# Database & Environment Secrets (never commit)
 database.db
+.env
+.env.local
 
 # Virtual environment (auto-generated, huge)
 .venv/

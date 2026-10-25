@@ -1,9 +1,22 @@
+import logging
+import os
 import re
 import sqlite3
-from pathlib import Path
 import sys
+import threading
+from contextlib import contextmanager
+from pathlib import Path
 
+from dotenv import load_dotenv
+import psycopg2
+from psycopg2.extras import RealDictCursor
+from psycopg2.pool import PoolError, ThreadedConnectionPool
 from werkzeug.security import generate_password_hash
+
+# Load environment variables from .env file if present
+load_dotenv()
+
+logger = logging.getLogger("pallo.database")
 
 # Use executable directory when frozen (PyInstaller), else use script directory
 if getattr(sys, 'frozen', False):
@@ -20,8 +33,194 @@ _DEFAULT_CATEGORY_NAMES = (
     "Other",
 )
 
+# Global PostgreSQL Threaded Connection Pool and sync lock
+_pg_pool = None
+_pg_pool_lock = threading.Lock()
+
+
+def normalize_database_url(url: str | None) -> str:
+    """Normalize DATABASE_URL for psycopg2 compatibility (e.g. postgres:// to postgresql://)."""
+    if not url:
+        return ""
+    url = url.strip()
+    if url.startswith("postgres://"):
+        url = "postgresql://" + url[len("postgres://"):]
+    return url
+
+
+def get_database_url() -> str:
+    """Return normalized DATABASE_URL from environment."""
+    return normalize_database_url(os.environ.get("DATABASE_URL", ""))
+
+
+def is_postgres_configured() -> bool:
+    """Check if a PostgreSQL DATABASE_URL is set in environment."""
+    return bool(get_database_url())
+
+
+def get_pool():
+    """Lazily initialize and return the global ThreadedConnectionPool."""
+    global _pg_pool
+    if _pg_pool is not None:
+        return _pg_pool
+
+    db_url = get_database_url()
+    if not db_url:
+        return None
+
+    with _pg_pool_lock:
+        if _pg_pool is None:
+            minconn = int(os.environ.get("DB_POOL_MIN", 1))
+            maxconn = int(os.environ.get("DB_POOL_MAX", 20))
+            logger.info("Initializing PostgreSQL ThreadedConnectionPool (min=%d, max=%d)", minconn, maxconn)
+            _pg_pool = ThreadedConnectionPool(minconn=minconn, maxconn=maxconn, dsn=db_url)
+    return _pg_pool
+
+
+def close_pool():
+    """Cleanly close all connections in the PostgreSQL connection pool."""
+    global _pg_pool
+    with _pg_pool_lock:
+        if _pg_pool is not None:
+            _pg_pool.closeall()
+            _pg_pool = None
+            logger.info("PostgreSQL ThreadedConnectionPool closed.")
+
+
+def get_pool_status() -> dict:
+    """Inspect current connection pool status."""
+    if not is_postgres_configured():
+        return {"configured": False, "engine": "sqlite"}
+    pool = get_pool()
+    if pool is None:
+        return {"configured": True, "status": "uninitialized"}
+    return {
+        "configured": True,
+        "engine": "postgresql",
+        "minconn": pool.minconn,
+        "maxconn": pool.maxconn,
+        "closed": pool.closed,
+    }
+
+
+class PooledConnectionWrapper:
+    """
+    Transparent proxy wrapper around a psycopg2 connection checked out from ThreadedConnectionPool.
+    - Intercepts .close() to return the connection to the pool rather than terminating the socket.
+    - Defaults .cursor() to use RealDictCursor for dict-like column access matching sqlite3.Row.
+    - Performs safety rollback on uncommitted transactions before pool return to prevent cross-request leakage.
+    """
+
+    def __init__(self, raw_conn, pool):
+        self._conn = raw_conn
+        self._pool = pool
+        self._returned = False
+
+    def cursor(self, *args, **kwargs):
+        if "cursor_factory" not in kwargs:
+            kwargs["cursor_factory"] = RealDictCursor
+        return self._conn.cursor(*args, **kwargs)
+
+    def commit(self):
+        return self._conn.commit()
+
+    def rollback(self):
+        return self._conn.rollback()
+
+    def close(self):
+        if not self._returned:
+            self._returned = True
+            try:
+                # If transaction is in progress or uncommitted, rollback to leave connection clean
+                if not self._conn.closed and self._conn.status != psycopg2.extensions.STATUS_READY:
+                    self._conn.rollback()
+            except Exception as e:
+                logger.warning("Error rolling back uncommitted connection before returning to pool: %s", e)
+            try:
+                self._pool.putconn(self._conn)
+            except Exception as e:
+                logger.error("Error returning connection to pool: %s", e)
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        if exc_type is not None:
+            try:
+                self.rollback()
+            except Exception:
+                pass
+        self.close()
+
+    def __getattr__(self, name):
+        return getattr(self._conn, name)
+
+
+@contextmanager
+def get_db_connection():
+    """
+    Context manager to borrow a connection from the pool and return it automatically on exit.
+    Usage:
+        with get_db_connection() as conn:
+            with conn.cursor() as cur:
+                cur.execute("SELECT ...")
+    """
+    conn = get_connection()
+    try:
+        yield conn
+    finally:
+        conn.close()
+
+
+@contextmanager
+def get_db_cursor(commit: bool = False):
+    """
+    Context manager to borrow a connection and yield a RealDictCursor directly.
+    Usage:
+        with get_db_cursor(commit=True) as cur:
+            cur.execute("INSERT ...")
+    """
+    conn = get_connection()
+    try:
+        cur = conn.cursor()
+        try:
+            yield cur
+            if commit:
+                conn.commit()
+        finally:
+            cur.close()
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
+
 
 def get_connection():
+    """
+    Returns an active database connection.
+    - If DATABASE_URL is set in environment/.env, checks out a thread-safe connection
+      from PostgreSQL ThreadedConnectionPool wrapped in PooledConnectionWrapper (RealDictCursor).
+    - If DATABASE_URL is not set, falls back to SQLite connection for smooth incremental transition.
+    """
+    if is_postgres_configured():
+        pool = get_pool()
+        if pool is not None:
+            try:
+                raw_conn = pool.getconn()
+                # Validate connection is alive; if broken, retry once with fresh connection
+                if raw_conn.closed != 0:
+                    try:
+                        pool.putconn(raw_conn, close=True)
+                    except Exception:
+                        pass
+                    raw_conn = pool.getconn()
+                return PooledConnectionWrapper(raw_conn, pool)
+            except Exception as e:
+                logger.error("Failed to checkout connection from PostgreSQL pool: %s", e)
+                raise
+
+    # Fallback to SQLite (preserves current ERP operation prior to full schema migration)
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA foreign_keys = ON")
