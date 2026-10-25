@@ -227,8 +227,54 @@ def get_connection():
     return conn
 
 
+POSTGRES_SCHEMA_PATH = Path(__file__).resolve().parent / "schema_postgres.sql"
+
+
+def get_postgres_schema_sql() -> str:
+    """Return the raw PostgreSQL multi-tenant schema DDL SQL."""
+    if POSTGRES_SCHEMA_PATH.exists():
+        return POSTGRES_SCHEMA_PATH.read_text(encoding="utf-8")
+    raise FileNotFoundError(f"PostgreSQL schema file not found at {POSTGRES_SCHEMA_PATH}")
+
+
+def init_postgres_db(conn=None):
+    """
+    Execute PostgreSQL DDL schema creating all 18 multi-tenant tables,
+    the companies master table, exact NUMERIC columns, and composite indices.
+    If conn is provided, executes on it; otherwise borrows a connection from the pool.
+    """
+    ddl_sql = get_postgres_schema_sql()
+    should_close = False
+    if conn is None:
+        conn = get_connection()
+        should_close = True
+
+    try:
+        with conn.cursor() as cur:
+            cur.execute(ddl_sql)
+        conn.commit()
+        logger.info("PostgreSQL multi-tenant schema initialized successfully.")
+    except Exception as e:
+        logger.error("Failed to initialize PostgreSQL multi-tenant schema: %s", e)
+        conn.rollback()
+        raise
+    finally:
+        if should_close:
+            conn.close()
+
+
 def init_db():
-    conn = get_connection()
+    """Initialize database schema according to the active database engine."""
+    if is_postgres_configured():
+        init_postgres_db()
+    else:
+        init_sqlite_db()
+
+
+def init_sqlite_db():
+    conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row
+    conn.execute("PRAGMA foreign_keys = ON")
     try:
         cur = conn.cursor()
         cur.executescript(

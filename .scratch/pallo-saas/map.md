@@ -17,6 +17,7 @@ A fully functional, production-ready Pallo multi-tenant SaaS running on PostgreS
 - [Tenant Lifecycle Policy](docs/adr/0004-tenant-lifecycle-and-soft-deactivation.md): Soft-deactivation (`is_active = 0`) on account pause/suspension, preserving tax and accounting audit records.
 - [Database Engine Transition](docs/adr/0005-database-engine-transition-to-postgresql.md): Transition from SQLite to PostgreSQL with `ThreadedConnectionPool` and exact `NUMERIC` financial precision.
 - [PostgreSQL Connection & Pooling](issues/01-provision-postgres-connection-and-pooling.md): Thread-safe `ThreadedConnectionPool` with `PooledConnectionWrapper` auto-returning connections and defaulting to `RealDictCursor`, driven by `DATABASE_URL` with SQLite fallback.
+- [PostgreSQL Multi-Tenant Schema](issues/02-define-postgres-multi-tenant-schema.md): Complete DDL schema covering all 18 tables with `company_id` CASCADE FKs, `companies` master table, exact `NUMERIC(14, 4)` types, and composite performance indices.
 
 ## Not yet specified
 

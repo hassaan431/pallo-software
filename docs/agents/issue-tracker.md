@@ -18,7 +18,7 @@ This document tracks implementation items, technical decisions, and milestones f
 - [ ] **M1: PostgreSQL Setup, Schema Creation & Data Migration**
   - [x] Add `psycopg2-binary` and `python-dotenv` to dependencies.
   - [x] Configure `DATABASE_URL` connection management with `ThreadedConnectionPool`.
-  - [ ] Build PostgreSQL multi-tenant schema with `company_id`, exact `NUMERIC` types, and composite indices.
+  - [x] Build PostgreSQL multi-tenant schema with `company_id`, exact `NUMERIC` types, and composite indices.
   - [ ] Write and run `migrate_sqlite_to_postgres.py` to transfer 100% of AK Distributors data to `company_id = 1`.
   - [ ] Add query helpers in `database.py` with `RealDictCursor`.
 
