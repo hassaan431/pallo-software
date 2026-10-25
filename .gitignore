@@ -25,3 +25,5 @@ static/uploads/products_backup/
 .agents/references/
 skills-lock.json
 videos/
+.neon
+node_modules/

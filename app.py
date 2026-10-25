@@ -20,6 +20,7 @@ from werkzeug.exceptions import HTTPException
 from functools import wraps
 
 from invoice_generator import generate_invoice_pdf
+import storage
 
 app = Flask(__name__)
 app.secret_key = os.environ.get("SECRET_KEY", "change-this-secret-key-for-local-use")
@@ -30,6 +31,19 @@ CORS(app, resources={r"/api/*": {"origins": "*"}})
 
 from api_routes import api_bp
 app.register_blueprint(api_bp, url_prefix='/api')
+
+@app.route("/healthz", methods=["GET"])
+def healthz():
+    """Health check endpoint for Render, keep-alive monitors, and orchestration."""
+    from database import is_postgres_configured
+    db_mode = "postgresql" if is_postgres_configured() else "sqlite"
+    return jsonify({
+        "status": "healthy",
+        "app": "Pallo Multi-Tenant SaaS",
+        "database": db_mode,
+        "storage": storage.get_storage_provider(),
+        "version": "1.0.0"
+    }), 200
 
 @app.route("/")
 def index():
@@ -642,11 +656,12 @@ def dashboard():
         now = date.today()
         current_month = f"{now.month:02d}"
         current_year = str(now.year)
+        month_pattern = f"{current_year}-{current_month}%"
         
         daily_cond = "company_id = ? AND invoice_date = ?"
         daily_params = [cid, today]
-        month_cond = "company_id = ? AND strftime('%m', invoice_date) = ? AND strftime('%Y', invoice_date) = ?"
-        month_params = [cid, current_month, current_year]
+        month_cond = "company_id = ? AND invoice_date LIKE ?"
+        month_params = [cid, month_pattern]
         
         if warehouse_id:
             daily_cond += " AND warehouse_id = ?"
@@ -663,8 +678,8 @@ def dashboard():
         # For joins involving sales:
         daily_cost_cond = "s.company_id = ? AND s.invoice_date = ?"
         daily_cost_params = [cid, today]
-        month_cost_cond = "s.company_id = ? AND strftime('%m', s.invoice_date) = ? AND strftime('%Y', s.invoice_date) = ?"
-        month_cost_params = [cid, current_month, current_year]
+        month_cost_cond = "s.company_id = ? AND s.invoice_date LIKE ?"
+        month_cost_params = [cid, month_pattern]
         
         if warehouse_id:
             daily_cost_cond += " AND s.warehouse_id = ?"
@@ -714,8 +729,8 @@ def dashboard():
 
         # Get monthly expenses
         monthly_expenses_row = conn.execute(
-            "SELECT COALESCE(SUM(amount), 0) as total FROM expenses WHERE company_id = ? AND strftime('%m', date) = ? AND strftime('%Y', date) = ?",
-            (cid, current_month, str(current_year))
+            "SELECT COALESCE(SUM(amount), 0) as total FROM expenses WHERE company_id = ? AND date LIKE ?",
+            (cid, month_pattern)
         ).fetchone()
         monthly_expenses = float(monthly_expenses_row["total"] or 0)
         monthly_net_profit = monthly_profit - monthly_expenses
@@ -5991,13 +6006,9 @@ def settings_company():
                         flash("Logo file exceeds maximum size of 2MB.", "danger")
                         return redirect(url_for("settings_company"))
                     
-                    logos_dir = os.path.join(app.root_path, "static", "logos", "companies")
-                    os.makedirs(logos_dir, exist_ok=True)
                     safe_filename = f"company_{cid}.{ext}"
-                    filepath = os.path.join(logos_dir, safe_filename)
-                    with open(filepath, "wb") as f:
-                        f.write(content)
-                    logo_url = f"/static/logos/companies/{safe_filename}"
+                    content_type = f"image/{'svg+xml' if ext == 'svg' else ext}"
+                    logo_url = storage.save_company_logo(content, safe_filename, content_type=content_type)
 
             if logo_url:
                 conn.execute(
@@ -6009,6 +6020,9 @@ def settings_company():
                     (name, tax_id, bill_address, ship_address, phone, email, currency, invoice_prefix, logo_url, cid)
                 )
             elif remove_logo:
+                existing_row = conn.execute("SELECT logo_url FROM companies WHERE id = ?", (cid,)).fetchone()
+                if existing_row and existing_row["logo_url"]:
+                    storage.delete_company_logo(existing_row["logo_url"])
                 conn.execute(
                     """
                     UPDATE companies

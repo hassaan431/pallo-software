@@ -9,12 +9,13 @@ from pathlib import Path
 
 from dotenv import load_dotenv
 import psycopg2
-from psycopg2.extras import RealDictCursor
+from psycopg2.extras import RealDictCursor, RealDictRow
 from psycopg2.pool import PoolError, ThreadedConnectionPool
 from werkzeug.security import generate_password_hash
 
-# Load environment variables from .env file if present
-load_dotenv()
+# Load environment variables from .env.local and .env files if present
+load_dotenv(".env.local")
+load_dotenv(".env")
 
 logger = logging.getLogger("pallo.database")
 
@@ -49,13 +50,31 @@ def normalize_database_url(url: str | None) -> str:
 
 
 def get_database_url() -> str:
-    """Return normalized DATABASE_URL from environment."""
+    """Return normalized DATABASE_URL from environment (pooled connection for app traffic)."""
     return normalize_database_url(os.environ.get("DATABASE_URL", ""))
+
+
+def get_direct_database_url() -> str:
+    """Return normalized unpooled DATABASE_URL for migrations/DDL (direct connection without PgBouncer)."""
+    unpooled = os.environ.get("DATABASE_URL_UNPOOLED", "").strip()
+    if unpooled:
+        return normalize_database_url(unpooled)
+    return get_database_url()
 
 
 def is_postgres_configured() -> bool:
     """Check if a PostgreSQL DATABASE_URL is set in environment."""
+    if os.environ.get("PALLO_TEST_SQLITE") == "1":
+        return False
     return bool(get_database_url())
+
+
+def get_sqlite_connection():
+    """Return a standard SQLite connection with Row factory and foreign keys enabled."""
+    conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row
+    conn.execute("PRAGMA foreign_keys = ON")
+    return conn
 
 
 def get_pool():
@@ -120,6 +139,13 @@ class PooledCursorWrapper:
     def execute(self, query, params=None):
         if "?" in query:
             query = query.replace("?", "%s")
+        if "is_active = 1 OR is_active IS TRUE" in query:
+            query = query.replace("is_active = 1 OR is_active IS TRUE", "is_active IS TRUE")
+        elif "is_active = 1" in query:
+            query = query.replace("is_active = 1", "is_active IS TRUE")
+        elif "is_active = 0" in query:
+            query = query.replace("is_active = 0", "is_active IS FALSE")
+
         if params is None:
             return self._cur.execute(query)
         if isinstance(params, list):
@@ -144,11 +170,29 @@ class PooledCursorWrapper:
         return getattr(self._cur, name)
 
 
+class SQLiteCompatibleRow(RealDictRow):
+    """
+    Subclass of RealDictRow that supports both column-name access (row['name'])
+    and zero-based integer index access (row[0], row[1]), perfectly matching sqlite3.Row.
+    """
+    def __getitem__(self, key):
+        if isinstance(key, int):
+            return list(self.values())[key]
+        return super().__getitem__(key)
+
+
+class SQLiteCompatibleCursor(RealDictCursor):
+    """RealDictCursor variant using SQLiteCompatibleRow as its row_factory."""
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.row_factory = SQLiteCompatibleRow
+
+
 class PooledConnectionWrapper:
     """
     A lightweight thread-safe wrapper around a psycopg2 pooled connection that:
     - Overrides .close() to return the connection back to the ThreadedConnectionPool instead of terminating it.
-    - Defaults .cursor() to use RealDictCursor for dict-like column access matching sqlite3.Row.
+    - Defaults .cursor() to use SQLiteCompatibleCursor for dict-like and index-like access matching sqlite3.Row.
     - Performs safety rollback on uncommitted transactions before pool return to prevent cross-request leakage.
     - Provides .execute() and adapts '?' parameter placeholders to '%s' for transparent cross-database queries.
     """
@@ -160,7 +204,7 @@ class PooledConnectionWrapper:
 
     def cursor(self, *args, **kwargs):
         if "cursor_factory" not in kwargs:
-            kwargs["cursor_factory"] = RealDictCursor
+            kwargs["cursor_factory"] = SQLiteCompatibleCursor
         raw_cur = self._conn.cursor(*args, **kwargs)
         return PooledCursorWrapper(raw_cur)
 
@@ -269,10 +313,7 @@ def get_connection():
                 raise
 
     # Fallback to SQLite (preserves current ERP operation prior to full schema migration)
-    conn = sqlite3.connect(DB_PATH)
-    conn.row_factory = sqlite3.Row
-    conn.execute("PRAGMA foreign_keys = ON")
-    return conn
+    return get_sqlite_connection()
 
 
 POSTGRES_SCHEMA_PATH = Path(__file__).resolve().parent / "schema_postgres.sql"
@@ -289,12 +330,13 @@ def init_postgres_db(conn=None):
     """
     Execute PostgreSQL DDL schema creating all 18 multi-tenant tables,
     the companies master table, exact NUMERIC columns, and composite indices.
-    If conn is provided, executes on it; otherwise borrows a connection from the pool.
+    If conn is provided, executes on it; otherwise connects directly via unpooled URL.
     """
     ddl_sql = get_postgres_schema_sql()
     should_close = False
     if conn is None:
-        conn = get_connection()
+        direct_url = get_direct_database_url()
+        conn = psycopg2.connect(direct_url)
         should_close = True
 
     try:

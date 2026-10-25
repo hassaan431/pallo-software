@@ -117,10 +117,20 @@ def sanitize_row_for_postgres(
         data["is_active"] = bool(data["is_active"]) if data["is_active"] is not None else True
     if "show_on_website" in data:
         data["show_on_website"] = bool(data["show_on_website"]) if data["show_on_website"] is not None else True
-    if "show_in_brochure" in data:
-        data["show_in_brochure"] = int(data["show_in_brochure"]) if data["show_in_brochure"] is not None else 1
-    if "is_public" in data:
-        data["is_public"] = int(data["is_public"]) if data["is_public"] is not None else 1
+    if table == "brands":
+        if "show_in_brochure" in data:
+            data["show_in_brochure"] = bool(data["show_in_brochure"]) if data["show_in_brochure"] is not None else True
+        if "show_on_website" in data:
+            data["show_on_website"] = bool(data["show_on_website"]) if data["show_on_website"] is not None else True
+    elif table == "products":
+        if "show_in_brochure" in data:
+            data["show_in_brochure"] = int(data["show_in_brochure"]) if data["show_in_brochure"] is not None else 1
+        if "is_public" in data:
+            data["is_public"] = int(data["is_public"]) if data["is_public"] is not None else 1
+
+    if table in ("users", "companies"):
+        if "is_active" in data and data["is_active"] is not None:
+            data["is_active"] = bool(data["is_active"])
 
     # Foreign key sanitation for nullable relations
     if table == "sales":
@@ -258,14 +268,15 @@ def migrate_data(sqlite_conn, pg_conn) -> Dict[str, Tuple[int, int]]:
     for t in ["warehouses", "categories", "brands", "suppliers", "users", "customers", "products", "purchases", "sales", "inventory_transfers"]:
         rows = sqlite_cur.execute(f"SELECT id FROM {t}").fetchall()
         valid_ids[t] = {r["id"] for r in rows}
-
-    # Ensure stubs for any missing parents required by hard foreign keys
-    ensure_parent_stubs(sqlite_conn, valid_ids, pg_conn)
-
     # 3. Migrate tables in topological dependency order
     for table in TABLE_ORDER:
         if table == "companies":
             continue
+
+        if table == "inventory_transfers":
+            # Ensure stubs for any missing parents required by hard foreign keys
+            # (warehouses and products are already migrated to PostgreSQL by this point)
+            ensure_parent_stubs(sqlite_conn, valid_ids, pg_conn)
 
         sqlite_rows = sqlite_cur.execute(f"SELECT * FROM {table}").fetchall()
         sqlite_count = len(sqlite_rows)

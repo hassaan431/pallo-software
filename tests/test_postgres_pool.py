@@ -28,9 +28,9 @@ class TestPostgresConnectionPool(unittest.TestCase):
         )
 
     def test_is_postgres_configured(self):
-        with patch.dict(os.environ, {"DATABASE_URL": ""}, clear=True):
+        with patch.dict(os.environ, {"DATABASE_URL": "", "PALLO_TEST_SQLITE": ""}, clear=True):
             self.assertFalse(database.is_postgres_configured())
-        with patch.dict(os.environ, {"DATABASE_URL": "postgresql://localhost/testdb"}):
+        with patch.dict(os.environ, {"DATABASE_URL": "postgresql://localhost/testdb", "PALLO_TEST_SQLITE": ""}):
             self.assertTrue(database.is_postgres_configured())
 
     def test_sqlite_fallback_when_database_url_not_set(self):
@@ -53,7 +53,7 @@ class TestPostgresConnectionPool(unittest.TestCase):
 
         wrapper = database.PooledConnectionWrapper(mock_raw_conn, mock_pool)
         wrapper.cursor()
-        mock_raw_conn.cursor.assert_called_once_with(cursor_factory=RealDictCursor)
+        mock_raw_conn.cursor.assert_called_once_with(cursor_factory=database.SQLiteCompatibleCursor)
 
     def test_pooled_connection_wrapper_close_returns_to_pool(self):
         mock_raw_conn = MagicMock()

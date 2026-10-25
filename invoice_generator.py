@@ -107,12 +107,24 @@ def _draw_logo_placeholder(cnv, x, y, w, h, label):
 def _draw_logo(cnv, logo_path: str, x: float, y: float, max_size: float):
     """
     Draws a logo image at (x, y) scaled to max_size x max_size.
+    Supports local filesystem paths and remote HTTP/HTTPS URLs (Cloudflare R2/S3).
     Returns drawn width (points) when successful, else None.
     """
-    if not os.path.exists(logo_path):
+    if not logo_path:
         return None
     try:
-        img = ImageReader(logo_path)
+        if logo_path.startswith("http://") or logo_path.startswith("https://"):
+            import io
+            import urllib.request
+            req = urllib.request.Request(logo_path, headers={"User-Agent": "Pallo-PDF/1.0"})
+            with urllib.request.urlopen(req, timeout=5) as resp:
+                data = resp.read()
+            img = ImageReader(io.BytesIO(data))
+        else:
+            if not os.path.exists(logo_path):
+                return None
+            img = ImageReader(logo_path)
+
         img_w, img_h = img.getSize()
         if img_w <= 0 or img_h <= 0:
             return None
@@ -363,12 +375,15 @@ def generate_pdf_from_data(sale: dict, customer: dict, sale_items: list, is_quot
                 tenant_logo_path = None
                 logo_url = company.get("logo_url")
                 if logo_url:
-                    cleaned_url = logo_url.lstrip("/")
-                    possible_path = os.path.join(BASE_DIR, cleaned_url)
-                    if os.path.exists(possible_path):
-                        tenant_logo_path = possible_path
-                    elif os.path.exists(logo_url):
+                    if logo_url.startswith("http://") or logo_url.startswith("https://"):
                         tenant_logo_path = logo_url
+                    else:
+                        cleaned_url = logo_url.lstrip("/")
+                        possible_path = os.path.join(BASE_DIR, cleaned_url)
+                        if os.path.exists(possible_path):
+                            tenant_logo_path = possible_path
+                        elif os.path.exists(logo_url):
+                            tenant_logo_path = logo_url
 
                 tenant_draw_w = None
                 if tenant_logo_path:

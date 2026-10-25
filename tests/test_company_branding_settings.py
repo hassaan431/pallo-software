@@ -186,11 +186,12 @@ class TestCompanyBrandingSettings(unittest.TestCase):
         conn = database.get_connection()
         try:
             row = conn.execute("SELECT logo_url FROM companies WHERE id = ?", (self.c1_id,)).fetchone()
-            self.assertEqual(row["logo_url"], f"/static/logos/companies/company_{self.c1_id}.png")
-            
-            # Verify file exists on disk
-            saved_path = os.path.join(self.app.root_path, "static", "logos", "companies", f"company_{self.c1_id}.png")
-            self.assertTrue(os.path.exists(saved_path))
+            self.assertTrue(row["logo_url"].endswith(f"company_{self.c1_id}.png"))
+            if row["logo_url"].startswith("http"):
+                self.assertTrue("storage." in row["logo_url"] or "r2." in row["logo_url"])
+            else:
+                saved_path = os.path.join(self.app.root_path, "static", "logos", "companies", f"company_{self.c1_id}.png")
+                self.assertTrue(os.path.exists(saved_path))
         finally:
             conn.close()
 
