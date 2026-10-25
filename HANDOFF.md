@@ -63,21 +63,25 @@ A production-ready **Pallo** multi-tenant SaaS running on PostgreSQL, where mult
 ---
 
 ## Standing Context & Established Rules
-1. **Database Engine**: Centralized PostgreSQL with `ThreadedConnectionPool` using `DATABASE_URL` with seamless fallback to SQLite.
-2. **Multi-Tenancy**: Single shared database partitioned by `company_id`. All queries strictly scoped (`WHERE company_id = ?`).
-3. **Preserve AK Distributors**: Existing `database.db` SQLite data is preserved under `company_id = 1` ("AK Distributors LLC") with zero downtime/data loss.
-4. **Branding & UI**: Keep the software's existing emerald (`#10b981`) and slate design system tokens. Do not alter color tokens. Global app brand is **Pallo**.
-5. **Deployment & Restart Rules** (from `.agents/AGENTS.md`):
+1. **Live Production Status**: Deployed live on Render at **https://pallo-app.onrender.com**.
+2. **Database Engine**: Centralized Serverless PostgreSQL 16 on Neon.tech with `ThreadedConnectionPool` using `DATABASE_URL` (with fallback to SQLite for local tests).
+3. **Media & Object Storage**: Cloudflare R2 (`pallo-media` bucket) serving persistent company logos and invoice assets with $0 egress bandwidth.
+4. **Git Repository Boundary**: This workspace (`/Users/hassaanjazz/Desktop/Projects/SaaS/Pallo`) is strictly bound to `origin` at **https://github.com/hassaan431/pallo-software.git**. Never commit or push to `ak-distributors-app`.
+5. **Multi-Tenancy**: Single shared database partitioned by `company_id`. All queries strictly scoped (`WHERE company_id = ?`).
+6. **Preserve AK Distributors**: Existing data is preserved under `company_id = 1` ("AK Distributors LLC") with zero downtime/data loss.
+7. **Branding & UI**: Software's existing emerald (`#10b981`) and slate design system tokens. Global app brand is **Pallo**.
+8. **Deployment & Restart Rules** (from `.agents/AGENTS.md`):
    - Test locally first: Run `python3 launch.py` in background.
    - Restart rule: Automatically restart server when making backend/template changes using:
-     `lsof -t -i :5000 | xargs kill -9 && python3 launch.py`
+     `lsof -t -i :5000 | xargs kill -9 2>/dev/null; python3 launch.py`
    - Push to GitHub only after user explicitly verifies and approves.
-   - Inform user to run `git pull` on PythonAnywhere console and reload web app for production deploys.
+   - Deployments auto-trigger on Render via `git push origin main`.
 
 ---
 
 ## Canonical Documentation & Artifacts
 - **Wayfinder Map**: [.scratch/pallo-saas/map.md](file:///.scratch/pallo-saas/map.md)
+- **Deployment Map**: [.scratch/pallo-saas/deployment-map.md](file:///.scratch/pallo-saas/deployment-map.md)
 - **ADRs**:
   - [ADR 0001: Shared Database Multi-Tenancy Architecture](file:///docs/adr/0001-shared-db-multi-tenancy-and-flask-evolution.md)
   - [ADR 0002: Global User Identity & Unified Authentication](file:///docs/adr/0002-global-user-identity-and-unified-auth.md)
@@ -85,14 +89,22 @@ A production-ready **Pallo** multi-tenant SaaS running on PostgreSQL, where mult
   - [ADR 0004: Tenant Lifecycle & Soft-Deactivation Policy](file:///docs/adr/0004-tenant-lifecycle-and-soft-deactivation.md)
   - [ADR 0005: Database Engine Transition to PostgreSQL](file:///docs/adr/0005-database-engine-transition-to-postgresql.md)
 - **Domain Glossary**: [GLOSSARY.md](file:///GLOSSARY.md)
-- **Milestone Tracker**: [docs/agents/issue-tracker.md](file:///docs/agents/issue-tracker.md) (All M1 - M7 milestones completed)
-- `security-and-hardening`: For validating tenant isolation assertions and cross-company rejection.
-- `test-driven-development`: For end-to-end multi-tenant isolation testing.
+- **Test Suite**: 77 passing unit/integration tests (`python3 -m pytest tests/ -v`).
 
 ---
 
-## Prompt to Start Next Session
-Copy and paste this into the new window:
+## Prompt to Start Next Session (System Architecture & Beginner Deep Dive)
+Copy and paste this into a new session whenever you want to explore or explain the system:
 ```text
-We have completed all 11 tickets for the Pallo Multi-Tenant SaaS conversion on PostgreSQL. Please review HANDOFF.md, .scratch/pallo-saas/map.md, and docs/agents/issue-tracker.md for full context. Run the automated test suite (`python3 -m unittest discover tests`) to verify the 74 tests pass, ensure the local server is running on port 5000 via `python3 launch.py`, and let me know the status and next steps for production deployment and SaaS operations.
+I am the owner of Pallo SaaS. I am an absolute beginner to software architecture and web development, and I want you to walk me through how the entire application works from top to bottom. 
+
+Please review HANDOFF.md, .scratch/pallo-saas/deployment-map.md, and docs/adr/ for full architectural context.
+
+Explain each part in plain, friendly, non-jargon English using real-world analogies:
+1. The 3-Tier Cloud Setup: How Render (Compute), Neon (PostgreSQL Database), and Cloudflare R2 (Storage) work together when a user visits the site.
+2. The Multi-Tenant Architecture: How multiple independent companies (like AK Distributors and newly registered businesses) use the same codebase and database without ever seeing each other's data.
+3. The Core Business Workflows: How inventory stock, sales POS, sequential invoices, PDF generation, and customer ledgers operate behind the scenes.
+4. User Roles & Security: How SuperAdmin, Tenant Admin, and Salesman permissions differ, and how cost/profit margin data is protected.
+
+Please pause after each section so I can ask questions and clarify things before moving to the next section.
 ```
