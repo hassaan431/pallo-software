@@ -117,8 +117,8 @@ class TestPostgresConnectionPool(unittest.TestCase):
             with database.get_db_cursor(commit=True) as cur:
                 cur.execute("SELECT 1")
 
-            cur.execute.assert_called_once_with("SELECT 1")
-            cur.close.assert_called_once()
+            mock_cursor.execute.assert_called_once_with("SELECT 1")
+            mock_cursor.close.assert_called_once()
             mock_raw_conn.commit.assert_called_once()
             mock_pool.putconn.assert_called_once_with(mock_raw_conn)
 

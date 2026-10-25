@@ -353,32 +353,33 @@ def handle_exception(e):
 @admin_required
 def brochure_settings():
     from database import get_connection
+    cid = current_user.company_id if current_user.is_authenticated else 1
     conn = get_connection()
     try:
         if request.method == "POST":
-            # Reset all to 0
-            conn.execute("UPDATE brands SET show_in_brochure = 0")
-            conn.execute("UPDATE products SET show_in_brochure = 0")
+            # Reset all for current company
+            conn.execute("UPDATE brands SET show_in_brochure = 0 WHERE company_id = ?", (cid,))
+            conn.execute("UPDATE products SET show_in_brochure = 0 WHERE company_id = ?", (cid,))
             
             # Get selected brands and products
             selected_brands = request.form.getlist("brands")
             selected_products = request.form.getlist("products")
             
             for b_id in selected_brands:
-                conn.execute("UPDATE brands SET show_in_brochure = 1 WHERE id = ?", (b_id,))
+                conn.execute("UPDATE brands SET show_in_brochure = 1 WHERE id = ? AND company_id = ?", (b_id, cid))
             for p_id in selected_products:
-                conn.execute("UPDATE products SET show_in_brochure = 1 WHERE id = ?", (p_id,))
+                conn.execute("UPDATE products SET show_in_brochure = 1 WHERE id = ? AND company_id = ?", (p_id, cid))
                 
             conn.commit()
             flash("Brochure settings updated successfully.", "success")
             return redirect(url_for("brochure_settings"))
             
-        brands = conn.execute("SELECT id, name, show_in_brochure FROM brands ORDER BY name").fetchall()
+        brands = conn.execute("SELECT id, name, show_in_brochure FROM brands WHERE company_id = ? ORDER BY name", (cid,)).fetchall()
         
         # We want to group products by brand to make the UI easier
         products_by_brand = {}
         
-        products = conn.execute("SELECT id, name, brand, show_in_brochure FROM products ORDER BY name").fetchall()
+        products = conn.execute("SELECT id, name, brand, show_in_brochure FROM products WHERE company_id = ? ORDER BY name", (cid,)).fetchall()
         for p in products:
             b = p['brand'] or 'Uncategorized'
             if b not in products_by_brand:
@@ -503,7 +504,8 @@ def regenerate_brochure():
             print(f"[!] Error optimizing image {abs_path}: {e}")
             return None
 
-    products = get_brochure_products()
+    cid = current_user.company_id if current_user.is_authenticated else 1
+    products = get_brochure_products(cid)
     brands = {}
     brand_logos = {}
     
@@ -742,8 +744,14 @@ def dashboard():
 
 
 @app.route("/inventory")
-@admin_required
+@login_required
 def inventory():
+    if current_user.role not in ('admin', 'superadmin', 'warehouse_manager'):
+        return redirect(url_for('pos'))
+
+    cid = current_user.company_id
+    is_admin = current_user.role in ('admin', 'superadmin')
+
     brand_filter = request.args.get("brand", "").strip()
     date_from = request.args.get("date_from", "").strip()
     date_to = request.args.get("date_to", "").strip()
@@ -762,11 +770,14 @@ def inventory():
 
     conn = get_connection()
     try:
-        warehouses = conn.execute("SELECT id, name FROM warehouses ORDER BY name").fetchall()
+        warehouses = conn.execute("SELECT id, name FROM warehouses WHERE company_id = ? ORDER BY name", (cid,)).fetchall()
         
-        stock_select = "COALESCE((SELECT SUM(stock_quantity) FROM warehouse_inventory WHERE product_id = p.id), 0)"
         if warehouse_id:
-            stock_select = f"COALESCE((SELECT stock_quantity FROM warehouse_inventory WHERE product_id = p.id AND warehouse_id = ?), 0)"
+            stock_select = "COALESCE((SELECT stock_quantity FROM warehouse_inventory WHERE product_id = p.id AND warehouse_id = ? AND company_id = ?), 0)"
+            params = [warehouse_id, cid, cid]
+        else:
+            stock_select = "COALESCE((SELECT SUM(stock_quantity) FROM warehouse_inventory WHERE product_id = p.id AND company_id = ?), 0)"
+            params = [cid, cid]
             
         query = f"""
             SELECT
@@ -785,15 +796,12 @@ def inventory():
                 p.is_open,
                 c.name AS category_name
             FROM products p
-            LEFT JOIN categories c ON p.category_id = c.id
-            WHERE 1=1
+            LEFT JOIN categories c ON (p.category_id = c.id AND c.company_id = p.company_id)
+            WHERE p.company_id = ?
         """
-        params = []
-        if warehouse_id:
-            params.append(warehouse_id)
-            if current_user.role != 'admin':
-                query += " AND EXISTS (SELECT 1 FROM warehouse_inventory wi WHERE wi.product_id = p.id AND wi.warehouse_id = ?)"
-                params.append(warehouse_id)
+        if warehouse_id and current_user.role != 'admin':
+            query += " AND EXISTS (SELECT 1 FROM warehouse_inventory wi WHERE wi.product_id = p.id AND wi.warehouse_id = ? AND wi.company_id = ?)"
+            params.extend([warehouse_id, cid])
             
         if brand_filter:
             query += " AND p.brand = ?"
@@ -809,7 +817,7 @@ def inventory():
             query += " AND p.is_open = 1"
             
         query += " ORDER BY p.id DESC"
-        cur = conn.execute(query, params)
+        cur = conn.execute(query, tuple(params))
         products = []
         for row in cur.fetchall():
             d = dict(row)
@@ -818,23 +826,33 @@ def inventory():
                 continue
             if stock_filter == "low_stock" and (sq <= 0 or sq > low_stock_threshold):
                 continue
+            if not is_admin:
+                d['cost_price'] = None
             products.append(d)
 
-        cur = conn.execute("SELECT COUNT(*) AS total_products FROM products")
+        cur = conn.execute("SELECT COUNT(*) AS total_products FROM products WHERE company_id = ?", (cid,))
         total_products = int(cur.fetchone()["total_products"] or 0)
 
-        stock_val_query = "SELECT COALESCE(SUM(COALESCE(p.cost_price, 0) * COALESCE(wi.stock_quantity, 0)), 0) AS total_stock_value FROM warehouse_inventory wi JOIN products p ON wi.product_id = p.id"
-        stock_val_params = []
-        if warehouse_id:
-            stock_val_query += " WHERE wi.warehouse_id = ?"
-            stock_val_params.append(warehouse_id)
-        cur = conn.execute(stock_val_query, tuple(stock_val_params))
-        total_stock_value = float(cur.fetchone()["total_stock_value"] or 0)
+        if is_admin:
+            stock_val_query = """
+                SELECT COALESCE(SUM(COALESCE(p.cost_price, 0) * COALESCE(wi.stock_quantity, 0)), 0) AS total_stock_value
+                FROM warehouse_inventory wi
+                JOIN products p ON wi.product_id = p.id AND p.company_id = wi.company_id
+                WHERE wi.company_id = ?
+            """
+            stock_val_params = [cid]
+            if warehouse_id:
+                stock_val_query += " AND wi.warehouse_id = ?"
+                stock_val_params.append(warehouse_id)
+            cur = conn.execute(stock_val_query, tuple(stock_val_params))
+            total_stock_value = float(cur.fetchone()["total_stock_value"] or 0)
+        else:
+            total_stock_value = 0.0
 
-        low_stock_query = "SELECT COALESCE(SUM(CASE WHEN COALESCE(wi.stock_quantity, 0) < 5 THEN 1 ELSE 0 END), 0) AS low_stock_count FROM warehouse_inventory wi"
-        low_stock_params = []
+        low_stock_query = "SELECT COALESCE(SUM(CASE WHEN COALESCE(wi.stock_quantity, 0) < 5 THEN 1 ELSE 0 END), 0) AS low_stock_count FROM warehouse_inventory wi WHERE wi.company_id = ?"
+        low_stock_params = [cid]
         if warehouse_id:
-            low_stock_query += " WHERE wi.warehouse_id = ?"
+            low_stock_query += " AND wi.warehouse_id = ?"
             low_stock_params.append(warehouse_id)
         cur = conn.execute(low_stock_query, tuple(low_stock_params))
         low_stock_count = int(cur.fetchone()["low_stock_count"] or 0)
@@ -842,13 +860,14 @@ def inventory():
         cur = conn.execute("""
             SELECT c.id, c.name, COUNT(p.id) AS product_count 
             FROM categories c 
-            LEFT JOIN products p ON p.category_id = c.id 
+            LEFT JOIN products p ON (p.category_id = c.id AND p.company_id = c.company_id)
+            WHERE c.company_id = ?
             GROUP BY c.id, c.name 
             ORDER BY c.name COLLATE NOCASE
-        """)
+        """, (cid,))
         categories = [dict(row) for row in cur.fetchall()]
 
-        cur = conn.execute("SELECT id, name FROM suppliers ORDER BY name COLLATE NOCASE")
+        cur = conn.execute("SELECT id, name FROM suppliers WHERE company_id = ? ORDER BY name COLLATE NOCASE", (cid,))
         suppliers = [dict(row) for row in cur.fetchall()]
     finally:
         conn.close()
@@ -874,8 +893,14 @@ def inventory():
 
 
 @app.route("/inventory/download_csv")
-@admin_required
+@login_required
 def inventory_download_csv():
+    if current_user.role not in ('admin', 'superadmin', 'warehouse_manager'):
+        return redirect(url_for('pos'))
+
+    cid = current_user.company_id
+    is_admin = current_user.role in ('admin', 'superadmin')
+
     brand = request.args.get("brand", "").strip()
     date_from = request.args.get("date_from", "").strip()
     date_to = request.args.get("date_to", "").strip()
@@ -894,9 +919,12 @@ def inventory_download_csv():
 
     conn = get_connection()
     try:
-        stock_select = "COALESCE((SELECT SUM(stock_quantity) FROM warehouse_inventory WHERE product_id = p.id), 0)"
         if warehouse_id:
-            stock_select = f"COALESCE((SELECT stock_quantity FROM warehouse_inventory WHERE product_id = p.id AND warehouse_id = ?), 0)"
+            stock_select = "COALESCE((SELECT stock_quantity FROM warehouse_inventory WHERE product_id = p.id AND warehouse_id = ? AND company_id = ?), 0)"
+            params = [warehouse_id, cid, cid]
+        else:
+            stock_select = "COALESCE((SELECT SUM(stock_quantity) FROM warehouse_inventory WHERE product_id = p.id AND company_id = ?), 0)"
+            params = [cid, cid]
             
         query = f"""
             SELECT
@@ -910,13 +938,9 @@ def inventory_download_csv():
                 p.created_at,
                 c.name AS category_name
             FROM products p
-            LEFT JOIN categories c ON p.category_id = c.id
-            WHERE 1=1
+            LEFT JOIN categories c ON (p.category_id = c.id AND c.company_id = p.company_id)
+            WHERE p.company_id = ?
         """
-        params = []
-        if warehouse_id:
-            params.append(warehouse_id)
-            
         if brand:
             query += " AND p.brand = ?"
             params.append(brand)
@@ -935,9 +959,8 @@ def inventory_download_csv():
         else:
             query = f"SELECT * FROM ({query})"
             
-        # The main query string for ordering
         query += " ORDER BY name COLLATE NOCASE"
-        cur = conn.execute(query, params)
+        cur = conn.execute(query, tuple(params))
         products = [dict(row) for row in cur.fetchall()]
     finally:
         conn.close()
@@ -948,38 +971,56 @@ def inventory_download_csv():
     output = io.StringIO()
     writer = csv.writer(output)
     
-    # Write header
-    writer.writerow([
-        "ID", "Date Added", "Product Name", "Brand", "Category", 
-        "Cost Price", "Selling Price", "Stock Quantity", "Stock Value"
-    ])
-    
-    # Write rows
     total_qty = 0
     total_value = 0.0
 
-    for p in products:
-        stock_qty = p["stock_quantity"] if p["stock_quantity"] is not None else 0
-        stock_val = float(stock_qty) * float(p["cost_price"] or 0)
-        total_qty += stock_qty
-        total_value += stock_val
-        
+    if is_admin:
         writer.writerow([
-            p["id"],
-            str(p["created_at"] or "")[:10],
-            p["name"],
-            p["brand"] or "",
-            p["category_name"] or "",
-            f"{p['cost_price']:.2f}" if p['cost_price'] is not None else "0.00",
-            f"{p['selling_price']:.2f}" if p['selling_price'] is not None else "0.00",
-            stock_qty,
-            f"{stock_val:.2f}"
+            "ID", "Date Added", "Product Name", "Brand", "Category", 
+            "Cost Price", "Selling Price", "Stock Quantity", "Stock Value"
         ])
-    
-    # Write totals row
-    writer.writerow([
-        "", "", "TOTALS", "", "", "", "", total_qty, f"{total_value:.2f}"
-    ])
+        for p in products:
+            stock_qty = p["stock_quantity"] if p["stock_quantity"] is not None else 0
+            stock_val = float(stock_qty) * float(p["cost_price"] or 0)
+            total_qty += stock_qty
+            total_value += stock_val
+            
+            writer.writerow([
+                p["id"],
+                str(p["created_at"] or "")[:10],
+                p["name"],
+                p["brand"] or "",
+                p["category_name"] or "",
+                f"{p['cost_price']:.2f}" if p['cost_price'] is not None else "0.00",
+                f"{p['selling_price']:.2f}" if p['selling_price'] is not None else "0.00",
+                stock_qty,
+                f"{stock_val:.2f}"
+            ])
+        writer.writerow([
+            "", "", "TOTALS", "", "", "", "", total_qty, f"{total_value:.2f}"
+        ])
+    else:
+        # Redact supplier cost and stock value for non-admin roles
+        writer.writerow([
+            "ID", "Date Added", "Product Name", "Brand", "Category", 
+            "Selling Price", "Stock Quantity"
+        ])
+        for p in products:
+            stock_qty = p["stock_quantity"] if p["stock_quantity"] is not None else 0
+            total_qty += stock_qty
+            
+            writer.writerow([
+                p["id"],
+                str(p["created_at"] or "")[:10],
+                p["name"],
+                p["brand"] or "",
+                p["category_name"] or "",
+                f"{p['selling_price']:.2f}" if p['selling_price'] is not None else "0.00",
+                stock_qty
+            ])
+        writer.writerow([
+            "", "", "TOTALS", "", "", "", total_qty
+        ])
     
     from datetime import date
     today_str = date.today().strftime("%Y-%m-%d")
@@ -992,8 +1033,14 @@ def inventory_download_csv():
 
 
 @app.route("/inventory/add", methods=["POST"])
-@admin_required
+@login_required
 def inventory_add():
+    if current_user.role not in ('admin', 'superadmin', 'warehouse_manager'):
+        return redirect(url_for('pos'))
+
+    cid = current_user.company_id
+    is_admin = current_user.role in ('admin', 'superadmin')
+
     product_name = (request.form.get("product_name") or "").strip()
     brand = (request.form.get("brand") or "").strip()
     if brand == "__add_new__":
@@ -1007,7 +1054,7 @@ def inventory_add():
 
     try:
         category_id = int(category_id_raw)
-        cost_price = float(request.form.get("cost_price") or 0)
+        cost_price = float(request.form.get("cost_price") or 0) if is_admin else 0.0
         selling_price = float(request.form.get("selling_price") or 0)
         stock_quantity = float(request.form.get("stock_quantity") or 0)
     except ValueError:
@@ -1055,22 +1102,25 @@ def inventory_add():
                 supplier_id = None
         
         if not supplier_id and brand:
-            cur_sup = conn.execute("SELECT id FROM suppliers WHERE name = ?", (brand,))
+            cur_sup = conn.execute("SELECT id FROM suppliers WHERE name = ? AND company_id = ?", (brand, cid))
             sup_row = cur_sup.fetchone()
             if sup_row:
                 supplier_id = sup_row["id"]
             else:
-                conn.execute("INSERT INTO suppliers (name) VALUES (?)", (brand,))
-                supplier_id = conn.execute("SELECT last_insert_rowid()").fetchone()[0]
+                conn.execute("INSERT INTO suppliers (company_id, name) VALUES (?, ?)", (cid, brand))
+                cur_sup = conn.execute("SELECT id FROM suppliers WHERE name = ? AND company_id = ?", (brand, cid))
+                supplier_id = cur_sup.fetchone()["id"]
         
-        # Check if product already exists
+        # Check if product already exists within this company
         wid = current_user.warehouse_id or 1
-        cur = conn.execute("SELECT id, stock_quantity FROM products WHERE LOWER(name) = LOWER(?)", (product_name,))
+        cur = conn.execute("SELECT id, cost_price, stock_quantity FROM products WHERE LOWER(name) = LOWER(?) AND company_id = ?", (product_name, cid))
         existing = cur.fetchone()
         
         if existing:
             product_id = existing["id"]
-            old_stock_row = conn.execute("SELECT stock_quantity FROM warehouse_inventory WHERE product_id = ? AND warehouse_id = ?", (product_id, wid)).fetchone()
+            if not is_admin:
+                cost_price = float(existing["cost_price"] or 0)
+            old_stock_row = conn.execute("SELECT stock_quantity FROM warehouse_inventory WHERE product_id = ? AND warehouse_id = ? AND company_id = ?", (product_id, wid, cid)).fetchone()
             old_stock = float(old_stock_row["stock_quantity"] if old_stock_row else 0)
             
             update_query = """
@@ -1086,22 +1136,26 @@ def inventory_add():
             if image_url:
                 update_query += ", image_url = ?"
                 params.append(image_url)
-            update_query += " WHERE id = ?"
-            params.append(product_id)
+            update_query += " WHERE id = ? AND company_id = ?"
+            params.extend([product_id, cid])
             
-            conn.execute(update_query, params)
+            conn.execute(update_query, tuple(params))
             
             new_stock = old_stock + stock_quantity
             if stock_quantity > 0:
-                conn.execute("INSERT INTO warehouse_inventory (product_id, warehouse_id, stock_quantity) VALUES (?, ?, ?) ON CONFLICT(warehouse_id, product_id) DO UPDATE SET stock_quantity = ?", (product_id, wid, new_stock, new_stock))
                 conn.execute("""
-                    INSERT INTO inventory_history (product_id, transaction_type, quantity_change, previous_stock, new_stock, reference, warehouse_id)
-                    VALUES (?, ?, ?, ?, ?, ?, ?)
-                """, (product_id, 'IN', stock_quantity, old_stock, new_stock, 'Manual Addition', wid))
+                    INSERT INTO warehouse_inventory (company_id, product_id, warehouse_id, stock_quantity)
+                    VALUES (?, ?, ?, ?)
+                    ON CONFLICT(warehouse_id, product_id) DO UPDATE SET stock_quantity = ?
+                """, (cid, product_id, wid, new_stock, new_stock))
+                conn.execute("""
+                    INSERT INTO inventory_history (company_id, product_id, transaction_type, quantity_change, previous_stock, new_stock, reference, warehouse_id)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                """, (cid, product_id, 'IN', stock_quantity, old_stock, new_stock, 'Manual Addition', wid))
         else:
-            fields = ["name", "category_id", "brand", "unit", "cost_price", "selling_price", "is_public", "supplier_id", "is_open"]
-            vals = ["?", "?", "?", "?", "?", "?", "?", "?", "?"]
-            params_insert = [product_name, category_id, brand or None, unit, cost_price, selling_price, is_public, supplier_id, is_open]
+            fields = ["company_id", "name", "category_id", "brand", "unit", "cost_price", "selling_price", "is_public", "supplier_id", "is_open"]
+            vals = ["?", "?", "?", "?", "?", "?", "?", "?", "?", "?"]
+            params_insert = [cid, product_name, category_id, brand or None, unit, cost_price, selling_price, is_public, supplier_id, is_open]
             
             if created_at:
                 fields.append("created_at")
@@ -1113,108 +1167,22 @@ def inventory_add():
                 vals.append("?")
                 params_insert.append(image_url)
                 
-            conn.execute(f"INSERT INTO products ({', '.join(fields)}) VALUES ({', '.join(vals)})", params_insert)
-            product_id = conn.execute("SELECT last_insert_rowid()").fetchone()[0]
+            conn.execute(f"INSERT INTO products ({', '.join(fields)}) VALUES ({', '.join(vals)})", tuple(params_insert))
+            cur_pid = conn.execute("SELECT id FROM products WHERE LOWER(name) = LOWER(?) AND company_id = ?", (product_name, cid))
+            product_id = cur_pid.fetchone()["id"]
             
             if stock_quantity > 0:
-                conn.execute("INSERT INTO warehouse_inventory (product_id, warehouse_id, stock_quantity) VALUES (?, ?, ?)", (product_id, wid, stock_quantity))
+                conn.execute("INSERT INTO warehouse_inventory (company_id, product_id, warehouse_id, stock_quantity) VALUES (?, ?, ?, ?)", (cid, product_id, wid, stock_quantity))
                 conn.execute("""
-                    INSERT INTO inventory_history (product_id, transaction_type, quantity_change, previous_stock, new_stock, reference, warehouse_id)
-                    VALUES (?, ?, ?, ?, ?, ?, ?)
-                """, (product_id, 'IN', stock_quantity, 0, stock_quantity, 'Initial Stock', wid))
+                    INSERT INTO inventory_history (company_id, product_id, transaction_type, quantity_change, previous_stock, new_stock, reference, warehouse_id)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                """, (cid, product_id, 'IN', stock_quantity, 0, stock_quantity, 'Initial Stock', wid))
 
-        # Keep brands table in sync for the Brand dropdown.
+        # Keep brands table in sync for the Brand dropdown within this company.
         if brand:
-            conn.execute("INSERT OR IGNORE INTO brands (name) VALUES (?)", (brand,))
-
-        conn.commit()
-    finally:
-        conn.close()
-
-    return redirect(url_for("inventory"))
-
-    if not product_name or not category_id:
-        return redirect(url_for("inventory"))
-
-    import os
-    from werkzeug.utils import secure_filename
-    image_file = request.files.get("product_image")
-    image_url = None
-    if image_file and image_file.filename:
-        filename = secure_filename(image_file.filename)
-        base, _ = os.path.splitext(filename)
-        filename = f"{base}.webp"
-        
-        upload_folder = os.path.join(app.root_path, "static", "uploads", "products")
-        os.makedirs(upload_folder, exist_ok=True)
-        filepath = os.path.join(upload_folder, filename)
-        
-        try:
-            from PIL import Image
-            img = Image.open(image_file)
-            if img.mode != 'RGB':
-                img = img.convert('RGB')
-            img.thumbnail((800, 800))
-            img.save(filepath, format="WEBP", optimize=True, quality=70)
-        except Exception:
-            # Fallback if Pillow fails
-            image_file.seek(0)
-            image_file.save(filepath)
-            
-        image_url = f"/static/uploads/products/{filename}"
-
-    conn = get_connection()
-    try:
-        conn.execute("BEGIN")
-        
-        # Determine supplier
-        if supplier_id:
-            try:
-                supplier_id = int(supplier_id)
-            except ValueError:
-                supplier_id = None
-        
-        if not supplier_id and brand:
-            cur_sup = conn.execute("SELECT id FROM suppliers WHERE name = ?", (brand,))
-            sup_row = cur_sup.fetchone()
-            if sup_row:
-                supplier_id = sup_row["id"]
-            else:
-                conn.execute("INSERT INTO suppliers (name) VALUES (?)", (brand,))
-                supplier_id = conn.execute("SELECT last_insert_rowid()").fetchone()[0]
-        
-        # Check if product already exists
-        wid = current_user.warehouse_id or 1
-        cur = conn.execute("SELECT id, stock_quantity FROM products WHERE LOWER(name) = LOWER(?)", (product_name,))
-        existing = cur.fetchone()
-        
-        if existing:
-            product_id = existing["id"]
-            old_stock_row = conn.execute("SELECT stock_quantity FROM warehouse_inventory WHERE product_id = ? AND warehouse_id = ?", (product_id, wid)).fetchone()
-            old_stock = float(old_stock_row["stock_quantity"] if old_stock_row else 0)
-            new_stock = float(stock_quantity)
-            
-            update_query = """
-                UPDATE products
-                SET category_id = ?, brand = ?, unit = ?, cost_price = ?, selling_price = ?, supplier_id = ?, is_open = ?
-            """
-            params = [category_id, brand or None, unit, cost_price, selling_price, supplier_id, is_open]
-            
-            if created_at:
-                update_query += ", created_at = ?"
-                params.append(created_at)
-                
-            if image_url:
-                update_query += ", image_url = ?"
-                params.append(image_url)
-            update_query += " WHERE id = ?"
-            params.append(product_id)
-            
-            conn.execute(update_query, params)
-            
-            # Keep brands table in sync for the Brand dropdown.
-        if brand:
-            conn.execute("INSERT OR IGNORE INTO brands (name) VALUES (?)", (brand,))
+            cur_b = conn.execute("SELECT id FROM brands WHERE LOWER(name) = LOWER(?) AND company_id = ?", (brand, cid))
+            if not cur_b.fetchone():
+                conn.execute("INSERT INTO brands (company_id, name) VALUES (?, ?)", (cid, brand))
 
         conn.commit()
     finally:
@@ -1224,61 +1192,72 @@ def inventory_add():
 
 
 @app.route("/inventory/edit/<int:product_id>", methods=["POST"])
-@admin_required
+@login_required
 def inventory_edit(product_id: int):
-    product_name = (request.form.get("product_name") or "").strip()
-    brand = (request.form.get("brand") or "").strip()
-    if brand == "__add_new__":
-        brand = ""
-    unit = (request.form.get("unit") or "Each").strip()
-    category_id_raw = (request.form.get("category_id") or "").strip()
-    created_at = (request.form.get("created_at") or "").strip()
-    is_public = 1 if request.form.get("is_public") else 0
-    is_open = 1 if request.form.get("is_open") else 0
-    supplier_id = request.form.get("supplier_id")
+    if current_user.role not in ('admin', 'superadmin', 'warehouse_manager'):
+        return redirect(url_for('pos'))
 
-    try:
-        category_id = int(category_id_raw)
-        cost_price = float(request.form.get("cost_price") or 0)
-        selling_price = float(request.form.get("selling_price") or 0)
-        
-    except ValueError:
-        return redirect(url_for("inventory"))
-
-    if not product_name or not category_id or not brand:
-        return redirect(url_for("inventory"))
-
-    remove_image = request.form.get("remove_image") == "1"
-
-    import os
-    from werkzeug.utils import secure_filename
-    image_file = request.files.get("product_image")
-    image_url = None
-    if image_file and image_file.filename:
-        filename = secure_filename(image_file.filename)
-        base, _ = os.path.splitext(filename)
-        filename = f"{base}.webp"
-        
-        upload_folder = os.path.join(app.root_path, "static", "uploads", "products")
-        os.makedirs(upload_folder, exist_ok=True)
-        filepath = os.path.join(upload_folder, filename)
-        
-        try:
-            from PIL import Image
-            img = Image.open(image_file)
-            if img.mode != 'RGB':
-                img = img.convert('RGB')
-            img.thumbnail((800, 800))
-            img.save(filepath, format="WEBP", optimize=True, quality=70)
-        except Exception:
-            # Fallback if Pillow fails
-            image_file.seek(0)
-            image_file.save(filepath)
-            
-        image_url = f"/static/uploads/products/{filename}"
+    cid = current_user.company_id
+    is_admin = current_user.role in ('admin', 'superadmin')
 
     conn = get_connection()
     try:
+        existing = conn.execute("SELECT id, cost_price FROM products WHERE id = ? AND company_id = ?", (product_id, cid)).fetchone()
+        if not existing:
+            flash("Product not found.", "error")
+            return redirect(url_for("inventory"))
+
+        product_name = (request.form.get("product_name") or "").strip()
+        brand = (request.form.get("brand") or "").strip()
+        if brand == "__add_new__":
+            brand = ""
+        unit = (request.form.get("unit") or "Each").strip()
+        category_id_raw = (request.form.get("category_id") or "").strip()
+        created_at = (request.form.get("created_at") or "").strip()
+        is_public = 1 if request.form.get("is_public") else 0
+        is_open = 1 if request.form.get("is_open") else 0
+        supplier_id = request.form.get("supplier_id")
+
+        try:
+            category_id = int(category_id_raw)
+            # Retain existing cost_price if edited by non-admin to prevent price tampering
+            cost_price = float(request.form.get("cost_price") or 0) if is_admin else float(existing["cost_price"] or 0)
+            selling_price = float(request.form.get("selling_price") or 0)
+        except ValueError:
+            return redirect(url_for("inventory"))
+
+        if not product_name or not category_id or not brand:
+            return redirect(url_for("inventory"))
+
+        remove_image = request.form.get("remove_image") == "1"
+
+        import os
+        from werkzeug.utils import secure_filename
+        image_file = request.files.get("product_image")
+        image_url = None
+        if image_file and image_file.filename:
+            filename = secure_filename(image_file.filename)
+            base, _ = os.path.splitext(filename)
+            filename = f"{base}.webp"
+            
+            upload_folder = os.path.join(app.root_path, "static", "uploads", "products")
+            os.makedirs(upload_folder, exist_ok=True)
+            filepath = os.path.join(upload_folder, filename)
+            
+            try:
+                from PIL import Image
+                img = Image.open(image_file)
+                if img.mode != 'RGB':
+                    img = img.convert('RGB')
+                img.thumbnail((800, 800))
+                img.save(filepath, format="WEBP", optimize=True, quality=70)
+            except Exception:
+                # Fallback if Pillow fails
+                image_file.seek(0)
+                image_file.save(filepath)
+                
+            image_url = f"/static/uploads/products/{filename}"
+
         conn.execute("BEGIN")
         
         # Determine supplier
@@ -1289,19 +1268,15 @@ def inventory_edit(product_id: int):
                 supplier_id = None
         
         if not supplier_id and brand:
-            cur_sup = conn.execute("SELECT id FROM suppliers WHERE name = ?", (brand,))
+            cur_sup = conn.execute("SELECT id FROM suppliers WHERE name = ? AND company_id = ?", (brand, cid))
             sup_row = cur_sup.fetchone()
             if sup_row:
                 supplier_id = sup_row["id"]
             else:
-                conn.execute("INSERT INTO suppliers (name) VALUES (?)", (brand,))
-                supplier_id = conn.execute("SELECT last_insert_rowid()").fetchone()[0]
+                conn.execute("INSERT INTO suppliers (company_id, name) VALUES (?, ?)", (cid, brand))
+                cur_sup = conn.execute("SELECT id FROM suppliers WHERE name = ? AND company_id = ?", (brand, cid))
+                supplier_id = cur_sup.fetchone()["id"]
         
-        cur = conn.execute("SELECT stock_quantity FROM products WHERE id = ?", (product_id,))
-        
-        
-        # If user uploaded a new image, use it. Else if they clicked remove, set it to NULL.
-        # Otherwise, keep existing image_url.
         update_query = """
             UPDATE products
             SET name = ?, brand = ?, category_id = ?, unit = ?, cost_price = ?, selling_price = ?, is_public = ?, supplier_id = ?, is_open = ?
@@ -1318,14 +1293,16 @@ def inventory_edit(product_id: int):
         elif remove_image:
             update_query += ", image_url = NULL"
             
-        update_query += " WHERE id = ?"
-        params.append(product_id)
+        update_query += " WHERE id = ? AND company_id = ?"
+        params.extend([product_id, cid])
         
-        conn.execute(update_query, params)
+        conn.execute(update_query, tuple(params))
         
-        # Keep brands table in sync for the Brand dropdown.
+        # Keep brands table in sync for the Brand dropdown within this company.
         if brand:
-            conn.execute("INSERT OR IGNORE INTO brands (name) VALUES (?)", (brand,))
+            cur_b = conn.execute("SELECT id FROM brands WHERE LOWER(name) = LOWER(?) AND company_id = ?", (brand, cid))
+            if not cur_b.fetchone():
+                conn.execute("INSERT INTO brands (company_id, name) VALUES (?, ?)", (cid, brand))
 
         conn.commit()
     finally:
@@ -1336,8 +1313,12 @@ def inventory_edit(product_id: int):
 
 
 @app.route("/inventory/adjust_stock", methods=["POST"])
-@admin_required
+@login_required
 def inventory_adjust_stock():
+    if current_user.role not in ('admin', 'superadmin', 'warehouse_manager'):
+        return redirect(url_for('pos'))
+
+    cid = current_user.company_id
     product_id = int(request.form.get("product_id", 0))
     raw_wid = request.form.get("warehouse_id", "").strip()
     try:
@@ -1358,16 +1339,39 @@ def inventory_adjust_stock():
 
     conn = get_connection()
     try:
-        old_stock_row = conn.execute("SELECT stock_quantity FROM warehouse_inventory WHERE product_id = ? AND warehouse_id = ?", (product_id, warehouse_id)).fetchone()
+        prod = conn.execute("SELECT id FROM products WHERE id = ? AND company_id = ?", (product_id, cid)).fetchone()
+        if not prod:
+            flash("Product not found.", "error")
+            return redirect(url_for("inventory"))
+
+        wh = conn.execute("SELECT id FROM warehouses WHERE id = ? AND company_id = ?", (warehouse_id, cid)).fetchone()
+        if not wh:
+            flash("Warehouse not found.", "error")
+            return redirect(url_for("inventory"))
+
+        old_stock_row = conn.execute(
+            "SELECT stock_quantity FROM warehouse_inventory WHERE product_id = ? AND warehouse_id = ? AND company_id = ?",
+            (product_id, warehouse_id, cid)
+        ).fetchone()
         old_stock = old_stock_row["stock_quantity"] if old_stock_row else 0.0
 
         if old_stock != new_stock:
-            conn.execute("INSERT INTO warehouse_inventory (product_id, warehouse_id, stock_quantity) VALUES (?, ?, ?) ON CONFLICT(warehouse_id, product_id) DO UPDATE SET stock_quantity = ?", (product_id, warehouse_id, new_stock, new_stock))
+            conn.execute(
+                """
+                INSERT INTO warehouse_inventory (company_id, product_id, warehouse_id, stock_quantity)
+                VALUES (?, ?, ?, ?)
+                ON CONFLICT(warehouse_id, product_id) DO UPDATE SET stock_quantity = ?
+                """,
+                (cid, product_id, warehouse_id, new_stock, new_stock)
+            )
             
             adjustment = new_stock - old_stock
             conn.execute(
-                "INSERT INTO inventory_history (product_id, transaction_type, quantity_change, previous_stock, new_stock, reference, warehouse_id) VALUES (?, ?, ?, ?, ?, ?, ?)",
-                (product_id, "Manual Adjustment", adjustment, old_stock, new_stock, None, warehouse_id)
+                """
+                INSERT INTO inventory_history (company_id, product_id, transaction_type, quantity_change, previous_stock, new_stock, reference, warehouse_id)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (cid, product_id, "Manual Adjustment", adjustment, old_stock, new_stock, None, warehouse_id)
             )
             conn.commit()
             flash("Stock adjusted successfully.", "success")
@@ -1704,24 +1708,33 @@ def delete_transfer(transfer_id):
 @app.route("/inventory/delete/<int:product_id>", methods=["POST"])
 @admin_required
 def inventory_delete(product_id: int):
+    cid = current_user.company_id
     is_ajax = request.headers.get("X-Requested-With") == "fetch"
 
     conn = get_connection()
     ok = False
     error = None
     try:
-        # Remove references to avoid FOREIGN KEY constraint error
-        conn.execute("UPDATE sale_items SET product_id = NULL WHERE product_id = ?", (product_id,))
-        conn.execute("UPDATE purchase_items SET product_id = NULL WHERE product_id = ?", (product_id,))
-        conn.execute("DELETE FROM inventory_history WHERE product_id = ?", (product_id,))
-        conn.execute("DELETE FROM warehouse_inventory WHERE product_id = ?", (product_id,))
+        # Ensure product belongs to current tenant
+        existing = conn.execute("SELECT id FROM products WHERE id = ? AND company_id = ?", (product_id, cid)).fetchone()
+        if not existing:
+            if is_ajax:
+                return jsonify({"ok": False, "error": "Product not found."}), 404
+            flash("Product not found.", "error")
+            return redirect(url_for("inventory"))
+
+        # Remove references scoped to this company
+        conn.execute("UPDATE sale_items SET product_id = NULL WHERE product_id = ? AND company_id = ?", (product_id, cid))
+        conn.execute("UPDATE purchase_items SET product_id = NULL WHERE product_id = ? AND company_id = ?", (product_id, cid))
+        conn.execute("DELETE FROM inventory_history WHERE product_id = ? AND company_id = ?", (product_id, cid))
+        conn.execute("DELETE FROM warehouse_inventory WHERE product_id = ? AND company_id = ?", (product_id, cid))
         
-        cur = conn.execute("DELETE FROM products WHERE id = ?", (product_id,))
+        cur = conn.execute("DELETE FROM products WHERE id = ? AND company_id = ?", (product_id, cid))
         conn.commit()
         ok = cur.rowcount > 0
         if not ok:
             error = "Product not found."
-    except sqlite3.IntegrityError as e:
+    except Exception as e:
         ok = False
         error = str(e)
     finally:
@@ -1738,9 +1751,14 @@ def inventory_delete(product_id: int):
 @app.route("/api/inventory_history/<int:product_id>", methods=["GET"])
 @login_required
 def api_inventory_history(product_id):
+    cid = current_user.company_id
     warehouse_id = request.args.get("warehouse_id")
     conn = get_connection()
     try:
+        prod = conn.execute("SELECT id FROM products WHERE id = ? AND company_id = ?", (product_id, cid)).fetchone()
+        if not prod:
+            return jsonify({"ok": False, "error": "Product not found."}), 404
+
         query = """
             SELECT 
                 h.transaction_type, 
@@ -1752,11 +1770,11 @@ def api_inventory_history(product_id):
                 s.name as supplier_name,
                 w.name as warehouse_name
             FROM inventory_history h
-            LEFT JOIN suppliers s ON h.supplier_id = s.id
-            LEFT JOIN warehouses w ON h.warehouse_id = w.id
-            WHERE h.product_id = ?
+            LEFT JOIN suppliers s ON (h.supplier_id = s.id AND s.company_id = h.company_id)
+            LEFT JOIN warehouses w ON (h.warehouse_id = w.id AND w.company_id = h.company_id)
+            WHERE h.product_id = ? AND h.company_id = ?
         """
-        params = [product_id]
+        params = [product_id, cid]
         
         if warehouse_id:
             query += " AND h.warehouse_id = ?"
@@ -1776,6 +1794,7 @@ def api_inventory_history(product_id):
 @app.route("/categories/add", methods=["POST"])
 @admin_required
 def categories_add():
+    cid = current_user.company_id
     is_ajax = request.headers.get("X-Requested-With") == "fetch"
 
     data = request.get_json(silent=True) or {}
@@ -1790,18 +1809,17 @@ def categories_add():
 
     conn = get_connection()
     try:
-        try:
-            cur = conn.execute("INSERT INTO categories (name) VALUES (?)", (name,))
+        cur = conn.execute("SELECT id, name FROM categories WHERE LOWER(name) = LOWER(?) AND company_id = ?", (name, cid))
+        row = cur.fetchone()
+        if row:
+            category_id = int(row["id"])
+        else:
+            conn.execute("INSERT INTO categories (company_id, name) VALUES (?, ?)", (cid, name))
             conn.commit()
-            category_id = int(cur.lastrowid)
-        except sqlite3.IntegrityError:
-            cur = conn.execute("SELECT id, name FROM categories WHERE name = ?", (name,))
+            cur = conn.execute("SELECT id, name FROM categories WHERE LOWER(name) = LOWER(?) AND company_id = ?", (name, cid))
             row = cur.fetchone()
             category_id = int(row["id"]) if row else None
-            if not category_id:
-                raise
-        category_name = name
-        return jsonify({"id": category_id, "name": category_name})
+        return jsonify({"id": category_id, "name": name})
     finally:
         conn.close()
 
@@ -1809,15 +1827,17 @@ def categories_add():
 @app.route("/categories", methods=["GET"])
 @login_required
 def categories_list():
+    cid = current_user.company_id
     conn = get_connection()
     try:
         cur = conn.execute("""
             SELECT c.id, c.name, COUNT(p.id) AS product_count 
             FROM categories c 
-            LEFT JOIN products p ON p.category_id = c.id 
+            LEFT JOIN products p ON (p.category_id = c.id AND p.company_id = c.company_id)
+            WHERE c.company_id = ?
             GROUP BY c.id, c.name 
             ORDER BY c.name COLLATE NOCASE
-        """)
+        """, (cid,))
         categories = [dict(row) for row in cur.fetchall()]
     finally:
         conn.close()
@@ -1827,10 +1847,16 @@ def categories_list():
 @app.route("/categories/delete/<int:category_id>", methods=["POST"])
 @admin_required
 def categories_delete(category_id: int):
+    cid = current_user.company_id
     is_ajax = request.headers.get("X-Requested-With") == "fetch"
     conn = get_connection()
     try:
-        cur = conn.execute("SELECT COUNT(*) AS c FROM products WHERE category_id = ?", (category_id,))
+        cat = conn.execute("SELECT id FROM categories WHERE id = ? AND company_id = ?", (category_id, cid)).fetchone()
+        if not cat:
+            msg = "Category not found."
+            return (jsonify({"ok": False, "error": msg}), 404) if is_ajax else redirect(url_for("inventory"))
+
+        cur = conn.execute("SELECT COUNT(*) AS c FROM products WHERE category_id = ? AND company_id = ?", (category_id, cid))
         used_count = int(cur.fetchone()["c"] or 0)
         if used_count > 0:
             msg = "Category cannot be deleted because it is used by one or more products."
@@ -1838,7 +1864,7 @@ def categories_delete(category_id: int):
                 return jsonify({"ok": False, "error": msg}), 409
             return redirect(url_for("inventory"))
 
-        cur2 = conn.execute("DELETE FROM categories WHERE id = ?", (category_id,))
+        cur2 = conn.execute("DELETE FROM categories WHERE id = ? AND company_id = ?", (category_id, cid))
         conn.commit()
         ok = cur2.rowcount > 0
         if ok:
@@ -1856,6 +1882,7 @@ def categories_delete(category_id: int):
 @app.route("/categories/edit/<int:category_id>", methods=["POST"])
 @admin_required
 def categories_edit(category_id: int):
+    cid = current_user.company_id
     is_ajax = request.headers.get("X-Requested-With") == "fetch"
     data = request.get_json(silent=True) or {}
     if not data:
@@ -1869,20 +1896,26 @@ def categories_edit(category_id: int):
 
     conn = get_connection()
     try:
-        try:
-            cur = conn.execute(
-                "UPDATE categories SET name = ? WHERE id = ?",
-                (name, category_id),
-            )
-            conn.commit()
-            if cur.rowcount == 0:
-                if is_ajax:
-                    return jsonify({"ok": False, "error": "Category not found."}), 404
-                return redirect(url_for("inventory"))
-        except sqlite3.IntegrityError:
-            # Unique constraint on categories.name
+        cat = conn.execute("SELECT id FROM categories WHERE id = ? AND company_id = ?", (category_id, cid)).fetchone()
+        if not cat:
+            if is_ajax:
+                return jsonify({"ok": False, "error": "Category not found."}), 404
+            return redirect(url_for("inventory"))
+
+        dup = conn.execute("SELECT id FROM categories WHERE LOWER(name) = LOWER(?) AND id != ? AND company_id = ?", (name, category_id, cid)).fetchone()
+        if dup:
             if is_ajax:
                 return jsonify({"ok": False, "error": "Category name already exists."}), 409
+            return redirect(url_for("inventory"))
+
+        cur = conn.execute(
+            "UPDATE categories SET name = ? WHERE id = ? AND company_id = ?",
+            (name, category_id, cid),
+        )
+        conn.commit()
+        if cur.rowcount == 0:
+            if is_ajax:
+                return jsonify({"ok": False, "error": "Category not found."}), 404
             return redirect(url_for("inventory"))
     finally:
         conn.close()
@@ -1896,24 +1929,27 @@ def categories_edit(category_id: int):
 @login_required
 def brands_list():
     """
-    Returns all brands as JSON [{id, name}].
-    If brands table is empty (fresh DB), derive initial values from products.brand.
+    Returns all brands for current tenant as JSON [{id, name}].
+    If brands table is empty for tenant, derive initial values from products.brand.
     """
+    cid = current_user.company_id
     conn = get_connection()
     try:
-        # Backfill brands from existing products (idempotent).
+        # Backfill brands from existing products for current company (idempotent).
         conn.execute(
             """
-            INSERT OR IGNORE INTO brands (name)
-            SELECT DISTINCT TRIM(brand)
+            INSERT OR IGNORE INTO brands (company_id, name)
+            SELECT DISTINCT ?, TRIM(brand)
             FROM products
-            WHERE brand IS NOT NULL AND TRIM(brand) != ''
-            """
+            WHERE company_id = ? AND brand IS NOT NULL AND TRIM(brand) != ''
+            """,
+            (cid, cid),
         )
         conn.commit()
 
         cur = conn.execute(
-            "SELECT id, name FROM brands ORDER BY name COLLATE NOCASE"
+            "SELECT id, name FROM brands WHERE company_id = ? ORDER BY name COLLATE NOCASE",
+            (cid,),
         )
         return jsonify([{"id": int(r["id"]), "name": r["name"]} for r in cur.fetchall()])
     finally:
@@ -1923,6 +1959,7 @@ def brands_list():
 @app.route("/brands/add", methods=["POST"])
 @admin_required
 def brands_add():
+    cid = current_user.company_id
     is_json = request.is_json
     data = request.get_json(silent=True) if is_json else {}
     if not data:
@@ -1937,7 +1974,6 @@ def brands_add():
 
     show_on_website = data.get("show_on_website")
     if show_on_website is None:
-        # Checkboxes are missing when unchecked in form data
         show_on_website = False if not is_json and request.form else True
     elif isinstance(show_on_website, str):
         show_on_website = show_on_website.lower() in ("true", "1", "on")
@@ -1949,21 +1985,24 @@ def brands_add():
     # Handle file upload
     logo = request.files.get("logo")
     if logo and logo.filename:
-        # ensure directories exist
         import os
-        from werkzeug.utils import secure_filename
         brands_dir = os.path.join(app.root_path, "static", "logos", "brands")
         os.makedirs(brands_dir, exist_ok=True)
-        # Use exact brand name with .png extension to match existing convention
         logo.save(os.path.join(brands_dir, f"{name}.png"))
 
     conn = get_connection()
     try:
-        conn.execute("INSERT OR IGNORE INTO brands (name, commission_rate, show_on_website) VALUES (?, ?, ?)", (name, commission_rate, 1 if show_on_website else 0))
-        conn.commit()
-
-        cur = conn.execute("SELECT id, name FROM brands WHERE name = ?", (name,))
+        cur = conn.execute("SELECT id, name FROM brands WHERE LOWER(name) = LOWER(?) AND company_id = ?", (name, cid))
         row = cur.fetchone()
+        if not row:
+            conn.execute(
+                "INSERT INTO brands (company_id, name, commission_rate, show_on_website) VALUES (?, ?, ?, ?)",
+                (cid, name, commission_rate, 1 if show_on_website else 0),
+            )
+            conn.commit()
+            cur = conn.execute("SELECT id, name FROM brands WHERE LOWER(name) = LOWER(?) AND company_id = ?", (name, cid))
+            row = cur.fetchone()
+
         if row is None:
             if is_json:
                 return jsonify({"ok": False, "error": "Failed to create brand."}), 500
@@ -2095,34 +2134,29 @@ def supplier_history(supplier_id):
 @app.route("/brands/edit/<int:brand_id>", methods=["POST"])
 @admin_required
 def brands_edit(brand_id):
+    cid = current_user.company_id
     name = request.form.get("name", "").strip()
     commission_rate = float(request.form.get("commission_rate") or 0)
     
     show_on_website = request.form.get("show_on_website")
-    # if it's missing in a standard form submission, it means the checkbox was unchecked
     show_on_website = True if show_on_website == "on" else False
 
     if not name:
         return "Brand name is required.", 400
 
-    # Handle file upload
     logo = request.files.get("logo")
     if logo and logo.filename:
-        # ensure directories exist
         import os
         brands_dir = os.path.join(app.root_path, "static", "logos", "brands")
         os.makedirs(brands_dir, exist_ok=True)
-        # Use exact brand name with .png extension
         logo.save(os.path.join(brands_dir, f"{name}.png"))
         
     conn = get_connection()
     try:
-        # Get old brand name
-        old_brand_name = conn.execute("SELECT name FROM brands WHERE id = ?", (brand_id,)).fetchone()
+        old_brand_name = conn.execute("SELECT name FROM brands WHERE id = ? AND company_id = ?", (brand_id, cid)).fetchone()
         if old_brand_name:
             old_name = old_brand_name["name"]
             
-            # If name changed, rename existing logo if it exists
             if old_name != name:
                 import os
                 brands_dir = os.path.join(app.root_path, "static", "logos", "brands")
@@ -2131,9 +2165,9 @@ def brands_edit(brand_id):
                 if os.path.exists(old_logo_path) and not (logo and logo.filename):
                     os.rename(old_logo_path, new_logo_path)
 
-            conn.execute("UPDATE brands SET name = ?, commission_rate = ?, show_on_website = ? WHERE id = ?", (name, commission_rate, 1 if show_on_website else 0, brand_id))
-            conn.execute("UPDATE products SET brand = ? WHERE brand = ?", (name, old_name))
-        conn.commit()
+            conn.execute("UPDATE brands SET name = ?, commission_rate = ?, show_on_website = ? WHERE id = ? AND company_id = ?", (name, commission_rate, 1 if show_on_website else 0, brand_id, cid))
+            conn.execute("UPDATE products SET brand = ? WHERE brand = ? AND company_id = ?", (name, old_name, cid))
+            conn.commit()
     finally:
         conn.close()
     return redirect(url_for("suppliers_page"))
@@ -2141,15 +2175,15 @@ def brands_edit(brand_id):
 @app.route("/brands/delete/<int:brand_id>", methods=["POST"])
 @admin_required
 def brands_delete(brand_id):
+    cid = current_user.company_id
     conn = get_connection()
     try:
-        # Get old brand name
-        old_brand_name = conn.execute("SELECT name FROM brands WHERE id = ?", (brand_id,)).fetchone()
+        old_brand_name = conn.execute("SELECT name FROM brands WHERE id = ? AND company_id = ?", (brand_id, cid)).fetchone()
         if old_brand_name:
             old_name = old_brand_name["name"]
-            conn.execute("DELETE FROM brands WHERE id = ?", (brand_id,))
-            conn.execute("UPDATE products SET brand = NULL WHERE brand = ?", (old_name,))
-        conn.commit()
+            conn.execute("DELETE FROM brands WHERE id = ? AND company_id = ?", (brand_id, cid))
+            conn.execute("UPDATE products SET brand = NULL WHERE brand = ? AND company_id = ?", (old_name, cid))
+            conn.commit()
     finally:
         conn.close()
     return redirect(url_for("suppliers_page"))
@@ -2157,6 +2191,8 @@ def brands_delete(brand_id):
 @app.route("/products/list", methods=["GET"])
 @login_required
 def products_list():
+    cid = current_user.company_id
+    is_admin = current_user.role in ('admin', 'superadmin')
     warehouse_id = request.args.get("warehouse_id")
     wid = int(warehouse_id) if warehouse_id else (current_user.warehouse_id or 1)
     conn = get_connection()
@@ -2171,18 +2207,18 @@ def products_list():
                 p.unit AS unit,
                 p.cost_price AS cost_price,
                 p.selling_price AS selling_price,
-                COALESCE((SELECT stock_quantity FROM warehouse_inventory WHERE product_id = p.id AND warehouse_id = ?), 0) AS stock_quantity,
+                COALESCE((SELECT stock_quantity FROM warehouse_inventory WHERE product_id = p.id AND warehouse_id = ? AND company_id = ?), 0) AS stock_quantity,
                 p.image_url AS image_url,
                 p.is_open AS is_open
             FROM products p
             LEFT JOIN brands b
-                ON LOWER(b.name) = LOWER(p.brand)
-            WHERE 1=1
+                ON (LOWER(b.name) = LOWER(p.brand) AND (b.company_id = p.company_id OR b.company_id IS NULL))
+            WHERE p.company_id = ?
         """
-        params = [wid]
+        params = [wid, cid, cid]
         if current_user.role != 'admin':
-            query += " AND EXISTS (SELECT 1 FROM warehouse_inventory wi WHERE wi.product_id = p.id AND wi.warehouse_id = ?)"
-            params.append(wid)
+            query += " AND EXISTS (SELECT 1 FROM warehouse_inventory wi WHERE wi.product_id = p.id AND wi.warehouse_id = ? AND wi.company_id = ?)"
+            params.extend([wid, cid])
             
         query += """
             GROUP BY p.id
@@ -2199,7 +2235,7 @@ def products_list():
                     "brand_name": r["brand_name"],
                     "category_id": int(r["category_id"]) if r["category_id"] is not None else None,
                     "unit": r["unit"] or "Each",
-                    "cost_price": float(r["cost_price"] or 0),
+                    "cost_price": float(r["cost_price"] or 0) if is_admin else None,
                     "selling_price": float(r["selling_price"] or 0),
                     "stock_quantity": round(float(r["stock_quantity"] or 0), 4),
                     "image_url": r["image_url"],
@@ -2215,6 +2251,7 @@ def products_list():
 @app.route("/brands/search", methods=["GET"])
 @login_required
 def brands_search():
+    cid = current_user.company_id
     q = (request.args.get("q") or "").strip()
     if not q:
         return jsonify([])
@@ -2226,11 +2263,11 @@ def brands_search():
             """
             SELECT DISTINCT brand
             FROM products
-            WHERE brand IS NOT NULL AND TRIM(brand) != '' AND brand LIKE ?
+            WHERE company_id = ? AND brand IS NOT NULL AND TRIM(brand) != '' AND brand LIKE ?
             ORDER BY brand COLLATE NOCASE
             LIMIT 15
             """,
-            (like,),
+            (cid, like),
         ).fetchall()
         return jsonify([r["brand"] for r in rows if r["brand"]])
     finally:
@@ -2599,6 +2636,8 @@ def sales_next_invoice():
 @app.route("/products/search", methods=["GET"])
 @login_required
 def products_search():
+    cid = current_user.company_id
+    is_admin = current_user.role in ('admin', 'superadmin')
     q = (request.args.get("q") or "").strip()
     like = f"%{q}%"
     warehouse_id = request.args.get("warehouse_id")
@@ -2606,7 +2645,7 @@ def products_search():
         warehouse_id = current_user.warehouse_id
     wid = int(warehouse_id) if warehouse_id else (current_user.warehouse_id or 1)
         
-    stock_query = "COALESCE((SELECT stock_quantity FROM warehouse_inventory WHERE product_id = products.id AND warehouse_id = ?), 0)"
+    stock_query = "COALESCE((SELECT stock_quantity FROM warehouse_inventory WHERE product_id = products.id AND warehouse_id = ? AND company_id = ?), 0)"
     
     conn = get_connection()
     try:
@@ -2622,26 +2661,24 @@ def products_search():
                 is_open,
                 supplier_id
             FROM products
-            WHERE 1=1
+            WHERE company_id = ?
         """
+        params = [wid, cid, cid]
         
-        if not q:
-            query = base_query
-            params = [wid]
-        else:
-            query = base_query + " AND (name LIKE ? OR brand LIKE ?)"
-            params = [wid, like, like]
+        if q:
+            base_query += " AND (name LIKE ? OR brand LIKE ?)"
+            params.extend([like, like])
             
         if current_user.role != 'admin':
-            query += " AND EXISTS (SELECT 1 FROM warehouse_inventory wi WHERE wi.product_id = products.id AND wi.warehouse_id = ?)"
-            params.append(wid)
+            base_query += " AND EXISTS (SELECT 1 FROM warehouse_inventory wi WHERE wi.product_id = products.id AND wi.warehouse_id = ? AND wi.company_id = ?)"
+            params.extend([wid, cid])
             
         if not q:
-            query += " ORDER BY name COLLATE NOCASE LIMIT 20"
+            base_query += " ORDER BY name COLLATE NOCASE LIMIT 20"
         else:
-            query += " ORDER BY name COLLATE NOCASE LIMIT 15"
+            base_query += " ORDER BY name COLLATE NOCASE LIMIT 15"
             
-        cur = conn.execute(query, tuple(params))
+        cur = conn.execute(base_query, tuple(params))
         results = []
         for r in cur.fetchall():
             results.append(
@@ -2650,7 +2687,7 @@ def products_search():
                     "name": r["name"],
                     "brand": r["brand"],
                     "selling_price": r["selling_price"],
-                    "cost_price": r["cost_price"],
+                    "cost_price": r["cost_price"] if is_admin else None,
                     "unit": r["unit"],
                     "stock_quantity": r["stock_quantity"],
                     "is_open": r["is_open"],

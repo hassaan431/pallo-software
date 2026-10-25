@@ -111,6 +111,48 @@ class PooledConnectionWrapper:
     - Performs safety rollback on uncommitted transactions before pool return to prevent cross-request leakage.
     """
 
+class PooledCursorWrapper:
+    """Cursor wrapper that adapts '?' parameter placeholders to '%s' for PostgreSQL execution."""
+
+    def __init__(self, raw_cursor):
+        self._cur = raw_cursor
+
+    def execute(self, query, params=None):
+        if "?" in query:
+            query = query.replace("?", "%s")
+        if params is None:
+            return self._cur.execute(query)
+        if isinstance(params, list):
+            params = tuple(params)
+        return self._cur.execute(query, params)
+
+    def executemany(self, query, params_seq):
+        if "?" in query:
+            query = query.replace("?", "%s")
+        return self._cur.executemany(query, params_seq)
+
+    def __iter__(self):
+        return iter(self._cur)
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        self._cur.close()
+
+    def __getattr__(self, name):
+        return getattr(self._cur, name)
+
+
+class PooledConnectionWrapper:
+    """
+    A lightweight thread-safe wrapper around a psycopg2 pooled connection that:
+    - Overrides .close() to return the connection back to the ThreadedConnectionPool instead of terminating it.
+    - Defaults .cursor() to use RealDictCursor for dict-like column access matching sqlite3.Row.
+    - Performs safety rollback on uncommitted transactions before pool return to prevent cross-request leakage.
+    - Provides .execute() and adapts '?' parameter placeholders to '%s' for transparent cross-database queries.
+    """
+
     def __init__(self, raw_conn, pool):
         self._conn = raw_conn
         self._pool = pool
@@ -119,7 +161,13 @@ class PooledConnectionWrapper:
     def cursor(self, *args, **kwargs):
         if "cursor_factory" not in kwargs:
             kwargs["cursor_factory"] = RealDictCursor
-        return self._conn.cursor(*args, **kwargs)
+        raw_cur = self._conn.cursor(*args, **kwargs)
+        return PooledCursorWrapper(raw_cur)
+
+    def execute(self, sql, params=None):
+        cur = self.cursor()
+        cur.execute(sql, params)
+        return cur
 
     def commit(self):
         return self._conn.commit()
@@ -615,6 +663,7 @@ def init_sqlite_db():
         _migrate_database(conn)
         _migrate_expenses(conn)
         _seed_default_data(conn)
+        _ensure_sqlite_companies_support(conn)
     finally:
         conn.close()
 
@@ -814,7 +863,7 @@ def generate_company_slug(name: str) -> str:
 
 
 def _ensure_sqlite_companies_support(conn):
-    """Ensure companies table and company_id columns exist when running in SQLite fallback mode."""
+    """Ensure companies table and company_id columns exist across all multi-tenant tables when running in SQLite mode."""
     conn.execute(
         """
         CREATE TABLE IF NOT EXISTS companies (
@@ -836,11 +885,33 @@ def _ensure_sqlite_companies_support(conn):
         );
         """
     )
-    for tbl in ["users", "warehouses", "categories"]:
+    # Ensure default Company 1 (AK Distributors LLC) exists
+    cur = conn.execute("SELECT id FROM companies WHERE id = 1")
+    if not cur.fetchone():
+        conn.execute(
+            """
+            INSERT INTO companies (id, name, slug, currency, invoice_prefix, starting_invoice_number, is_active)
+            VALUES (1, 'AK Distributors LLC', 'ak-distributors', '$', 'INV-', 1, 1)
+            """
+        )
+
+    multi_tenant_tables = [
+        "users", "warehouses", "categories", "brands", "suppliers", "customers",
+        "products", "product_variants", "warehouse_inventory", "sales", "sale_items",
+        "customer_payments", "purchases", "purchase_items", "supplier_payments",
+        "expenses", "inventory_transfers", "inventory_transfer_items", "inventory_history"
+    ]
+    for tbl in multi_tenant_tables:
         try:
-            conn.execute(f"ALTER TABLE {tbl} ADD COLUMN company_id INTEGER REFERENCES companies(id)")
-        except sqlite3.OperationalError:
-            pass
+            table_check = conn.execute("SELECT name FROM sqlite_master WHERE type='table' AND name=?", (tbl,)).fetchone()
+            if not table_check:
+                continue
+            cols = [r[1] for r in conn.execute(f"PRAGMA table_info({tbl})").fetchall()]
+            if "company_id" not in cols:
+                conn.execute(f"ALTER TABLE {tbl} ADD COLUMN company_id INTEGER REFERENCES companies(id)")
+                conn.execute(f"UPDATE {tbl} SET company_id = 1 WHERE company_id IS NULL")
+        except Exception as e:
+            logger.warning("Could not add company_id to %s in SQLite: %s", tbl, e)
     conn.commit()
 
 
@@ -954,7 +1025,7 @@ def register_company_with_admin(
         conn.close()
 
 
-def get_public_products():
+def get_public_products(company_id: int = 1):
     conn = get_connection()
     try:
         cur = conn.execute(
@@ -962,17 +1033,18 @@ def get_public_products():
             SELECT p.id, p.name, p.brand, p.image_url, c.name as category_name
             FROM products p
             LEFT JOIN categories c ON p.category_id = c.id
-            LEFT JOIN brands b ON p.brand = b.name
-            WHERE p.is_public = 1 AND (b.show_on_website IS NULL OR b.show_on_website = 1)
+            LEFT JOIN brands b ON (p.brand = b.name AND (b.company_id = p.company_id OR b.company_id IS NULL))
+            WHERE p.company_id = ? AND p.is_public = 1 AND (b.show_on_website IS NULL OR b.show_on_website = 1)
             ORDER BY p.name COLLATE NOCASE
-            """
+            """,
+            (company_id,),
         )
         return [dict(row) for row in cur.fetchall()]
     finally:
         conn.close()
 
 
-def get_brochure_products():
+def get_brochure_products(company_id: int = 1):
     conn = get_connection()
     try:
         cur = conn.execute(
@@ -980,11 +1052,13 @@ def get_brochure_products():
             SELECT p.id, p.name, p.brand, p.image_url, c.name as category_name
             FROM products p
             LEFT JOIN categories c ON p.category_id = c.id
-            LEFT JOIN brands b ON p.brand = b.name
-            WHERE (p.show_in_brochure IS NULL OR p.show_in_brochure = 1) 
+            LEFT JOIN brands b ON (p.brand = b.name AND (b.company_id = p.company_id OR b.company_id IS NULL))
+            WHERE p.company_id = ? 
+              AND (p.show_in_brochure IS NULL OR p.show_in_brochure = 1) 
               AND (b.show_in_brochure IS NULL OR b.show_in_brochure = 1)
             ORDER BY p.name COLLATE NOCASE
-            """
+            """,
+            (company_id,),
         )
         return [dict(row) for row in cur.fetchall()]
     finally:

@@ -20,7 +20,7 @@ This document tracks implementation items, technical decisions, and milestones f
   - [x] Configure `DATABASE_URL` connection management with `ThreadedConnectionPool`.
   - [x] Build PostgreSQL multi-tenant schema with `company_id`, exact `NUMERIC` types, and composite indices.
   - [x] Write and run `migrate_sqlite_to_postgres.py` to transfer 100% of AK Distributors data to `company_id = 1`.
-  - [ ] Add query helpers in `database.py` with `RealDictCursor`.
+  - [x] Add query helpers in `database.py` with `RealDictCursor`.
 
 - [x] **M2: Authentication, Tenant Scoping & Self-Serve Signup**
   - [x] Extend Flask-Login `User` with `company_id`.
@@ -30,7 +30,7 @@ This document tracks implementation items, technical decisions, and milestones f
   - [x] Update `/login` for unified sign-in with active company validation.
 
 - [ ] **M3: Query Scoping & Commercial Privacy (app.py)**
-  - [ ] Scope Products, Categories, Brands (`company_id`). Mask `cost_price` for non-admins.
+  - [x] Scope Products, Categories, Brands (`company_id`). Mask `cost_price` for non-admins.
   - [ ] Scope Customers & Ledgers (`company_id`).
   - [ ] Scope Sales, POS, and Invoices (`company_id`).
   - [ ] Scope Warehouses & Inventory Transfers (`company_id`).
