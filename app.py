@@ -59,6 +59,76 @@ def download_brochure():
         return "Brochure is not currently available. Please check back later.", 404
     return send_from_directory(downloads_dir, filename, as_attachment=True, download_name="AK_Distributors_Brochure.pdf")
 
+@app.route("/catalogue")
+@app.route("/c/<company_slug>/catalogue")
+def public_catalogue(company_slug=None):
+    conn = get_connection()
+    try:
+        if company_slug:
+            co = conn.execute("SELECT * FROM companies WHERE slug = ? AND (is_active = 1 OR is_active IS TRUE)", (company_slug,)).fetchone()
+            if not co:
+                abort(404)
+            cid = co["id"]
+            company = dict(co)
+        else:
+            cid = 1
+            company = get_company(1)
+
+        warehouses = conn.execute("SELECT id, name FROM warehouses WHERE company_id = ? ORDER BY name", (cid,)).fetchall()
+        return render_template("catalogue.html", warehouses=[dict(w) for w in warehouses], current_company=company)
+    finally:
+        conn.close()
+
+@app.route("/brochure")
+@app.route("/c/<company_slug>/brochure")
+def public_brochure(company_slug=None):
+    from database import get_brochure_products
+    conn = get_connection()
+    try:
+        if company_slug:
+            co = conn.execute("SELECT * FROM companies WHERE slug = ? AND (is_active = 1 OR is_active IS TRUE)", (company_slug,)).fetchone()
+            if not co:
+                abort(404)
+            cid = co["id"]
+            company = dict(co)
+        else:
+            cid = 1
+            company = get_company(1)
+
+        products = get_brochure_products(cid)[:250]
+        brands = {}
+        for p in products:
+            b = p.get('brand') or 'Other'
+            if b not in brands:
+                brands[b] = []
+            brands[b].append(p)
+
+        return render_template("brochure.html", brands=brands, brand_logos={}, company=company)
+    finally:
+        conn.close()
+
+@app.route("/c/<company_slug>/brochure/download")
+def download_tenant_brochure(company_slug):
+    conn = get_connection()
+    try:
+        co = conn.execute("SELECT * FROM companies WHERE slug = ? AND (is_active = 1 OR is_active IS TRUE)", (company_slug,)).fetchone()
+        if not co:
+            abort(404)
+        cid = co["id"]
+        company = dict(co)
+    finally:
+        conn.close()
+
+    downloads_dir = os.path.join(app.root_path, 'static', 'downloads')
+    filename = f'brochure_company_{cid}.pdf' if cid != 1 else 'brochure.pdf'
+    file_path = os.path.join(downloads_dir, filename)
+    if not os.path.exists(file_path):
+        if os.path.exists(os.path.join(downloads_dir, 'brochure.pdf')):
+            filename = 'brochure.pdf'
+        else:
+            return "Brochure is not currently available. Please check back later.", 404
+    return send_from_directory(downloads_dir, filename, as_attachment=True, download_name=f"{company['slug']}_Brochure.pdf")
+
 login_manager = LoginManager()
 login_manager.init_app(app)
 login_manager.login_view = "login"
@@ -505,7 +575,8 @@ def regenerate_brochure():
             return None
 
     cid = current_user.company_id if current_user.is_authenticated else 1
-    products = get_brochure_products(cid)
+    company = get_company(cid)
+    products = get_brochure_products(cid)[:250]
     brands = {}
     brand_logos = {}
     
@@ -523,11 +594,11 @@ def regenerate_brochure():
                 brand_logos[b] = False
         brands[b].append(p)
         
-    html = render_template('brochure.html', brands=brands, brand_logos=brand_logos)
+    html = render_template('brochure.html', brands=brands, brand_logos=brand_logos, company=company)
     
     downloads_dir = os.path.join(app.root_path, 'static', 'downloads')
     os.makedirs(downloads_dir, exist_ok=True)
-    file_path = os.path.join(downloads_dir, 'brochure.pdf')
+    file_path = os.path.join(downloads_dir, 'brochure.pdf' if cid == 1 else f'brochure_company_{cid}.pdf')
     
     with open(file_path, "w+b") as pdf_file:
         pisa_status = pisa.CreatePDF(html, dest=pdf_file, link_callback=fetch_resources)

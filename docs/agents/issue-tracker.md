@@ -15,7 +15,7 @@ This document tracks implementation items, technical decisions, and milestones f
 
 ## Execution Milestones
 
-- [ ] **M1: PostgreSQL Setup, Schema Creation & Data Migration**
+- [x] **M1: PostgreSQL Setup, Schema Creation & Data Migration**
   - [x] Add `psycopg2-binary` and `python-dotenv` to dependencies.
   - [x] Configure `DATABASE_URL` connection management with `ThreadedConnectionPool`.
   - [x] Build PostgreSQL multi-tenant schema with `company_id`, exact `NUMERIC` types, and composite indices.
@@ -43,15 +43,15 @@ This document tracks implementation items, technical decisions, and milestones f
   - [x] Company profile & branding settings page (`/settings/company`) with 2MB logo upload guardrails.
   - [x] Dynamic sidebar branding and company name badge.
 
-- [ ] **M5: Public Tenant Catalogues & Resource Guardrails**
-  - [ ] Implement `/c/<company_slug>/catalogue` and `/c/<company_slug>/brochure`.
-  - [ ] Keep root `/catalogue` and `/brochure` backwards compatible to Company 1.
-  - [ ] Apply 250-item safety cap on brochure PDF exports.
+- [x] **M5: Public Tenant Catalogues & Resource Guardrails**
+  - [x] Implement `/c/<company_slug>/catalogue` and `/c/<company_slug>/brochure`.
+  - [x] Keep root `/catalogue` and `/brochure` backwards compatible to Company 1.
+  - [x] Apply 250-item safety cap on brochure PDF exports.
 
 - [x] **M6: SuperAdmin Platform Management**
   - [x] Build `/superadmin` dashboard for platform metrics and soft-deactivation toggling.
   - [x] SuperAdmin role and security gate.
 
-- [ ] **M7: Automated Verification & Isolation Assertions**
-  - [ ] Automated tenant isolation test suite (`test_saas_isolation.py`).
-  - [ ] Full regression check on AK Distributors data integrity in PostgreSQL.
+- [x] **M7: Automated Verification & Isolation Assertions**
+  - [x] Automated tenant isolation test suite (`test_saas_isolation.py`).
+  - [x] Full regression check on AK Distributors data integrity in PostgreSQL.

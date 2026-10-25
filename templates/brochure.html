@@ -85,13 +85,17 @@
 <body>
 
 <div id="footer_content">
-    Page <pdf:pagenumber> of <pdf:pagecount> | AK Distributors Product Brochure
+    Page <pdf:pagenumber> of <pdf:pagecount> | {{ (company.name if company else None) or 'AK Distributors' }} Product Brochure
 </div>
 
 <div style="text-align: center; margin-top: 100pt; margin-bottom: 20pt;">
-    <img src="/static/logos/AK_Distributors_Logo.png" width="180">
+    {% if company and company.id != 1 and company.logo_url %}
+        <img src="{{ company.logo_url }}" width="180">
+    {% else %}
+        <img src="/static/logos/AK_Distributors_Logo.png" width="180">
+    {% endif %}
 </div>
-<h1 style="margin-top: 0;">AK Distributors Catalog</h1>
+<h1 style="margin-top: 0;">{{ (company.name if company else None) or 'AK Distributors' }} Catalog</h1>
 
 <div style="text-align: center; margin-top: 50pt; margin-bottom: 25pt;">
     <h3 style="color: #83899D; margin-bottom: 20pt; font-size: 14pt;">Our Partner Brands</h3>

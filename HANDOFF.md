@@ -5,7 +5,7 @@ This project converts an existing single-business wholesale ERP ("AK Distributor
 
 All planning, architectural decisions, and requirement stress-testing were completed and approved via `/grill-with-docs`. The execution route is charted as a shared map of 11 decision/task tickets under `.scratch/pallo-saas/` via `/wayfinder`.
 
-**Current Status**: Tickets 01 through 08 are completely resolved, unit-tested (56 passing tests), committed, and verified. The next session can immediately claim and execute **Ticket 09** on the active frontier.
+**Current Status**: All 11 tickets (Tickets 01 through 11) and all 7 project milestones (M1 through M7) are completely resolved, unit-tested (74 passing tests across the entire repository), verified locally, and documented.
 
 ---
 
@@ -44,18 +44,21 @@ A production-ready **Pallo** multi-tenant SaaS running on PostgreSQL, where mult
   - Scoped staff/user management with self-deactivation protection and cross-tenant mutation blocks.
   - Created test suite [tests/test_warehouse_purchases_scoping.py](file:///tests/test_warehouse_purchases_scoping.py) with 6 passing unit tests.
 - ✅ **Ticket 09** ([09-dynamic-pdf-invoicing-and-company-branding.md](file:///.scratch/pallo-saas/issues/09-dynamic-pdf-invoicing-and-company-branding.md)):
-  - Built Company Profile & White-Label Settings portal (`/settings/company`) for tenant admins to view and manage company details: business legal name, billing & shipping addresses, contact phone, contact email, tax/VAT ID, regional currency symbol, and invoice prefix.
-  - Implemented secure logo upload with safety guardrails: max 2MB file size cap, allowed image extensions (`.png`, `.jpg`, `.jpeg`, `.webp`, `.svg`), secure persistence (`static/logos/companies/company_{cid}.{ext}`), and database storage of `logo_url`.
-  - Updated sidebar brand header and document title in [templates/base.html](file:///templates/base.html) to dynamically render current tenant's logo and company name (with initials monogram fallback), while preserving dual logos and branding for Company 1 ("AK Distributors LLC").
-  - Updated invoice PDF generator [invoice_generator.py](file:///invoice_generator.py) to dynamically format rates, amounts, totals, and balances with the tenant's currency symbol and render tenant company headers while preserving Company 1 dual logos and contact details.
-  - Added unit test suite [tests/test_company_branding_settings.py](file:///tests/test_company_branding_settings.py) with 7 passing unit tests (63 total passing tests across repo).
+  - Built Company Profile & White-Label Settings portal (`/settings/company`) for tenant admins to view and manage company details.
+  - Implemented secure logo upload with safety guardrails: max 2MB file size cap, allowed image extensions (`.png`, `.jpg`, `.jpeg`, `.webp`, `.svg`).
+  - Updated sidebar brand header and document title in [templates/base.html](file:///templates/base.html) to dynamically render current tenant's logo and company name.
+  - Updated invoice PDF generator [invoice_generator.py](file:///invoice_generator.py) to dynamically format rates, amounts, totals, and balances with the tenant's currency symbol.
+  - Added unit test suite [tests/test_company_branding_settings.py](file:///tests/test_company_branding_settings.py) with 7 passing unit tests.
 - ✅ **Ticket 10** ([10-superadmin-platform-governance.md](file:///.scratch/pallo-saas/issues/10-superadmin-platform-governance.md)):
   - Enforced SuperAdmin security gate (`@superadmin_required`) restricting platform management to `role == 'superadmin'`.
   - Built Platform Governance Dashboard (`/superadmin` and [templates/superadmin.html](file:///templates/superadmin.html)) aggregating registered tenants, active/paused status, platform sales GMV, orders count, total catalog products, and total platform accounts.
   - Implemented 1-click tenant soft-deactivation toggle (`/superadmin/company/<id>/toggle_status`) per ADR 0004 with immediate session interception while preserving transactional records.
   - Protected Master Company 1 ("AK Distributors LLC") from deactivation.
   - Added tenant warehouse plan capacity manager (`/superadmin/company/<id>/update_plan`).
-  - Added unit test suite [tests/test_superadmin_governance.py](file:///tests/test_superadmin_governance.py) with 4 passing unit tests (67 total passing tests across repo).
+  - Added unit test suite [tests/test_superadmin_governance.py](file:///tests/test_superadmin_governance.py) with 4 passing unit tests.
+- ✅ **Ticket 11** ([11-tenant-isolation-automated-test-suite.md](file:///.scratch/pallo-saas/issues/11-tenant-isolation-automated-test-suite.md)):
+  - Built comprehensive automated tenant isolation test suite [tests/test_saas_isolation.py](file:///tests/test_saas_isolation.py) with 7 test cases covering product cross-tenant isolation, cross-tenant inter-warehouse stock transfer rejection, customer & accounts receivable isolation, independent sequential invoice numbering, salesman commercial privacy cost masking (ADR 0003), public tenant catalogue & brochure routing (`/c/<company_slug>/catalogue`, `/c/<company_slug>/brochure`) with 250-item safety cap (Milestone 5), and soft-deactivation session termination with SuperAdmin oversight (ADR 0004).
+  - All 74 tests across the entire test suite pass with 100% green status.
 
 ---
 
@@ -75,7 +78,6 @@ A production-ready **Pallo** multi-tenant SaaS running on PostgreSQL, where mult
 
 ## Canonical Documentation & Artifacts
 - **Wayfinder Map**: [.scratch/pallo-saas/map.md](file:///.scratch/pallo-saas/map.md)
-- **Implementation Plan**: [pallo_saas_single_db_plan.md](file:///Users/hassaanjazz/.gemini/antigravity-ide/brain/07de88ae-4a5a-42ca-abf8-a089338194b7/pallo_saas_single_db_plan.md)
 - **ADRs**:
   - [ADR 0001: Shared Database Multi-Tenancy Architecture](file:///docs/adr/0001-shared-db-multi-tenancy-and-flask-evolution.md)
   - [ADR 0002: Global User Identity & Unified Authentication](file:///docs/adr/0002-global-user-identity-and-unified-auth.md)
@@ -83,21 +85,7 @@ A production-ready **Pallo** multi-tenant SaaS running on PostgreSQL, where mult
   - [ADR 0004: Tenant Lifecycle & Soft-Deactivation Policy](file:///docs/adr/0004-tenant-lifecycle-and-soft-deactivation.md)
   - [ADR 0005: Database Engine Transition to PostgreSQL](file:///docs/adr/0005-database-engine-transition-to-postgresql.md)
 - **Domain Glossary**: [GLOSSARY.md](file:///GLOSSARY.md)
-- **Milestone Tracker**: [docs/agents/issue-tracker.md](file:///docs/agents/issue-tracker.md)
-
----
-
-## Wayfinder Issue Map & Next Immediate Task
-
-### Active Frontier Ticket (Take this first)
-- 🟢 **[11-tenant-isolation-automated-test-suite.md](file:///.scratch/pallo-saas/issues/11-tenant-isolation-automated-test-suite.md)**
-  - *Status*: Open, Unblocked (08, 09, 10 resolved).
-  - *Goal*: Build comprehensive automated tenant isolation test suite (`test_saas_isolation.py`) asserting zero cross-company data leakage across inventory, customers, sales, and sequential invoice numbers.
-
----
-
-## Suggested Skills for the Next Agent
-- `wayfinder`: To claim, execute, and resolve tickets one by one per `.scratch/pallo-saas/map.md`.
+- **Milestone Tracker**: [docs/agents/issue-tracker.md](file:///docs/agents/issue-tracker.md) (All M1 - M7 milestones completed)
 - `security-and-hardening`: For validating tenant isolation assertions and cross-company rejection.
 - `test-driven-development`: For end-to-end multi-tenant isolation testing.
 
@@ -106,5 +94,5 @@ A production-ready **Pallo** multi-tenant SaaS running on PostgreSQL, where mult
 ## Prompt to Start Next Session
 Copy and paste this into the new window:
 ```text
-/wayfinder We are converting the ERP to Pallo Multi-Tenant SaaS on PostgreSQL. Review the handoff document at HANDOFF.md and .scratch/pallo-saas/map.md. Claim and start working on Ticket 11 (.scratch/pallo-saas/issues/11-tenant-isolation-automated-test-suite.md).
+We have completed all 11 tickets for the Pallo Multi-Tenant SaaS conversion on PostgreSQL. Please review HANDOFF.md, .scratch/pallo-saas/map.md, and docs/agents/issue-tracker.md for full context. Run the automated test suite (`python3 -m unittest discover tests`) to verify the 74 tests pass, ensure the local server is running on port 5000 via `python3 launch.py`, and let me know the status and next steps for production deployment and SaaS operations.
 ```

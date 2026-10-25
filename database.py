@@ -1085,6 +1085,7 @@ def get_brochure_products(company_id: int = 1):
               AND (p.show_in_brochure IS NULL OR p.show_in_brochure = 1) 
               AND (b.show_in_brochure IS NULL OR b.show_in_brochure = 1)
             ORDER BY p.name COLLATE NOCASE
+            LIMIT 250
             """,
             (company_id,),
         )
