@@ -279,7 +279,7 @@
 
           <tr id="product-row-{{ p.id }}" class="{{ row_class }}">
             <td>{{ loop.index }}</td>
-            <td style="white-space: nowrap; font-size: 0.85rem; color: var(--text-muted);">{{ (p.created_at or '')[:10] }}</td>
+            <td style="white-space: nowrap; font-size: 0.85rem; color: var(--text-muted);">{{ (p.created_at|string or '')[:10] }}</td>
             <td>
               {% if p.image_url %}
               <img src="{{ p.image_url }}" alt="Img" style="width: 32px; height: 32px; object-fit: cover; border-radius: 4px; cursor: pointer; border: 1px solid var(--border);" onclick="openImagePreview('{{ p.image_url }}')">
@@ -319,7 +319,7 @@
                 data-cost-price="{{ p.cost_price|default(0)|float }}"
                 data-selling-price="{{ p.selling_price|default(0)|float }}"
                 data-stock-quantity="{{ p.stock_quantity|format_qty }}"
-                data-created-at="{{ (p.created_at or '')[:10] }}"
+                data-created-at="{{ (p.created_at|string or '')[:10] }}"
                 style="padding: 3px 8px; font-size: 11px; border-radius: 4px; margin: 0 1px;"
               >
                 Edit

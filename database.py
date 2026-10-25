@@ -146,6 +146,10 @@ class PooledCursorWrapper:
         elif "is_active = 0" in query:
             query = query.replace("is_active = 0", "is_active IS FALSE")
 
+        # Strip SQLite-specific COLLATE NOCASE for PostgreSQL
+        if "COLLATE" in query.upper():
+            query = re.sub(r'(?i)\bCOLLATE\s+NOCASE\b', '', query)
+
         if params is None:
             return self._cur.execute(query)
         if isinstance(params, list):
@@ -155,6 +159,8 @@ class PooledCursorWrapper:
     def executemany(self, query, params_seq):
         if "?" in query:
             query = query.replace("?", "%s")
+        if "COLLATE" in query.upper():
+            query = re.sub(r'(?i)\bCOLLATE\s+NOCASE\b', '', query)
         return self._cur.executemany(query, params_seq)
 
     def __iter__(self):

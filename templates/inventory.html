@@ -409,7 +409,7 @@
               data-cost-price="{% if current_user.role in ['admin', 'superadmin'] and p.cost_price is not none %}{{ p.cost_price|default(0)|float }}{% endif %}"
               data-selling-price="{{ p.selling_price|default(0)|float }}"
               data-stock-quantity="{{ p.stock_quantity|format_qty }}"
-              data-created-at="{{ (p.created_at or '')[:10] }}"
+              data-created-at="{{ (p.created_at|string or '')[:10] }}"
               data-is-public="{{ 1 if p.is_public else 0 }}"
               data-is-open="{{ 1 if p.is_open else 0 }}"
               data-supplier-id="{{ p.supplier_id or '' }}"
