@@ -709,13 +709,63 @@ def get_next_invoice_number():
         conn.close()
 
 
+def get_company(company_id: int = 1):
+    """
+    Fetch company metadata by id, with default fallback for Company 1 (AK Distributors LLC)
+    in legacy SQLite or unmigrated environments.
+    """
+    if not company_id:
+        company_id = 1
+
+    conn = get_connection()
+    try:
+        placeholder = "%s" if is_postgres_configured() else "?"
+        cur = conn.cursor()
+        try:
+            cur.execute(f"SELECT * FROM companies WHERE id = {placeholder}", (company_id,))
+            row = cur.fetchone()
+            if row is not None:
+                return dict(row)
+        except Exception:
+            # Table companies might not exist yet in legacy SQLite mode
+            pass
+    finally:
+        conn.close()
+
+    # Fallback default for Company 1 (AK Distributors LLC)
+    if company_id == 1:
+        return {
+            "id": 1,
+            "name": "AK Distributors LLC",
+            "slug": "ak-distributors",
+            "currency": "$",
+            "invoice_prefix": "AK-",
+            "starting_invoice_number": 1,
+            "bill_address": "813 S 12th St",
+            "ship_address": "Philadelphia PA 19147",
+            "phone": "267-270-4200",
+            "email": "akdistributorsllc@gmail.com",
+            "tax_id": "",
+            "logo_url": None,
+            "max_warehouses": 5,
+            "is_active": True,
+        }
+    return None
+
+
 def get_user_by_id(user_id: int):
     conn = get_connection()
     try:
-        cur = conn.execute(
-            "SELECT id, username, role, is_active, warehouse_id FROM users WHERE id = ?", (user_id,)
-        )
-        return cur.fetchone()
+        placeholder = "%s" if is_postgres_configured() else "?"
+        cur = conn.cursor()
+        cur.execute(f"SELECT * FROM users WHERE id = {placeholder}", (user_id,))
+        row = cur.fetchone()
+        if row is None:
+            return None
+        res = dict(row)
+        if "company_id" not in res or res["company_id"] is None:
+            res["company_id"] = 1
+        return res
     finally:
         conn.close()
 
@@ -723,11 +773,16 @@ def get_user_by_id(user_id: int):
 def get_user_by_username(username: str):
     conn = get_connection()
     try:
-        cur = conn.execute(
-            "SELECT id, username, password_hash, role, is_active, warehouse_id FROM users WHERE username = ?",
-            (username,),
-        )
-        return cur.fetchone()
+        placeholder = "%s" if is_postgres_configured() else "?"
+        cur = conn.cursor()
+        cur.execute(f"SELECT * FROM users WHERE username = {placeholder}", (username,))
+        row = cur.fetchone()
+        if row is None:
+            return None
+        res = dict(row)
+        if "company_id" not in res or res["company_id"] is None:
+            res["company_id"] = 1
+        return res
     finally:
         conn.close()
 

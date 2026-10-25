@@ -9,7 +9,7 @@ from datetime import date, timedelta
 
 from collections import defaultdict
 
-from database import get_connection, get_next_invoice_number, get_user_by_id, get_user_by_username, init_db, DB_PATH
+from database import get_connection, get_next_invoice_number, get_user_by_id, get_user_by_username, get_company, init_db, DB_PATH
 
 import urllib.parse
 
@@ -66,11 +66,12 @@ login_manager.login_message = None
 
 
 class User(UserMixin):
-    def __init__(self, db_id: int, username: str, role: str = 'admin', warehouse_id: int = None):
+    def __init__(self, db_id: int, username: str, role: str = 'admin', warehouse_id: int = None, company_id: int = 1):
         self.id = db_id
         self.username = username
         self.role = role
         self.warehouse_id = warehouse_id
+        self.company_id = company_id if company_id is not None else 1
 
 
 @login_manager.user_loader
@@ -84,22 +85,77 @@ def load_user(user_id):
     row = get_user_by_id(pk)
     if row is None:
         return None
-    is_active = row["is_active"] if "is_active" in row.keys() else 1
-    if is_active == 0:
+
+    # Check user account activation
+    is_active = row.get("is_active", 1)
+    if is_active in (0, False):
         return None
-    role = row["role"] if "role" in row.keys() else "admin"
-    warehouse_id = row["warehouse_id"] if "warehouse_id" in row.keys() else None
-    return User(row["id"], row["username"], role, warehouse_id)
+
+    role = row.get("role", "admin")
+    warehouse_id = row.get("warehouse_id")
+    company_id = row.get("company_id")
+    if company_id is None:
+        company_id = 1
+
+    # Enforce company soft-deactivation (ADR 0004); superadmins bypass company pause
+    if role != "superadmin":
+        company = get_company(company_id)
+        if company and not company.get("is_active", True):
+            return None
+
+    return User(row["id"], row["username"], role, warehouse_id, company_id)
+
+
+def superadmin_required(f):
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        if not current_user.is_authenticated:
+            return redirect(url_for('login'))
+        if current_user.role != 'superadmin':
+            return redirect(url_for('dashboard'))
+        return f(*args, **kwargs)
+    return decorated_function
+
+
+def company_admin_required(f):
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        if not current_user.is_authenticated:
+            return redirect(url_for('login'))
+        if current_user.role not in ('admin', 'superadmin'):
+            return redirect(url_for('pos'))
+        return f(*args, **kwargs)
+    return decorated_function
+
 
 def admin_required(f):
     @wraps(f)
     def decorated_function(*args, **kwargs):
         if not current_user.is_authenticated:
             return redirect(url_for('login'))
-        if current_user.role != 'admin':
+        if current_user.role not in ('admin', 'superadmin'):
             return redirect(url_for('pos'))
         return f(*args, **kwargs)
     return decorated_function
+
+
+@app.context_processor
+def inject_pallo_context():
+    """
+    Inject multi-tenant company context and SaaS brand tokens into all Jinja2 templates.
+    """
+    company = None
+    if current_user.is_authenticated:
+        cid = getattr(current_user, "company_id", 1) or 1
+        company = get_company(cid)
+    if not company:
+        company = get_company(1)
+
+    return {
+        "current_company": company,
+        "app_name": "Pallo",
+        "is_superadmin": bool(current_user.is_authenticated and current_user.role == "superadmin"),
+    }
 
 @app.template_filter("format_rate")
 def format_rate_filter(val):
@@ -133,6 +189,8 @@ def brand_logo_filename_filter(val):
 @app.route("/login", methods=["GET", "POST"])
 def login():
     if current_user.is_authenticated:
+        if current_user.role == 'superadmin':
+            return redirect(url_for("superadmin_dashboard") if "superadmin_dashboard" in app.view_functions else url_for("dashboard"))
         if current_user.role == 'salesman':
             return redirect(url_for("pos"))
         return redirect(url_for("dashboard"))
@@ -141,18 +199,33 @@ def login():
         password = request.form.get("password") or ""
         row = get_user_by_username(username)
         if row is not None and check_password_hash(row["password_hash"], password):
-            is_active = row["is_active"] if "is_active" in row.keys() else 1
-            if is_active == 0:
+            is_active = row.get("is_active", 1)
+            if is_active in (0, False):
                 return render_template(
                     "login.html",
                     error="Account is disabled. Please contact the administrator.",
                 )
-            role = row["role"] if "role" in row.keys() else "admin"
-            user_obj = User(row["id"], row["username"], role)
+
+            role = row.get("role", "admin")
+            warehouse_id = row.get("warehouse_id")
+            company_id = row.get("company_id") or 1
+
+            # Enforce company soft-deactivation (ADR 0004); superadmins bypass company pause
+            if role != "superadmin":
+                company = get_company(company_id)
+                if company and not company.get("is_active", True):
+                    return render_template(
+                        "login.html",
+                        error="Your company account has been paused or suspended. Please contact support.",
+                    )
+
+            user_obj = User(row["id"], row["username"], role, warehouse_id, company_id)
             login_user(user_obj, remember=True)
             next_url = request.args.get("next")
             if next_url and next_url.startswith("/"):
                 return redirect(next_url)
+            if user_obj.role == 'superadmin':
+                return redirect(url_for("superadmin_dashboard") if "superadmin_dashboard" in app.view_functions else url_for("dashboard"))
             if user_obj.role == 'salesman':
                 return redirect(url_for("pos"))
             return redirect(url_for("dashboard"))

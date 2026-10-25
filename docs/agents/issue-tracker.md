@@ -23,11 +23,11 @@ This document tracks implementation items, technical decisions, and milestones f
   - [ ] Add query helpers in `database.py` with `RealDictCursor`.
 
 - [ ] **M2: Authentication, Tenant Scoping & Self-Serve Signup**
-  - [ ] Extend Flask-Login `User` with `company_id`.
-  - [ ] Implement `@app.context_processor` for `current_company`.
+  - [x] Extend Flask-Login `User` with `company_id`.
+  - [x] Implement `@app.context_processor` for `current_company`.
   - [ ] Create `/register` self-serve onboarding page with auto-slug generation.
   - [ ] Seed default "Main Warehouse" and starter categories for newly registered companies.
-  - [ ] Update `/login` for unified sign-in with active company validation.
+  - [x] Update `/login` for unified sign-in with active company validation.
 
 - [ ] **M3: Query Scoping & Commercial Privacy (app.py)**
   - [ ] Scope Products, Categories, Brands (`company_id`). Mask `cost_price` for non-admins.

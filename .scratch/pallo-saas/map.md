@@ -19,6 +19,7 @@ A fully functional, production-ready Pallo multi-tenant SaaS running on PostgreS
 - [PostgreSQL Connection & Pooling](issues/01-provision-postgres-connection-and-pooling.md): Thread-safe `ThreadedConnectionPool` with `PooledConnectionWrapper` auto-returning connections and defaulting to `RealDictCursor`, driven by `DATABASE_URL` with SQLite fallback.
 - [PostgreSQL Multi-Tenant Schema](issues/02-define-postgres-multi-tenant-schema.md): Complete DDL schema covering all 18 tables with `company_id` CASCADE FKs, `companies` master table, exact `NUMERIC(14, 4)` types, and composite performance indices.
 - [SQLite to PostgreSQL Migration](issues/03-build-sqlite-to-postgres-migration-script.md): Standalone migration tool (`migrate_sqlite_to_postgres.py`) with topological sequencing, FK sanitization, sequence synchronization, and 100% parity verification.
+- [Unified Auth & Tenant Context](issues/04-unified-auth-session-scoping-and-context.md): User model scoped by `company_id`, soft-deactivation session termination, and global template context injection (`current_company`, `app_name = 'Pallo'`).
 
 ## Not yet specified
 
