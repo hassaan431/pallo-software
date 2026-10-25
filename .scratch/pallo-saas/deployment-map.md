@@ -18,9 +18,9 @@ A live, production-deployed Pallo Multi-Tenant SaaS accessible on a secure publi
 | **D1** | [Provision Neon PostgreSQL Database](deployment-issues/d1-provision-neon-postgres.md) | `wayfinder:task` (HITL) | 🟢 **DONE** | Neon database provisioned and connected via connection string. |
 | **D2** | [Validate Schema & Dry-Run Migration](deployment-issues/d2-verify-schema-and-dry-run.md) | `wayfinder:task` (AFK) | 🟢 **DONE** | PostgreSQL schema applied; composite keys, indices, and constraints verified. |
 | **D3** | [Execute Live Migration & SuperAdmin](deployment-issues/d3-execute-live-migration-and-superadmin.md) | `wayfinder:task` (AFK) | 🟢 **DONE** | 991 records migrated with 100% fidelity; SuperAdmin provisioned. |
-| **D4** | [Push Production Code to GitHub](deployment-issues/d4-push-production-code-to-github.md) | `wayfinder:task` (HITL) | 🟡 **Current Frontier** | User approval to commit and push deployment assets to GitHub `main`. |
-| **D5** | [Launch Web Service on Render](deployment-issues/d5-launch-render-web-service.md) | `wayfinder:task` (HITL) | ⚪ Blocked by D4 | Connect GitHub repo to Render, enter environment variables, and deploy. |
-| **D6** | [Production Smoke Test & Verification](deployment-issues/d6-production-smoke-test-verification.md) | `wayfinder:task` (HITL) | ⚪ Blocked by D5 | Assert live login, new tenant registration, dynamic invoices, and zero cross-tenant leakage. |
+| **D4** | [Push Production Code to GitHub](deployment-issues/d4-push-production-code-to-github.md) | `wayfinder:task` (HITL) | 🟢 **DONE** | Code committed and pushed to `pallo-software` (`main` and `master`). |
+| **D5** | [Launch Web Service on Render](deployment-issues/d5-launch-render-web-service.md) | `wayfinder:task` (HITL) | 🟢 **DONE** | Live Render web service active at `https://pallo-app.onrender.com`. |
+| **D6** | [Production Smoke Test & Verification](deployment-issues/d6-production-smoke-test-verification.md) | `wayfinder:task` (HITL) | 🟢 **DONE** | Full production smoke test verified: 200 OK across all ERP workstations and SuperAdmin. |
 
 ## Not yet specified
 
