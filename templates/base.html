@@ -3,7 +3,18 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>{% block title %}{{ self.page_heading() }} — {{ current_company.name if current_company else 'AK Distributors' }}{% endblock %}</title>
+  
+  <!-- Anti-FOUC Instant Theme Engine -->
+  <script>
+    (function() {
+      try {
+        localStorage.removeItem('pallo_theme');
+        document.documentElement.setAttribute('data-theme', 'light');
+      } catch (e) {}
+    })();
+  </script>
+
+  <title>{% block title %}{{ self.page_heading() }} — {{ current_company.name if current_company else 'Pallo' }}{% endblock %}</title>
 
   <!-- Typography: Inter & Plus Jakarta Sans -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -11,7 +22,7 @@
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@500;600;700;800&display=swap" rel="stylesheet">
 
   <!-- Favicons -->
-  <link rel="icon" type="image/x-icon" href="{{ url_for('static', filename='favicon.ico') }}">
+  <link rel="icon" type="image/png" href="{{ url_for('static', filename='favicon.png') }}">
   <link rel="shortcut icon" type="image/x-icon" href="{{ url_for('static', filename='favicon.ico') }}">
 
   <!-- Core App Styles -->
@@ -59,28 +70,44 @@
       <!-- Brand Header -->
       <div class="sidebar-brand-wrapper">
         <a href="{{ url_for('superadmin_dashboard') if is_superadmin else (url_for('dashboard') if current_user.role == 'admin' else url_for('pos')) }}" class="sidebar-brand-inner">
-          {% if current_company and current_company.id != 1 and current_company.logo_url %}
+          {% if is_superadmin and not active_switched_company_id %}
+            <img
+              src="{{ url_for('static', filename='logos/pallo_mark.png') }}"
+              alt="Pallo OS Logo"
+              class="sidebar-logo-img"
+              style="width: 32px; height: 32px; object-fit: contain;"
+            >
+            <div class="sidebar-brand-text">
+              <span class="sidebar-brand-title">Pallo OS</span>
+              <span class="sidebar-brand-badge" style="background: rgba(99, 102, 241, 0.15); color: #6366f1;">SUPERADMIN</span>
+            </div>
+          {% elif current_company and current_company.logo_url %}
             <img
               src="{{ current_company.logo_url }}"
               alt="{{ current_company.name }} Logo"
               class="sidebar-logo-img"
               style="max-width: 48px; object-fit: contain;"
+              onerror="this.style.display='none'; if(this.nextElementSibling) this.nextElementSibling.style.display='inline-flex';"
             >
-          {% elif current_company and current_company.id != 1 %}
-            <div class="sidebar-logo-monogram" style="width: 32px; height: 32px; border-radius: 6px; background: rgba(16, 185, 129, 0.12); color: var(--color-primary, #10b981); display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 0.85rem; border: 1px solid rgba(16, 185, 129, 0.25); flex-shrink: 0;">
-              {{ current_company.name[:2]|upper }}
+            <div class="sidebar-avatar-monogram" style="display: none; width: 34px; height: 34px; border-radius: 8px; background: rgba(3, 163, 117, 0.12); color: #03a375; font-weight: 700; align-items: center; justify-content: center; font-size: 0.85rem; border: 1px solid rgba(3, 163, 117, 0.25); flex-shrink: 0;">
+              {{ (current_company.name[:2]|upper) if current_company.name else 'CO' }}
+            </div>
+            <div class="sidebar-brand-text">
+              <span class="sidebar-brand-title">{{ current_company.name }}</span>
+              <span class="sidebar-brand-badge">{{ 'SUPERADMIN' if is_superadmin else 'WORKSPACE' }}</span>
             </div>
           {% else %}
             <img
-              src="{{ url_for('static', filename='logos/AK_Distributors_Logo.png') }}"
-              alt="AK Distributors Logo"
+              src="{{ url_for('static', filename='logos/pallo_mark.png') }}"
+              alt="Pallo Logo"
               class="sidebar-logo-img"
+              style="width: 32px; height: 32px; object-fit: contain;"
             >
+            <div class="sidebar-brand-text">
+              <span class="sidebar-brand-title">{{ current_company.name if current_company else 'Pallo' }}</span>
+              <span class="sidebar-brand-badge">{{ 'SUPERADMIN' if is_superadmin else 'WORKSPACE' }}</span>
+            </div>
           {% endif %}
-          <div class="sidebar-brand-text">
-            <span class="sidebar-brand-title">{{ current_company.name if current_company else 'AK Distributors' }}</span>
-            <span class="sidebar-brand-badge">{{ 'SUPERADMIN' if is_superadmin else ('PORTAL' if not current_company or current_company.id == 1 else 'PRO') }}</span>
-          </div>
         </a>
         <button id="sidebarCollapseBtn" class="sidebar-collapse-btn" type="button" title="Collapse sidebar">
           <i data-lucide="panel-left-close"></i>
@@ -143,17 +170,9 @@
         </a>
 
         <div class="sidebar-section">Administration</div>
-        <a href="{{ url_for('settings_company') }}" class="{{ 'is-active' if request.endpoint == 'settings_company' else '' }}" title="Company Settings">
-          <div class="sidebar-nav-icon"><i data-lucide="building"></i></div>
-          <span class="nav-label">Company Settings</span>
-        </a>
         <a href="/expenses" class="{{ 'is-active' if request.path.startswith('/expenses') else '' }}" title="Expenses">
           <div class="sidebar-nav-icon"><i data-lucide="wallet"></i></div>
           <span class="nav-label">Expenses</span>
-        </a>
-        <a href="{{ url_for('users_list') }}" class="{{ 'is-active' if request.endpoint == 'users_list' else '' }}" title="Users">
-          <div class="sidebar-nav-icon"><i data-lucide="shield-check"></i></div>
-          <span class="nav-label">Users</span>
         </a>
         {% endif %}
       </nav>
@@ -212,10 +231,62 @@
             <kbd class="quick-search-kbd">⌘K</kbd>
           </button>
 
-          <!-- Privacy Mode Toggle -->
-          <button id="privacyModeToggle" class="topbar-action-btn" type="button" title="Toggle Privacy Mode (Hide sensitive amounts)">
-            <i id="privacyIcon" data-lucide="eye"></i>
-          </button>
+          {% if is_superadmin and all_companies %}
+          <!-- SuperAdmin Tenant Workspace Switcher -->
+          <div class="tenant-switcher-wrap" id="tenantSwitcherWrap">
+            <button class="tenant-switcher-trigger" type="button" id="tenantSwitcherBtn" aria-haspopup="true" aria-expanded="false" title="Switch Client Workspace">
+              <div class="switcher-icon-pill">
+                <i data-lucide="building-2"></i>
+              </div>
+              <div class="switcher-label-block">
+                <span class="switcher-caption">{% if active_switched_company_id %}Workspace{% else %}Tenant View{% endif %}</span>
+                <span class="switcher-title">{{ current_company.name if current_company else 'All Companies' }}</span>
+              </div>
+              <i data-lucide="chevrons-up-down" class="switcher-arrow"></i>
+            </button>
+
+            <div class="tenant-switcher-dropdown" id="tenantSwitcherMenu">
+              <div class="tenant-switcher-header">
+                <div style="font-weight: 700; font-size: 0.85rem; color: var(--color-text);">Switch Company Workspace</div>
+                <span style="font-size: 0.75rem; background: var(--color-canvas); padding: 2px 8px; border-radius: 999px; color: var(--color-text-muted); font-weight: 600;">{{ all_companies|length }} Tenants</span>
+              </div>
+
+              {% if active_switched_company_id %}
+              <a href="{{ url_for('superadmin_clear_tenant_switch') }}" class="tenant-switcher-clear-row">
+                <i data-lucide="shield-alert" style="width: 14px; height: 14px; color: #6366f1;"></i>
+                <span>Platform Console View (Reset)</span>
+              </a>
+              {% endif %}
+
+              <div class="tenant-switcher-list">
+                {% for co in all_companies %}
+                <a href="{{ url_for('superadmin_switch_tenant', company_id=co.id) }}" class="tenant-switcher-row {{ 'is-active' if current_company and current_company.id == co.id else '' }}">
+                  <div style="display: flex; align-items: center; gap: 0.65rem;">
+                    <div style="width: 26px; height: 26px; border-radius: 6px; background: rgba(99, 102, 241, 0.12); color: #6366f1; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 0.7rem; border: 1px solid rgba(99, 102, 241, 0.25); flex-shrink: 0; overflow: hidden;">
+                      {% if co.logo_url %}
+                        <img src="{{ co.logo_url }}" alt="{{ co.name }}" style="width: 100%; height: 100%; object-fit: contain;" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">
+                        <span style="display: none; width: 100%; height: 100%; align-items: center; justify-content: center;">{{ (co.name[:2]|upper) if co.name else 'CO' }}</span>
+                      {% elif co.id == 1 %}
+                        <img src="{{ url_for('static', filename='logos/AK_Distributors_Logo.png') }}" alt="AK" style="width: 100%; height: 100%; object-fit: contain;" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">
+                        <span style="display: none; width: 100%; height: 100%; align-items: center; justify-content: center;">AK</span>
+                      {% else %}
+                        <span>{{ (co.name[:2]|upper) if co.name else 'CO' }}</span>
+                      {% endif %}
+                    </div>
+                    <div class="tenant-row-details">
+                      <span class="tenant-row-name">{{ co.name }}</span>
+                      <span class="tenant-row-slug">/{{ co.slug }}</span>
+                    </div>
+                  </div>
+                  {% if current_company and current_company.id == co.id %}
+                  <i data-lucide="check" class="tenant-row-check"></i>
+                  {% endif %}
+                </a>
+                {% endfor %}
+              </div>
+            </div>
+          </div>
+          {% endif %}
 
           <!-- User Menu Dropdown -->
           <div class="user-menu-dropdown" id="userMenuDropdown">
@@ -253,11 +324,11 @@
               </div>
               <div class="user-menu-divider"></div>
 
-              <!-- Product Tour / Walk Around in Settings Menu -->
-              <a href="javascript:void(0)" id="menuWalkaroundBtn" class="user-menu-item">
-                <i data-lucide="compass"></i>
-                <span>Product Tour (Walk Around)</span>
-              </a>
+              <!-- Show / Hide Balances Privacy Toggle -->
+              <button id="privacyModeToggle" class="user-menu-item" type="button" style="width: 100%; border: none; background: transparent; text-align: left; cursor: pointer; display: flex; align-items: center; gap: 0.75rem;">
+                <i id="privacyIcon" data-lucide="eye"></i>
+                <span id="privacyLabel">Hide Balances</span>
+              </button>
 
               <a href="{{ url_for('pos') }}" target="_blank" class="user-menu-item">
                 <i data-lucide="shopping-bag"></i>
@@ -265,17 +336,10 @@
                 <span class="menu-ext-badge"><i data-lucide="external-link"></i></span>
               </a>
 
-              {% if is_superadmin %}
-              <a href="{{ url_for('superadmin_dashboard') }}" class="user-menu-item" style="color: #4338ca; font-weight: 600;">
-                <i data-lucide="shield-alert" style="color: #6366f1;"></i>
-                <span>SuperAdmin Console</span>
-              </a>
-              {% endif %}
-
               {% if current_user.role in ('admin', 'superadmin') %}
-              <a href="{{ url_for('brochure_settings') }}" class="user-menu-item">
-                <i data-lucide="book-open"></i>
-                <span>Brochure Settings</span>
+              <a href="{{ url_for('settings_hub') }}" class="user-menu-item">
+                <i data-lucide="settings"></i>
+                <span>Settings Hub</span>
               </a>
               {% endif %}
 
@@ -325,7 +389,7 @@
           <span class="cmdk-footer-hint"><kbd class="cmdk-kbd">↵</kbd> Select</span>
           <span class="cmdk-footer-hint"><kbd class="cmdk-kbd">ESC</kbd> Dismiss</span>
         </div>
-        <div style="font-weight: 600; color: var(--color-slate-400);">AK Portal</div>
+        <div style="font-weight: 600; color: var(--color-slate-400);">Pallo OS</div>
       </div>
     </div>
   </div>
@@ -465,15 +529,20 @@
         });
       }
 
-      // 3. Privacy Mode Toggle
+      // 3. Privacy Mode Toggle (Show / Hide Balances in user menu)
       const privacyBtn = document.getElementById('privacyModeToggle');
       if (privacyBtn) {
         function updatePrivacyIcon(isActive) {
           privacyBtn.classList.toggle('active', isActive);
-          privacyBtn.innerHTML = isActive 
-            ? '<i data-lucide="eye-off"></i>' 
-            : '<i data-lucide="eye"></i>';
-          if (window.lucide) {
+          const iconElem = privacyBtn.querySelector('#privacyIcon');
+          const labelElem = privacyBtn.querySelector('#privacyLabel');
+          if (iconElem) {
+            iconElem.setAttribute('data-lucide', isActive ? 'eye-off' : 'eye');
+          }
+          if (labelElem) {
+            labelElem.textContent = isActive ? 'Show Balances' : 'Hide Balances';
+          }
+          if (window.lucide && typeof window.lucide.createIcons === 'function') {
             window.lucide.createIcons({ root: privacyBtn });
           }
         }
@@ -486,10 +555,49 @@
           updatePrivacyIcon(false);
         }
 
-        privacyBtn.addEventListener('click', () => {
+        privacyBtn.addEventListener('click', (e) => {
+          e.stopPropagation();
           const isActive = document.body.classList.toggle('privacy-mode');
-          localStorage.setItem('privacyMode', isActive);
+          try {
+            localStorage.setItem('privacyMode', isActive);
+          } catch (err) {}
           updatePrivacyIcon(isActive);
+        });
+      }
+
+      // Global Theme Controller (Exposed for Settings page and Cmd+K)
+      window.setPalloTheme = function(theme) {
+        const nextTheme = theme === 'dark' ? 'dark' : 'light';
+        document.documentElement.setAttribute('data-theme', nextTheme);
+        try {
+          localStorage.setItem('pallo_theme', nextTheme);
+        } catch (e) {}
+        window.dispatchEvent(new CustomEvent('palloThemeChanged', { detail: { theme: nextTheme } }));
+      };
+
+      window.togglePalloTheme = function() {
+        const currentTheme = document.documentElement.getAttribute('data-theme') || 'light';
+        const nextTheme = currentTheme === 'dark' ? 'light' : 'dark';
+        window.setPalloTheme(nextTheme);
+        return nextTheme;
+      };
+
+      // SuperAdmin Tenant Switcher Dropdown
+      const tenantSwitcherBtn = document.getElementById('tenantSwitcherBtn');
+      const tenantSwitcherMenu = document.getElementById('tenantSwitcherMenu');
+      if (tenantSwitcherBtn && tenantSwitcherMenu) {
+        tenantSwitcherBtn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          const isOpen = tenantSwitcherMenu.classList.toggle('show');
+          tenantSwitcherBtn.setAttribute('aria-expanded', isOpen);
+          if (window.userMenuContent) window.userMenuContent.classList.remove('show');
+        });
+
+        document.addEventListener('click', (e) => {
+          if (!tenantSwitcherBtn.contains(e.target) && !tenantSwitcherMenu.contains(e.target)) {
+            tenantSwitcherMenu.classList.remove('show');
+            tenantSwitcherBtn.setAttribute('aria-expanded', 'false');
+          }
         });
       }
 
@@ -773,6 +881,7 @@
         { group: "Navigation", title: "Users", url: "{{ url_for('users_list') }}", icon: "shield-check" },
         { group: "Navigation", title: "Reports", url: "{{ url_for('reports') }}", icon: "line-chart" },
         { group: "Navigation", title: "POS Catalogue", url: "{{ url_for('pos') }}", icon: "shopping-bag" },
+        { group: "Navigation", title: "Settings Hub", url: "{{ url_for('settings_hub') }}", icon: "settings" },
         { group: "Navigation", title: "Help Center", url: "{{ url_for('help_center') }}", icon: "help-circle" }
       ];
 
@@ -879,6 +988,10 @@
         } else if (item.action === 'privacy') {
           const btn = document.getElementById('privacyModeToggle');
           if (btn) btn.click();
+        } else if (item.action === 'theme') {
+          if (window.togglePalloTheme) {
+            window.togglePalloTheme();
+          }
         } else if (item.action === 'sidebar') {
           const btn = document.getElementById('sidebarCollapseBtn');
           if (btn) btn.click();
@@ -1116,11 +1229,12 @@
           return isModalVisible(el);
         });
 
+        const companyName = '{{ current_company.name if current_company else "Pallo" }}';
         if (openModals.length > 0) {
           const topModal = openModals[openModals.length - 1];
           const modalTitle = getModalTitle(topModal);
           if (modalTitle) {
-            document.title = `${modalTitle} — AK Distributors`;
+            document.title = `${modalTitle} — ${companyName}`;
             return;
           }
         }
@@ -1131,7 +1245,8 @@
       }
 
       window.addEventListener('DOMContentLoaded', () => {
-        if (!basePageTitle || basePageTitle === 'Details Drawer — AK Distributors') {
+        const companyName = '{{ current_company.name if current_company else "Pallo" }}';
+        if (!basePageTitle || basePageTitle.includes('Details Drawer')) {
           basePageTitle = document.title;
         }
         updateTabTitleForModals();

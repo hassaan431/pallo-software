@@ -1,0 +1,2211 @@
+{% extends "base.html" %}
+
+{% block title %}Settings — {{ company.name if company else 'Pallo' }}{% endblock %}
+{% block page_heading %}Settings Hub{% endblock %}
+
+{% block content %}
+<div class="settings-hub-layout">
+  <!-- Settings Header Banner -->
+  <div class="settings-hub-header">
+    <div class="settings-header-left">
+      <div class="settings-header-icon">
+        <i data-lucide="sliders-horizontal"></i>
+      </div>
+      <div>
+        <h1 class="settings-header-title">Workspace Settings</h1>
+        <p class="settings-header-sub">Manage your company branding, team permissions, catalogue publications, and system defaults.</p>
+      </div>
+    </div>
+
+    <div class="settings-header-badge">
+      <span class="tenant-pill">
+        <i data-lucide="building" style="width: 14px; height: 14px;"></i>
+        <span>{{ company.name if company else 'Pallo Tenant' }}</span>
+      </span>
+      {% if is_superadmin %}
+      <span class="superadmin-pill">
+        <i data-lucide="shield-check" style="width: 14px; height: 14px;"></i>
+        <span>SuperAdmin</span>
+      </span>
+      {% endif %}
+    </div>
+  </div>
+
+  <div class="settings-hub-body">
+    <!-- Left Navigation Rail / Tabs -->
+    <aside class="settings-nav-rail" aria-label="Settings navigation">
+      <nav class="settings-tabs-list">
+        <a href="{{ url_for('settings_hub', tab='company') }}" class="settings-tab-link {{ 'is-active' if active_tab == 'company' else '' }}">
+          <i data-lucide="building-2"></i>
+          <div class="tab-label-group">
+            <span class="tab-primary-title">Company Profile</span>
+            <span class="tab-sub-title">Branding, tax, contact info</span>
+          </div>
+        </a>
+
+        <a href="{{ url_for('settings_hub', tab='users') }}" class="settings-tab-link {{ 'is-active' if active_tab == 'users' else '' }}">
+          <i data-lucide="users"></i>
+          <div class="tab-label-group">
+            <span class="tab-primary-title">Team & Users</span>
+            <span class="tab-sub-title">Staff accounts & roles</span>
+          </div>
+          {% if users %}
+          <span class="tab-count-pill">{{ users|length }}</span>
+          {% endif %}
+        </a>
+
+        <a href="{{ url_for('settings_hub', tab='brochure') }}" class="settings-tab-link {{ 'is-active' if active_tab == 'brochure' else '' }}">
+          <i data-lucide="book-open"></i>
+          <div class="tab-label-group">
+            <span class="tab-primary-title">Brochure & Catalog</span>
+            <span class="tab-sub-title">Public lines & PDF export</span>
+          </div>
+        </a>
+
+        <a href="{{ url_for('settings_hub', tab='preferences') }}" class="settings-tab-link {{ 'is-active' if active_tab == 'preferences' else '' }}">
+          <i data-lucide="sliders-horizontal"></i>
+          <div class="tab-label-group">
+            <span class="tab-primary-title">Operational Preferences</span>
+            <span class="tab-sub-title">Fulfillment, alerts & sequencing</span>
+          </div>
+        </a>
+
+        {% if is_superadmin %}
+        <div class="settings-nav-divider"></div>
+        <a href="{{ url_for('settings_hub', tab='platform') }}" class="settings-tab-link settings-tab-superadmin {{ 'is-active' if active_tab == 'platform' else '' }}">
+          <i data-lucide="shield-alert" style="color: #6366f1;"></i>
+          <div class="tab-label-group">
+            <span class="tab-primary-title" style="color: #4338ca;">Platform Console</span>
+            <span class="tab-sub-title">Multi-tenant governance</span>
+          </div>
+          <span class="tab-badge-super">SYS</span>
+        </a>
+        {% endif %}
+      </nav>
+    </aside>
+
+    <!-- Main Content Tab Panel -->
+    <main class="settings-content-panel">
+      <!-- ========================================== -->
+      <!-- TAB 1: COMPANY PROFILE & BRANDING          -->
+      <!-- ========================================== -->
+      {% if active_tab == 'company' %}
+      <div class="settings-pane">
+        <div class="pane-header">
+          <div>
+            <h2 class="pane-title">Company Profile & Branding</h2>
+            <p class="pane-desc">This information appears on generated invoices, customer receipts, and public brochure exports.</p>
+          </div>
+        </div>
+
+        <form method="POST" action="{{ url_for('settings_hub', tab='company') }}" enctype="multipart/form-data" class="settings-form">
+          <input type="hidden" name="form_type" value="company">
+
+          <!-- Brand Logo Upload Section -->
+          <div class="settings-section-card">
+            <div class="card-headline">
+              <i data-lucide="image"></i>
+              <h3>Company Logo</h3>
+            </div>
+            <p class="card-caption">Upload your high-resolution logo (PNG, JPG, SVG, or WEBP up to 2MB). Recommended transparent background.</p>
+
+            <div class="logo-upload-wrapper">
+              <div class="logo-preview-box">
+                {% if company.logo_url %}
+                  <img id="logoPreviewImg" src="{{ company.logo_url }}" alt="Company Logo" class="current-logo-img" onerror="this.style.display='none'; if(this.nextElementSibling) this.nextElementSibling.style.display='flex';">
+                  <div id="logoFallbackInitials" style="display: none; width: 100%; height: 100%; align-items: center; justify-content: center; font-weight: 800; font-size: 1.4rem; color: #03a375; background: rgba(3, 163, 117, 0.08); border-radius: 6px;">
+                    {{ (company.name[:2]|upper) if company.name else 'CO' }}
+                  </div>
+                {% else %}
+                  <div id="logoFallbackInitials" style="display: flex; width: 100%; height: 100%; align-items: center; justify-content: center; font-weight: 800; font-size: 1.4rem; color: #03a375; background: rgba(3, 163, 117, 0.08); border-radius: 6px;">
+                    {{ (company.name[:2]|upper) if company.name else 'CO' }}
+                  </div>
+                {% endif %}
+              </div>
+
+              <div class="logo-upload-actions">
+                <label class="btn-file-select" for="logoInput">
+                  <i data-lucide="upload-cloud"></i>
+                  <span>Choose New Logo</span>
+                  <input type="file" id="logoInput" name="logo" accept="image/png,image/jpeg,image/webp,image/svg+xml" style="display: none;">
+                </label>
+
+                {% if company.logo_url %}
+                <button type="submit" name="remove_logo" value="1" class="btn-remove-logo" onclick="return confirm('Remove custom company logo and revert to Pallo default mark?')">
+                  <i data-lucide="trash-2"></i>
+                  <span>Remove Logo</span>
+                </button>
+                {% endif %}
+                <span class="file-hint">Max file size: 2MB • Formats: PNG, JPG, SVG, WEBP</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- General Company Information -->
+          <div class="settings-section-card">
+            <div class="card-headline">
+              <i data-lucide="file-text"></i>
+              <h3>Business Information</h3>
+            </div>
+
+            <div class="form-grid-2">
+              <div class="field-item">
+                <label for="companyName">Company Legal Name <span class="req">*</span></label>
+                <input type="text" id="companyName" name="name" value="{{ company.name or '' }}" required placeholder="e.g. Apex Wholesale Distributors">
+              </div>
+
+              <div class="field-item">
+                <label for="companySlug">Tenant Workspace Slug</label>
+                <div class="input-with-pill">
+                  <input type="text" id="companySlug" value="{{ company.slug or '' }}" readonly disabled>
+                  <span class="readonly-pill">LOCKED</span>
+                </div>
+                <small class="field-tip">Public URL identifier: <code>/c/{{ company.slug or 'workspace' }}/catalogue</code></small>
+              </div>
+
+              <div class="field-item">
+                <label for="companyTaxId">Tax ID / NTN / VAT Number</label>
+                <input type="text" id="companyTaxId" name="tax_id" value="{{ company.tax_id or '' }}" placeholder="e.g. 12-3456789">
+              </div>
+
+              <div class="field-item">
+                <label for="companyPhone">Phone Number</label>
+                <input type="text" id="companyPhone" name="phone" value="{{ company.phone or '' }}" placeholder="e.g. +1 (555) 019-2834">
+              </div>
+
+              <div class="field-item">
+                <label for="companyEmail">Official Billing Email</label>
+                <input type="email" id="companyEmail" name="email" value="{{ company.email or '' }}" placeholder="billing@company.com">
+              </div>
+
+              <div class="field-item">
+                <label for="currencySymbol">Currency Symbol</label>
+                <input type="text" id="currencySymbol" name="currency" value="{{ company.currency or '$' }}" maxlength="5" placeholder="$">
+              </div>
+            </div>
+
+            <div class="form-grid-2" style="margin-top: 1rem;">
+              <div class="field-item">
+                <label for="billAddress">Billing / Registered Address</label>
+                <textarea id="billAddress" name="bill_address" rows="3" placeholder="Suite, Street Address, City, State, ZIP">{{ company.bill_address or '' }}</textarea>
+              </div>
+
+              <div class="field-item">
+                <label for="shipAddress">Shipping / Warehouse Address</label>
+                <textarea id="shipAddress" name="ship_address" rows="3" placeholder="Main fulfillment facility location">{{ company.ship_address or '' }}</textarea>
+              </div>
+            </div>
+          </div>
+
+          <!-- Invoice Customization -->
+          <div class="settings-section-card">
+            <div class="card-headline">
+              <i data-lucide="receipt"></i>
+              <h3>Invoice & Billing Defaults</h3>
+            </div>
+
+            <div class="form-grid-2">
+              <div class="field-item">
+                <label for="invoicePrefix">Invoice Number Prefix</label>
+                <input type="text" id="invoicePrefix" name="invoice_prefix" value="{{ company.invoice_prefix or 'INV-' }}" placeholder="e.g. INV- or AK-">
+                <small class="field-tip">Will generate numbers like <code>{{ company.invoice_prefix or 'INV-' }}00104</code></small>
+              </div>
+            </div>
+          </div>
+
+          <div class="settings-form-actions">
+            <button type="submit" class="btn-save-settings">
+              <i data-lucide="check"></i>
+              <span>Save Company Profile</span>
+            </button>
+          </div>
+        </form>
+      </div>
+      {% endif %}
+
+      <!-- ========================================== -->
+      <!-- TAB 2: TEAM & USERS                        -->
+      <!-- ========================================== -->
+      {% if active_tab == 'users' %}
+      <div class="settings-pane">
+        <div class="team-header-row">
+          <div>
+            <h2 class="pane-title">Team & User Accounts</h2>
+            <p class="pane-desc">Manage staff access, assigned sales roles, and multi-warehouse authorizations directly from this console.</p>
+          </div>
+          <button type="button" class="btn-add-team-member" onclick="openAddUserModal()">
+            <i data-lucide="user-plus"></i>
+            <span>Add Team Member</span>
+          </button>
+        </div>
+
+        <div class="settings-section-card team-card">
+          <div class="card-headline">
+            <i data-lucide="shield-check"></i>
+            <h3>Active Team Members ({{ users|length }})</h3>
+          </div>
+
+          <div class="table-container" style="margin-top: 1rem; overflow-x: auto;">
+            <table class="data-table team-table">
+              <thead>
+                <tr>
+                  <th style="width: 28%;">User Account</th>
+                  <th style="width: 18%;">Role</th>
+                  <th style="width: 26%;">Assigned Facility</th>
+                  <th style="width: 14%;">Status</th>
+                  <th style="width: 14%; text-align: right;">Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% set avatar_palettes = [
+                  'background: #e0f2fe; color: #0284c7; border: 1px solid #bae6fd;',
+                  'background: #f3e8ff; color: #9333ea; border: 1px solid #e9d5ff;',
+                  'background: #ecfdf5; color: #059669; border: 1px solid #a7f3d0;',
+                  'background: #fff7ed; color: #ea580c; border: 1px solid #fed7aa;',
+                  'background: #e0e7ff; color: #4f46e5; border: 1px solid #c7d2fe;',
+                  'background: #fdf2f8; color: #db2777; border: 1px solid #fbcfe8;'
+                ] %}
+                {% for u in users %}
+                <tr>
+                  <td>
+                    <div style="display: flex; align-items: center; gap: 0.75rem;">
+                      <div class="user-avatar-monogram" style="{{ avatar_palettes[loop.index0 % avatar_palettes|length] }}">
+                        {{ u.username[:2]|upper }}
+                      </div>
+                      <div style="display: flex; align-items: center; flex-wrap: wrap; gap: 4px;">
+                        <span style="font-weight: 700; color: #0f172a; font-size: 0.875rem;">{{ u.username }}</span>
+                        {% if current_user.id == u.id %}
+                        <span class="you-badge">You</span>
+                        {% endif %}
+                      </div>
+                    </div>
+                  </td>
+                  <td>
+                    {% if u.role == 'admin' %}
+                      <span class="role-badge role-badge-admin">
+                        <i data-lucide="shield" style="width: 12px; height: 12px;"></i>
+                        Admin
+                      </span>
+                    {% elif u.role == 'superadmin' %}
+                      <span class="role-badge role-badge-superadmin">
+                        <i data-lucide="shield-alert" style="width: 12px; height: 12px;"></i>
+                        Superadmin
+                      </span>
+                    {% elif u.role == 'warehouse_manager' %}
+                      <span class="role-badge role-badge-manager">
+                        <i data-lucide="box" style="width: 12px; height: 12px;"></i>
+                        Manager
+                      </span>
+                    {% else %}
+                      <span class="role-badge role-badge-salesman">
+                        <i data-lucide="user" style="width: 12px; height: 12px;"></i>
+                        Salesman
+                      </span>
+                    {% endif %}
+                  </td>
+                  <td>
+                    {% if u.warehouse_name %}
+                    <span style="display: inline-flex; align-items: center; gap: 0.35rem; color: #334155; font-size: 0.825rem; font-weight: 500;">
+                      <i data-lucide="warehouse" style="width: 13px; height: 13px; color: #94a3b8;"></i>
+                      {{ u.warehouse_name }}
+                    </span>
+                    {% else %}
+                    <span style="color: #94a3b8; font-size: 0.8rem; font-style: italic;">All Facilities</span>
+                    {% endif %}
+                  </td>
+                  <td>
+                    {% if u.is_active %}
+                    <span class="status-pill status-pill-active">Active</span>
+                    {% else %}
+                    <span class="status-pill status-pill-suspended">Suspended</span>
+                    {% endif %}
+                  </td>
+                  <td style="text-align: right; white-space: nowrap;">
+                    <div style="display: flex; gap: 0.4rem; justify-content: flex-end; align-items: center;">
+                      <!-- Edit Role & Status (in popup) -->
+                      <button
+                        type="button"
+                        class="btn-user-action btn-user-edit"
+                        onclick="openEditUser({{ u.id }}, '{{ u.username | e }}', '{{ u.role }}', '{{ u.warehouse_id or '' }}', {{ 'true' if u.is_active else 'false' }}, {{ 'true' if current_user.id == u.id else 'false' }})"
+                        title="Edit User & Status"
+                      >
+                        <i data-lucide="pencil"></i>
+                        <span>Edit</span>
+                      </button>
+
+                      <!-- Reset Password -->
+                      <button
+                        type="button"
+                        class="btn-user-action btn-user-pwd"
+                        onclick="openResetPassword({{ u.id }}, '{{ u.username | e }}')"
+                        title="Reset User Password"
+                      >
+                        <i data-lucide="key-round"></i>
+                        <span>Password</span>
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+                {% else %}
+                <tr>
+                  <td colspan="5" style="text-align: center; color: var(--color-text-muted); padding: 2.5rem 1rem;">No users found in this workspace.</td>
+                </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- Add User Modal -->
+        <div id="addUserModal" class="modal-backdrop" aria-hidden="true">
+          <div class="modal" role="dialog" aria-modal="true" aria-label="Add User" style="max-width: 480px; width: 95%;">
+            <div class="modal-header">
+              <div style="display: flex; align-items: center; gap: 0.5rem;">
+                <div class="users-stat-icon blue" style="width: 30px; height: 30px; border-radius: 8px;">
+                  <i data-lucide="user-plus" style="width: 15px; height: 15px;"></i>
+                </div>
+                <h3 style="margin: 0; font-size: 1rem; font-weight: 700;">Add Team Member</h3>
+              </div>
+              <button type="button" class="modal-close" data-close-modal="addUserModal" aria-label="Close">&times;</button>
+            </div>
+            <div class="modal-body">
+              <form id="addUserForm">
+                <div class="form-group" style="margin-bottom: 0.85rem;">
+                  <label for="newUsername" style="font-weight: 600; font-size: 0.775rem; color: var(--color-slate-700); display: block; margin-bottom: 0.35rem;">
+                    Username <span style="color: #dc2626;">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    class="form-control"
+                    id="newUsername"
+                    name="username"
+                    required
+                    placeholder="e.g. john_doe"
+                    style="width: 100%; height: 36px;"
+                  >
+                </div>
+
+                <div class="form-group" style="margin-bottom: 0.85rem;">
+                  <label for="newPassword" style="font-weight: 600; font-size: 0.775rem; color: var(--color-slate-700); display: block; margin-bottom: 0.35rem;">
+                    Initial Password <span style="color: #dc2626;">*</span>
+                  </label>
+                  <input
+                    type="password"
+                    class="form-control"
+                    id="newPassword"
+                    name="password"
+                    required
+                    placeholder="••••••••"
+                    style="width: 100%; height: 36px;"
+                  >
+                </div>
+
+                <div class="form-group" style="margin-bottom: 0.85rem;">
+                  <label for="newRole" style="font-weight: 600; font-size: 0.775rem; color: var(--color-slate-700); display: block; margin-bottom: 0.35rem;">
+                    Account Role <span style="color: #dc2626;">*</span>
+                  </label>
+                  <select class="form-control" id="newRole" name="role" required style="width: 100%; height: 36px;">
+                    <option value="salesman">Salesman (Invoicing &amp; Orders)</option>
+                    <option value="admin">Admin (Full Workspace Access)</option>
+                  </select>
+                </div>
+
+                <div class="form-group" style="margin-bottom: 1rem;">
+                  <label for="newWarehouse" style="font-weight: 600; font-size: 0.775rem; color: var(--color-slate-700); display: block; margin-bottom: 0.35rem;">
+                    Assigned Warehouse Facility
+                  </label>
+                  <select class="form-control" id="newWarehouse" name="warehouse_id" style="width: 100%; height: 36px;">
+                    <option value="">-- None / All Facilities (Admin) --</option>
+                    {% for w in warehouses %}
+                    <option value="{{ w.id }}">{{ w.name }}</option>
+                    {% endfor %}
+                  </select>
+                </div>
+                
+                <div class="alert alert-danger" id="addUserError" style="display: none; margin-bottom: 1rem; font-size: 0.8rem; padding: 0.5rem 0.75rem;"></div>
+                
+                <div style="display: flex; justify-content: flex-end; gap: 0.5rem;">
+                  <button type="button" class="btn btn-outline" data-close-modal="addUserModal" style="padding: 0.45rem 0.85rem; font-size: 0.825rem;">
+                    Cancel
+                  </button>
+                  <button type="submit" class="btn btn-primary" style="padding: 0.45rem 1rem; font-size: 0.825rem; font-weight: 600;">
+                    Create User
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        </div>
+
+        <!-- Edit User Modal -->
+        <div id="editUserModal" class="modal-backdrop" aria-hidden="true">
+          <div class="modal" role="dialog" aria-modal="true" aria-label="Edit User" style="max-width: 480px; width: 95%;">
+            <div class="modal-header">
+              <div style="display: flex; align-items: center; gap: 0.5rem;">
+                <div class="users-stat-icon purple" style="width: 30px; height: 30px; border-radius: 8px;">
+                  <i data-lucide="user-cog" style="width: 15px; height: 15px;"></i>
+                </div>
+                <h3 style="margin: 0; font-size: 1rem; font-weight: 700;">Edit User: <span id="editUserTitle"></span></h3>
+              </div>
+              <button type="button" class="modal-close" data-close-modal="editUserModal" aria-label="Close">&times;</button>
+            </div>
+            <div class="modal-body">
+              <!-- Account Status Strip with Suspend/Activate Toggle -->
+              <div style="background: #f8fafc; border: 1px solid var(--color-border); border-radius: 8px; padding: 0.75rem 1rem; margin-bottom: 1.15rem; display: flex; align-items: center; justify-content: space-between;">
+                <div>
+                  <div style="font-size: 0.7rem; font-weight: 700; color: #64748b; text-transform: uppercase; letter-spacing: 0.05em;">Account Status</div>
+                  <div id="editUserStatusBadge" style="margin-top: 3px;"></div>
+                </div>
+                <div id="editUserActionContainer"></div>
+              </div>
+
+              <form id="editUserForm" method="POST">
+                <div class="form-group" style="margin-bottom: 0.85rem;">
+                  <label for="editRole" style="font-weight: 600; font-size: 0.775rem; color: var(--color-slate-700); display: block; margin-bottom: 0.35rem;">
+                    Account Role <span style="color: #dc2626;">*</span>
+                  </label>
+                  <select class="form-control" id="editRole" name="role" required style="width: 100%; height: 36px;">
+                    <option value="salesman">Salesman (Invoicing &amp; Orders)</option>
+                    <option value="admin">Admin (Full Workspace Access)</option>
+                  </select>
+                </div>
+
+                <div class="form-group" style="margin-bottom: 1.25rem;">
+                  <label for="editWarehouse" style="font-weight: 600; font-size: 0.775rem; color: var(--color-slate-700); display: block; margin-bottom: 0.35rem;">
+                    Assigned Warehouse Facility
+                  </label>
+                  <select class="form-control" id="editWarehouse" name="warehouse_id" style="width: 100%; height: 36px;">
+                    <option value="">-- None / All Facilities (Admin) --</option>
+                    {% for w in warehouses %}
+                    <option value="{{ w.id }}">{{ w.name }}</option>
+                    {% endfor %}
+                  </select>
+                </div>
+                
+                <div style="display: flex; justify-content: flex-end; gap: 0.5rem;">
+                  <button type="button" class="btn btn-outline" data-close-modal="editUserModal" style="padding: 0.45rem 0.85rem; font-size: 0.825rem;">
+                    Cancel
+                  </button>
+                  <button type="submit" class="btn btn-primary" style="padding: 0.45rem 1rem; font-size: 0.825rem; font-weight: 600;">
+                    Save Changes
+                  </button>
+                </div>
+              </form>
+              <form id="editUserToggleForm" method="POST" style="display: none;"></form>
+            </div>
+          </div>
+        </div>
+
+        <!-- Reset Password Modal -->
+        <div id="resetPasswordModal" class="modal-backdrop" aria-hidden="true">
+          <div class="modal" role="dialog" aria-modal="true" aria-label="Reset Password" style="max-width: 440px; width: 95%;">
+            <div class="modal-header">
+              <div style="display: flex; align-items: center; gap: 0.5rem;">
+                <div class="users-stat-icon emerald" style="width: 30px; height: 30px; border-radius: 8px;">
+                  <i data-lucide="key-round" style="width: 15px; height: 15px;"></i>
+                </div>
+                <h3 style="margin: 0; font-size: 1rem; font-weight: 700;">Password: <span id="resetPasswordUsername"></span></h3>
+              </div>
+              <button type="button" class="modal-close" data-close-modal="resetPasswordModal" aria-label="Close">&times;</button>
+            </div>
+            <div class="modal-body">
+              <form id="resetPasswordForm">
+                <input type="hidden" id="resetUserId" name="user_id">
+                <div class="form-group" style="margin-bottom: 1rem;">
+                  <label for="resetNewPassword" style="font-weight: 600; font-size: 0.775rem; color: var(--color-slate-700); display: block; margin-bottom: 0.35rem;">
+                    New Password <span style="color: #dc2626;">*</span>
+                  </label>
+                  <input
+                    type="password"
+                    class="form-control"
+                    id="resetNewPassword"
+                    name="new_password"
+                    required
+                    placeholder="Enter new password"
+                    style="width: 100%; height: 36px;"
+                  >
+                </div>
+                
+                <div class="alert alert-danger" id="resetPasswordError" style="display: none; margin-bottom: 1rem; font-size: 0.8rem; padding: 0.5rem 0.75rem;"></div>
+                
+                <div style="display: flex; justify-content: flex-end; gap: 0.5rem;">
+                  <button type="button" class="btn btn-outline" data-close-modal="resetPasswordModal" style="padding: 0.45rem 0.85rem; font-size: 0.825rem;">
+                    Cancel
+                  </button>
+                  <button type="submit" class="btn btn-primary" style="padding: 0.45rem 1rem; font-size: 0.825rem; font-weight: 600;">
+                    Update Password
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <script>
+        function openModal(modalId) {
+          const m = document.getElementById(modalId);
+          if (m) {
+            m.setAttribute('aria-hidden', 'false');
+            m.classList.add('is-open');
+            if (window.lucide && typeof window.lucide.createIcons === 'function') {
+              window.lucide.createIcons();
+            }
+          }
+        }
+
+        function closeModal(modalId) {
+          const m = document.getElementById(modalId);
+          if (m) {
+            m.setAttribute('aria-hidden', 'true');
+            m.classList.remove('is-open');
+          }
+        }
+
+        function openAddUserModal() {
+          const form = document.getElementById('addUserForm');
+          if (form) form.reset();
+          const err = document.getElementById('addUserError');
+          if (err) { err.style.display = 'none'; err.textContent = ''; }
+          openModal('addUserModal');
+        }
+
+        function openEditUser(id, username, role, warehouse_id, isActive, isSelf) {
+          const title = document.getElementById('editUserTitle');
+          if (title) title.textContent = username;
+          const roleSelect = document.getElementById('editRole');
+          if (roleSelect) roleSelect.value = role;
+          const whSelect = document.getElementById('editWarehouse');
+          if (whSelect) whSelect.value = warehouse_id;
+          const form = document.getElementById('editUserForm');
+          if (form) form.action = `/users/edit/${id}`;
+
+          const statusBadge = document.getElementById('editUserStatusBadge');
+          const actionContainer = document.getElementById('editUserActionContainer');
+          const toggleForm = document.getElementById('editUserToggleForm');
+          if (toggleForm) toggleForm.action = `/users/toggle_active/${id}`;
+
+          if (statusBadge) {
+            if (isActive) {
+              statusBadge.innerHTML = '<span class="status-pill status-pill-active">Active</span>';
+            } else {
+              statusBadge.innerHTML = '<span class="status-pill status-pill-suspended">Suspended</span>';
+            }
+          }
+
+          if (actionContainer) {
+            if (isSelf) {
+              actionContainer.innerHTML = '<span style="font-size: 0.75rem; color: #64748b; font-style: italic;">(Your Account)</span>';
+            } else {
+              if (isActive) {
+                actionContainer.innerHTML = `
+                  <button type="button" class="btn-user-action btn-user-suspend" style="padding: 0.4rem 0.85rem; font-size: 0.8rem;" onclick="if(confirm('Suspend login access for user \\'${username}\\'?')) document.getElementById('editUserToggleForm').submit();">
+                    <i data-lucide="user-x"></i>
+                    <span>Suspend User</span>
+                  </button>
+                `;
+              } else {
+                actionContainer.innerHTML = `
+                  <button type="button" class="btn-user-action btn-user-activate" style="padding: 0.4rem 0.85rem; font-size: 0.8rem;" onclick="document.getElementById('editUserToggleForm').submit();">
+                    <i data-lucide="user-check"></i>
+                    <span>Activate User</span>
+                  </button>
+                `;
+              }
+            }
+          }
+
+          openModal('editUserModal');
+        }
+
+        function openResetPassword(userId, username) {
+          const idInput = document.getElementById('resetUserId');
+          if (idInput) idInput.value = userId;
+          const userSpan = document.getElementById('resetPasswordUsername');
+          if (userSpan) userSpan.textContent = username;
+          const pwdInput = document.getElementById('resetNewPassword');
+          if (pwdInput) pwdInput.value = '';
+          const err = document.getElementById('resetPasswordError');
+          if (err) { err.style.display = 'none'; err.textContent = ''; }
+          openModal('resetPasswordModal');
+        }
+
+        document.addEventListener('DOMContentLoaded', () => {
+          // Modal close buttons
+          document.querySelectorAll('[data-close-modal]').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+              e.preventDefault();
+              const modalId = btn.getAttribute('data-close-modal');
+              closeModal(modalId);
+            });
+          });
+
+          // Backdrop click & Escape key
+          ['addUserModal', 'editUserModal', 'resetPasswordModal'].forEach(id => {
+            const el = document.getElementById(id);
+            if (el) {
+              el.addEventListener('click', (e) => {
+                if (e.target === el) closeModal(id);
+              });
+            }
+          });
+
+          document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape') {
+              ['addUserModal', 'editUserModal', 'resetPasswordModal'].forEach(id => closeModal(id));
+            }
+          });
+
+          // Add User Submission
+          const addUserForm = document.getElementById('addUserForm');
+          if (addUserForm) {
+            addUserForm.addEventListener('submit', async (e) => {
+              e.preventDefault();
+              const errorBanner = document.getElementById('addUserError');
+              errorBanner.style.display = 'none';
+              errorBanner.textContent = '';
+              const formData = new FormData(addUserForm);
+              try {
+                const res = await fetch('{{ url_for("users_add") }}', {
+                  method: 'POST',
+                  body: formData
+                });
+                const data = await res.json();
+                if (res.ok && data.ok) {
+                  window.location.reload();
+                } else {
+                  errorBanner.textContent = data.error || 'Failed to add user.';
+                  errorBanner.style.display = 'block';
+                }
+              } catch (err) {
+                errorBanner.textContent = 'Network or server error occurred.';
+                errorBanner.style.display = 'block';
+              }
+            });
+          }
+
+          // Reset Password Submission
+          const resetPasswordForm = document.getElementById('resetPasswordForm');
+          if (resetPasswordForm) {
+            resetPasswordForm.addEventListener('submit', async (e) => {
+              e.preventDefault();
+              const errorBanner = document.getElementById('resetPasswordError');
+              errorBanner.style.display = 'none';
+              errorBanner.textContent = '';
+              const formData = new FormData(resetPasswordForm);
+              try {
+                const res = await fetch('{{ url_for("users_reset_password") }}', {
+                  method: 'POST',
+                  body: formData
+                });
+                const data = await res.json();
+                if (res.ok && data.ok) {
+                  closeModal('resetPasswordModal');
+                  alert('Password updated successfully.');
+                } else {
+                  errorBanner.textContent = data.error || 'Failed to reset password.';
+                  errorBanner.style.display = 'block';
+                }
+              } catch (err) {
+                errorBanner.textContent = 'Network or server error occurred.';
+                errorBanner.style.display = 'block';
+              }
+            });
+          }
+        });
+      </script>
+      {% endif %}
+
+      <!-- ========================================== -->
+      <!-- TAB 3: BROCHURE & CATALOG                  -->
+      <!-- ========================================== -->
+      {% if active_tab == 'brochure' %}
+      <div class="settings-pane">
+        <div class="pane-header">
+          <div>
+            <h2 class="pane-title">Brochure & Public Catalogue</h2>
+            <p class="pane-desc">Select which partner brands and product lines are included in your official public brochure and PDF download.</p>
+          </div>
+          <div class="pane-actions">
+            {% if company.slug %}
+            <a href="/c/{{ company.slug }}/catalogue" target="_blank" class="btn-secondary-action">
+              <i data-lucide="external-link"></i>
+              <span>Live Catalogue POS</span>
+            </a>
+            <a href="/c/{{ company.slug }}/brochure" target="_blank" class="btn-secondary-action">
+              <i data-lucide="file-down"></i>
+              <span>Download PDF</span>
+            </a>
+            {% endif %}
+          </div>
+        </div>
+
+        {% if company.slug %}
+        <div class="settings-section-card link-sharing-card">
+          <div class="share-icon"><i data-lucide="share-2"></i></div>
+          <div class="share-meta">
+            <h4>Your Public Customer Catalogue URL</h4>
+            <div class="copy-url-group">
+              <input type="text" id="catalogShareUrl" value="{{ request.url_root }}c/{{ company.slug }}/catalogue" readonly>
+              <button type="button" class="btn-copy-url" onclick="navigator.clipboard.writeText(document.getElementById('catalogShareUrl').value); window.showToast('Catalogue link copied to clipboard!', 'success');">
+                <i data-lucide="copy"></i>
+                <span>Copy</span>
+              </button>
+            </div>
+          </div>
+        </div>
+        {% endif %}
+
+        <form method="POST" action="{{ url_for('settings_hub', tab='brochure') }}" class="settings-form" id="brochureSettingsForm">
+          <input type="hidden" name="form_type" value="brochure">
+
+          <!-- Top Toolbar / Live Search & Quick Actions -->
+          <div class="brochure-control-strip">
+            <div class="brochure-search-wrap">
+              <i data-lucide="search" class="brochure-search-icon"></i>
+              <input type="text" id="brochureSearchInput" class="brochure-search-field" placeholder="Search brands or products..." onkeyup="filterBrochureTree(this.value)">
+            </div>
+            <div class="brochure-quick-actions">
+              <button type="button" class="btn-brochure-sub" onclick="toggleAllAccordions(true)">
+                <i data-lucide="chevrons-down-up" style="width: 14px; height: 14px;"></i>
+                <span>Expand All</span>
+              </button>
+              <button type="button" class="btn-brochure-sub" onclick="toggleAllAccordions(false)">
+                <i data-lucide="chevrons-up-down" style="width: 14px; height: 14px;"></i>
+                <span>Collapse All</span>
+              </button>
+              <button type="button" class="btn-brochure-sub" onclick="selectAllBrochure(true)">
+                <i data-lucide="check-square" style="width: 14px; height: 14px;"></i>
+                <span>Select All</span>
+              </button>
+              <button type="button" class="btn-brochure-sub" onclick="selectAllBrochure(false)">
+                <i data-lucide="square" style="width: 14px; height: 14px;"></i>
+                <span>Clear All</span>
+              </button>
+            </div>
+          </div>
+
+          <!-- Expandable Brands & Products List -->
+          <div class="brochure-tree-container">
+            {% for b in brands %}
+              {% set b_prods = products_by_brand.get(b.name, []) %}
+              <details class="brand-accordion-card" id="brandCard-{{ b.id }}">
+                <summary class="brand-accordion-summary">
+                  <div class="brand-summary-main">
+                    <span class="accordion-chevron">
+                      <i data-lucide="chevron-right" style="width: 16px; height: 16px;"></i>
+                    </span>
+                    <label class="brand-title-check" onclick="event.stopPropagation();">
+                      <input type="checkbox" name="brands" value="{{ b.id }}" {% if b.show_in_brochure %}checked{% endif %} class="brand-checkbox brand-chk-{{ b.id }}" onchange="handleBrandCheckboxChange(this, '{{ b.id }}')">
+                      <span class="brand-name-text">{{ b.name }}</span>
+                    </label>
+                    <span class="brand-badge-tally" id="tally-{{ b.id }}">
+                      {{ b_prods|selectattr('show_in_brochure')|list|length }} / {{ b_prods|length }} products
+                    </span>
+                  </div>
+                  <div class="brand-summary-buttons" onclick="event.stopPropagation();">
+                    <button type="button" class="btn-mini-toggle" onclick="toggleGroupProducts('{{ b.id }}', true)">Select All</button>
+                    <button type="button" class="btn-mini-toggle" onclick="toggleGroupProducts('{{ b.id }}', false)">Clear</button>
+                  </div>
+                </summary>
+
+                <div class="brand-accordion-body">
+                  {% if b_prods %}
+                  <div class="brand-products-grid" id="grid-{{ b.id }}">
+                    {% for p in b_prods %}
+                    <label class="product-toggle-chip {% if p.show_in_brochure %}is-selected{% endif %}" data-product-title="{{ p.name | lower }}">
+                      <input type="checkbox" name="products" value="{{ p.id }}" {% if p.show_in_brochure %}checked{% endif %} class="prod-checkbox prod-group-{{ b.id }}" onchange="handleProductCheckboxChange(this, '{{ b.id }}')">
+                      <span class="product-chip-name" title="{{ p.name }}">{{ p.name }}</span>
+                    </label>
+                    {% endfor %}
+                  </div>
+                  {% else %}
+                  <p class="brand-empty-notice">No products currently catalogued under {{ b.name }}.</p>
+                  {% endif %}
+                </div>
+              </details>
+            {% else %}
+              <div class="settings-section-card" style="text-align: center; padding: 2.5rem; color: var(--color-text-muted);">
+                No brand collections configured yet.
+              </div>
+            {% endfor %}
+
+            <!-- Uncategorized products if any exist without an official brand -->
+            {% if products_by_brand.get('Uncategorized') %}
+              {% set uncat_prods = products_by_brand.get('Uncategorized') %}
+              <details class="brand-accordion-card" id="brandCard-uncat">
+                <summary class="brand-accordion-summary">
+                  <div class="brand-summary-main">
+                    <span class="accordion-chevron">
+                      <i data-lucide="chevron-right" style="width: 16px; height: 16px;"></i>
+                    </span>
+                    <span class="brand-name-text" style="color: var(--color-slate-600); margin-left: 0.5rem;">Other / Uncategorized</span>
+                    <span class="brand-badge-tally" id="tally-uncat">
+                      {{ uncat_prods|selectattr('show_in_brochure')|list|length }} / {{ uncat_prods|length }} products
+                    </span>
+                  </div>
+                  <div class="brand-summary-buttons" onclick="event.stopPropagation();">
+                    <button type="button" class="btn-mini-toggle" onclick="toggleGroupProducts('uncat', true)">Select All</button>
+                    <button type="button" class="btn-mini-toggle" onclick="toggleGroupProducts('uncat', false)">Clear</button>
+                  </div>
+                </summary>
+                <div class="brand-accordion-body">
+                  <div class="brand-products-grid" id="grid-uncat">
+                    {% for p in uncat_prods %}
+                    <label class="product-toggle-chip {% if p.show_in_brochure %}is-selected{% endif %}" data-product-title="{{ p.name | lower }}">
+                      <input type="checkbox" name="products" value="{{ p.id }}" {% if p.show_in_brochure %}checked{% endif %} class="prod-checkbox prod-group-uncat" onchange="handleProductCheckboxChange(this, 'uncat')">
+                      <span class="product-chip-name" title="{{ p.name }}">{{ p.name }}</span>
+                    </label>
+                    {% endfor %}
+                  </div>
+                </div>
+              </details>
+            {% endif %}
+          </div>
+
+          <div class="settings-form-actions" style="margin-top: 1.5rem;">
+            <button type="submit" class="btn-save-settings">
+              <i data-lucide="check"></i>
+              <span>Save Brochure Settings</span>
+            </button>
+          </div>
+        </form>
+      </div>
+      {% endif %}
+
+      <!-- ========================================== -->
+      <!-- TAB 4: OPERATIONAL PREFERENCES             -->
+      <!-- ========================================== -->
+      {% if active_tab == 'preferences' %}
+      <div class="settings-pane">
+        <div class="pane-header">
+          <div>
+            <h2 class="pane-title">Operational Preferences</h2>
+            <p class="pane-desc">Configure default inventory fulfillment, automated stock alerts, and invoice sequencing.</p>
+          </div>
+        </div>
+
+        <form method="POST" action="{{ url_for('settings_hub', tab='preferences') }}" class="settings-form">
+          <input type="hidden" name="form_type" value="preferences">
+
+          <div class="settings-section-card">
+            <div class="card-headline">
+              <i data-lucide="warehouse"></i>
+              <h3>Fulfillment & Warehouses</h3>
+            </div>
+
+            <div class="form-grid-2">
+              <div class="field-item">
+                <label for="defaultWarehouse">Default Fulfillment Warehouse</label>
+                <select id="defaultWarehouse" name="default_warehouse_id">
+                  <option value="">-- Auto-select / Prompt at checkout --</option>
+                  {% for w in warehouses %}
+                  <option value="{{ w.id }}" {{ 'selected' if company.default_warehouse_id == w.id else '' }}>{{ w.name }}</option>
+                  {% endfor %}
+                </select>
+                <small class="field-tip">Automatically selected when sales reps open the POS or Record Sale modal.</small>
+              </div>
+
+              <div class="field-item">
+                <label for="lowStockThreshold">Low Stock Alert Threshold (Units)</label>
+                <input type="number" id="lowStockThreshold" name="low_stock_threshold" value="{{ company.low_stock_threshold or 5 }}" min="1" max="1000">
+                <small class="field-tip">Highlights products with a warning pill on the dashboard when total stock drops below this value.</small>
+              </div>
+            </div>
+          </div>
+
+          <div class="settings-section-card">
+            <div class="card-headline">
+              <i data-lucide="hash"></i>
+              <h3>Sequential Numbering</h3>
+            </div>
+
+            <div class="form-grid-2">
+              <div class="field-item">
+                <label for="startingInvoiceNum">Starting Invoice Number Sequence</label>
+                <input type="number" id="startingInvoiceNum" name="starting_invoice_number" value="{{ company.starting_invoice_number or 1 }}" min="1">
+                <small class="field-tip">Used to seed future automated invoice numbers.</small>
+              </div>
+            </div>
+          </div>
+
+          <div class="settings-form-actions">
+            <button type="submit" class="btn-save-settings">
+              <i data-lucide="check"></i>
+              <span>Save Preferences</span>
+            </button>
+          </div>
+        </form>
+      </div>
+      {% endif %}
+
+      <!-- ========================================== -->
+      <!-- TAB 5: PLATFORM GOVERNANCE (SuperAdmin)     -->
+      <!-- ========================================== -->
+      {% if active_tab == 'platform' and is_superadmin %}
+      <div class="settings-pane">
+        <div class="pane-header">
+          <div>
+            <h2 class="pane-title" style="color: #4338ca;">SuperAdmin Platform Governance</h2>
+            <p class="pane-desc">Platform-wide multi-tenant controls, tenant isolation health, and provisioning console.</p>
+          </div>
+          <div class="pane-actions">
+            <a href="{{ url_for('superadmin_dashboard') }}" class="btn-primary-action" style="background: #6366f1;">
+              <i data-lucide="shield-alert"></i>
+              <span>Launch Full Platform Console</span>
+            </a>
+          </div>
+        </div>
+
+        {% if platform_stats %}
+        <div class="platform-stats-grid">
+          <div class="platform-stat-card">
+            <div class="stat-num">{{ platform_stats.total_companies }}</div>
+            <div class="stat-label">Total Provisioned Tenants</div>
+          </div>
+          <div class="platform-stat-card">
+            <div class="stat-num" style="color: #10b981;">{{ platform_stats.active_companies }}</div>
+            <div class="stat-label">Active Workspaces</div>
+          </div>
+          <div class="platform-stat-card">
+            <div class="stat-num" style="color: #6366f1;">{{ platform_stats.total_platform_users }}</div>
+            <div class="stat-label">Global Users Across All Tenants</div>
+          </div>
+        </div>
+        {% endif %}
+
+        <div class="settings-section-card" style="border-left: 3px solid #6366f1;">
+          <div class="card-headline">
+            <i data-lucide="database" style="color: #6366f1;"></i>
+            <h3>PostgreSQL Tenant Lifecycle (ADR 0004)</h3>
+          </div>
+          <p class="card-caption">All company accounts operate on row-level shared database multi-tenancy. Deactivated companies cannot sign in, and their public catalogues automatically return HTTP 403 Forbidden without deleting historical financial records.</p>
+          <div style="margin-top: 1rem;">
+            <a href="{{ url_for('superadmin_dashboard') }}" style="color: #6366f1; font-weight: 600; display: inline-flex; align-items: center; gap: 0.35rem;">
+              <span>Manage company active status & provisioning</span>
+              <i data-lucide="arrow-right" style="width: 14px; height: 14px;"></i>
+            </a>
+          </div>
+        </div>
+      </div>
+      {% endif %}
+    </main>
+  </div>
+</div>
+
+<style>
+  /* Layout Architecture */
+  .settings-hub-layout {
+    max-width: 1180px;
+    margin: 0 auto;
+    padding-bottom: 4rem;
+  }
+
+  .settings-hub-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 1.25rem;
+    padding: 1.5rem 0 1.25rem 0;
+    border-bottom: 1px solid var(--color-border);
+    margin-bottom: 1.75rem;
+  }
+
+  .settings-header-left {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+  }
+
+  .settings-header-icon {
+    width: 48px;
+    height: 48px;
+    border-radius: 12px;
+    background: rgba(16, 185, 129, 0.12);
+    color: var(--color-primary);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+  }
+
+  .settings-header-icon i,
+  .settings-header-icon svg {
+    width: 24px;
+    height: 24px;
+  }
+
+  .settings-header-title {
+    font-size: 1.5rem;
+    font-weight: 700;
+    color: var(--color-text);
+    margin: 0 0 0.25rem 0;
+  }
+
+  .settings-header-sub {
+    font-size: 0.875rem;
+    color: var(--color-text-muted);
+    margin: 0;
+  }
+
+  .settings-header-badge {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+  }
+
+  .tenant-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.4rem 0.85rem;
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: 9999px;
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: var(--color-text);
+  }
+
+  .superadmin-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    padding: 0.4rem 0.85rem;
+    background: rgba(99, 102, 241, 0.12);
+    border: 1px solid rgba(99, 102, 241, 0.3);
+    border-radius: 9999px;
+    font-size: 0.8rem;
+    font-weight: 700;
+    color: #6366f1;
+  }
+
+  /* Two Column Hub Body */
+  .settings-hub-body {
+    display: grid;
+    grid-template-columns: 280px minmax(0, 1fr);
+    gap: 2rem;
+    align-items: flex-start;
+  }
+
+  @media (max-width: 900px) {
+    .settings-hub-body {
+      grid-template-columns: 1fr;
+    }
+  }
+
+  /* Left Navigation Rail */
+  .settings-nav-rail {
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius);
+    padding: 0.75rem;
+    box-shadow: var(--shadow-sm);
+    position: sticky;
+    top: calc(var(--topbar-height) + 1rem);
+  }
+
+  .settings-tabs-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+  }
+
+  .settings-tab-link {
+    display: flex;
+    align-items: center;
+    gap: 0.85rem;
+    padding: 0.75rem 0.85rem;
+    border-radius: 8px;
+    text-decoration: none;
+    color: var(--color-text-muted);
+    transition: all 0.15s ease;
+    border: 1px solid transparent;
+  }
+
+  .settings-tab-link:hover {
+    background: var(--color-bg-muted);
+    color: var(--color-text);
+  }
+
+  .settings-tab-link.is-active {
+    background: rgba(16, 185, 129, 0.12);
+    color: var(--color-primary-hover);
+    border-color: rgba(16, 185, 129, 0.25);
+    font-weight: 600;
+  }
+
+  .settings-tab-link i,
+  .settings-tab-link svg {
+    width: 20px;
+    height: 20px;
+    flex-shrink: 0;
+  }
+
+  .tab-label-group {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    flex: 1;
+  }
+
+  .tab-primary-title {
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: inherit;
+  }
+
+  .tab-sub-title {
+    font-size: 0.725rem;
+    color: var(--color-text-muted);
+    margin-top: 1px;
+  }
+
+  .tab-count-pill {
+    padding: 2px 7px;
+    background: var(--color-bg-muted);
+    border: 1px solid var(--color-border);
+    border-radius: 9999px;
+    font-size: 0.7rem;
+    font-weight: 700;
+    color: var(--color-text);
+  }
+
+  .settings-nav-divider {
+    height: 1px;
+    background: var(--color-border);
+    margin: 0.5rem 0.25rem;
+  }
+
+  .tab-badge-super {
+    padding: 1px 6px;
+    background: rgba(99, 102, 241, 0.15);
+    border-radius: 4px;
+    font-size: 0.65rem;
+    font-weight: 800;
+    color: #6366f1;
+  }
+
+  /* Content Panel */
+  .settings-content-panel {
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+  }
+
+  .pane-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    flex-wrap: wrap;
+    gap: 1rem;
+    margin-bottom: 1.25rem;
+  }
+
+  .pane-title {
+    font-size: 1.35rem;
+    font-weight: 700;
+    color: var(--color-text);
+    margin: 0 0 0.25rem 0;
+  }
+
+  .pane-desc {
+    font-size: 0.875rem;
+    color: var(--color-text-muted);
+    margin: 0;
+  }
+
+  .pane-actions {
+    display: flex;
+    align-items: center;
+    gap: 0.65rem;
+  }
+
+  /* Cards inside settings */
+  .settings-section-card {
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius);
+    padding: 1.5rem;
+    box-shadow: var(--shadow-sm);
+    margin-bottom: 1.25rem;
+  }
+
+  .card-headline {
+    display: flex;
+    align-items: center;
+    gap: 0.65rem;
+    margin-bottom: 0.35rem;
+  }
+
+  .card-headline i,
+  .card-headline svg {
+    width: 20px;
+    height: 20px;
+    color: var(--color-primary);
+  }
+
+  .card-headline h3 {
+    font-size: 1.05rem;
+    font-weight: 700;
+    color: var(--color-text);
+    margin: 0;
+  }
+
+  .card-caption {
+    font-size: 0.825rem;
+    color: var(--color-text-muted);
+    margin: 0 0 1.25rem 0;
+  }
+
+  /* Logo Upload UI */
+  .logo-upload-wrapper {
+    display: flex;
+    align-items: center;
+    gap: 1.5rem;
+    flex-wrap: wrap;
+  }
+
+  .logo-preview-box {
+    width: 140px;
+    height: 72px;
+    border: 1px dashed var(--color-border);
+    border-radius: 8px;
+    background: var(--color-bg-muted);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 6px;
+    overflow: hidden;
+  }
+
+  .current-logo-img {
+    max-width: 100%;
+    max-height: 100%;
+    object-fit: contain;
+  }
+
+  .logo-upload-actions {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+
+  .btn-file-select {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.55rem 1rem;
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: 8px;
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: var(--color-text);
+    cursor: pointer;
+    transition: all 0.15s ease;
+  }
+
+  .btn-file-select:hover {
+    border-color: var(--color-primary);
+    color: var(--color-primary);
+  }
+
+  .btn-remove-logo {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    background: transparent;
+    border: none;
+    color: var(--color-danger, #ef4444);
+    font-size: 0.8rem;
+    font-weight: 500;
+    cursor: pointer;
+    padding: 0;
+  }
+
+  .btn-remove-logo:hover {
+    text-decoration: underline;
+  }
+
+  .file-hint {
+    font-size: 0.725rem;
+    color: var(--color-text-muted);
+  }
+
+  /* Form Fields */
+  .form-grid-2 {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 1.25rem;
+  }
+
+  .field-item {
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+  }
+
+  .field-item label {
+    font-size: 0.825rem;
+    font-weight: 600;
+    color: var(--color-text);
+  }
+
+  .field-item label .req {
+    color: var(--color-danger, #ef4444);
+  }
+
+  .field-item input,
+  .field-item select,
+  .field-item textarea {
+    padding: 0.65rem 0.85rem;
+    border: 1px solid var(--color-border);
+    border-radius: 8px;
+    font-size: 0.875rem;
+    background: var(--color-surface);
+    color: var(--color-text);
+    outline: none;
+    transition: all 0.15s ease;
+  }
+
+  .field-item input:focus,
+  .field-item select:focus,
+  .field-item textarea:focus {
+    border-color: var(--color-primary);
+    box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.2);
+  }
+
+  .field-tip {
+    font-size: 0.725rem;
+    color: var(--color-text-muted);
+  }
+
+  .input-with-pill {
+    position: relative;
+    display: flex;
+    align-items: center;
+  }
+
+  .input-with-pill input {
+    width: 100%;
+    padding-right: 4.5rem;
+    background: var(--color-bg-muted) !important;
+  }
+
+  .readonly-pill {
+    position: absolute;
+    right: 0.65rem;
+    font-size: 0.65rem;
+    font-weight: 700;
+    background: var(--color-border);
+    color: var(--color-text-muted);
+    padding: 2px 6px;
+    border-radius: 4px;
+  }
+
+  /* Buttons */
+  .settings-form-actions {
+    display: flex;
+    justify-content: flex-end;
+    margin-top: 1rem;
+  }
+
+  .btn-save-settings {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    background: var(--color-primary);
+    color: #ffffff;
+    border: none;
+    padding: 0.65rem 1.5rem;
+    border-radius: 8px;
+    font-size: 0.9rem;
+    font-weight: 600;
+    cursor: pointer;
+    box-shadow: 0 1px 3px rgba(16, 185, 129, 0.4);
+    transition: all 0.15s ease;
+  }
+
+  .btn-save-settings:hover {
+    background: var(--color-primary-hover);
+    transform: translateY(-1px);
+    box-shadow: 0 4px 6px -1px rgba(16, 185, 129, 0.4);
+  }
+
+  .btn-primary-action {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.45rem;
+    background: var(--color-primary);
+    color: #ffffff !important;
+    padding: 0.55rem 1rem;
+    border-radius: 8px;
+    font-size: 0.85rem;
+    font-weight: 600;
+    text-decoration: none;
+    box-shadow: 0 1px 3px rgba(16, 185, 129, 0.3);
+  }
+
+  .btn-secondary-action {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.45rem;
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    color: var(--color-text) !important;
+    padding: 0.55rem 0.95rem;
+    border-radius: 8px;
+    font-size: 0.85rem;
+    font-weight: 600;
+    text-decoration: none;
+  }
+
+  .btn-secondary-action:hover {
+    border-color: var(--color-primary);
+    color: var(--color-primary) !important;
+  }
+
+  /* Share Card */
+  .link-sharing-card {
+    display: flex;
+    align-items: center;
+    gap: 1.25rem;
+    background: rgba(16, 185, 129, 0.06);
+    border-color: rgba(16, 185, 129, 0.25);
+  }
+
+  .share-icon {
+    width: 44px;
+    height: 44px;
+    border-radius: 10px;
+    background: var(--color-primary);
+    color: #ffffff;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+  }
+
+  .share-meta {
+    flex: 1;
+  }
+
+  .share-meta h4 {
+    margin: 0 0 0.4rem 0;
+    font-size: 0.9rem;
+    color: var(--color-text);
+  }
+
+  .copy-url-group {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+  }
+
+  .copy-url-group input {
+    flex: 1;
+    padding: 0.5rem 0.75rem;
+    font-size: 0.85rem;
+    font-family: var(--font-mono, monospace);
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: 6px;
+    color: var(--color-text);
+  }
+
+  .btn-copy-url {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.5rem 0.85rem;
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: 6px;
+    font-size: 0.825rem;
+    font-weight: 600;
+    color: var(--color-text);
+    cursor: pointer;
+  }
+
+  .btn-copy-url:hover {
+    border-color: var(--color-primary);
+    color: var(--color-primary);
+  }
+
+  /* Brands Checklist Grid */
+  .brands-checklist-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+    gap: 0.85rem;
+  }
+
+  .brand-check-card {
+    display: flex;
+    align-items: center;
+    gap: 0.65rem;
+    padding: 0.75rem 1rem;
+    background: var(--color-bg-muted);
+    border: 1px solid var(--color-border);
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all 0.15s ease;
+  }
+
+  .brand-check-card:hover {
+    border-color: var(--color-primary);
+  }
+
+  .brand-check-name {
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: var(--color-text);
+  }
+
+  /* Platform Stats Grid */
+  .platform-stats-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 1.25rem;
+    margin-bottom: 1.5rem;
+  }
+
+  .platform-stat-card {
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius);
+    padding: 1.25rem;
+    box-shadow: var(--shadow-sm);
+  }
+
+  .stat-num {
+    font-size: 2rem;
+    font-weight: 800;
+    color: var(--color-text);
+    line-height: 1;
+    margin-bottom: 0.35rem;
+  }
+
+  .stat-label {
+    font-size: 0.8rem;
+    color: var(--color-text-muted);
+    font-weight: 500;
+  }
+  /* Tab 2: Team Members */
+  .team-header-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 1rem;
+    margin-bottom: 1.25rem;
+  }
+
+  .btn-add-team-member {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    background: #03a375;
+    color: #ffffff !important;
+    border: none;
+    padding: 0.6rem 1.25rem;
+    border-radius: 8px;
+    font-size: 0.85rem;
+    font-weight: 600;
+    cursor: pointer;
+    box-shadow: 0 1px 3px rgba(3, 163, 117, 0.35);
+    transition: all 0.15s ease;
+  }
+
+  .btn-add-team-member:hover {
+    background: #02875f;
+    transform: translateY(-1px);
+    box-shadow: 0 4px 6px -1px rgba(3, 163, 117, 0.4);
+  }
+
+  .btn-add-team-member i,
+  .btn-add-team-member svg {
+    width: 17px;
+    height: 17px;
+  }
+
+  .team-card {
+    padding: 1.25rem 1.5rem;
+  }
+
+  .team-table {
+    width: 100%;
+    border-collapse: collapse;
+  }
+
+  .team-table th {
+    font-size: 0.725rem;
+    font-weight: 700;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    color: #64748b;
+    padding: 0.75rem 0.85rem;
+    border-bottom: 1px solid var(--color-border);
+    background: transparent;
+  }
+
+  .team-table td {
+    padding: 0.85rem;
+    vertical-align: middle;
+    border-bottom: 1px solid #f1f5f9;
+  }
+
+  .user-avatar-monogram {
+    width: 34px;
+    height: 34px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.75rem;
+    font-weight: 700;
+    letter-spacing: 0.02em;
+    flex-shrink: 0;
+  }
+
+  .you-badge {
+    display: inline-flex;
+    align-items: center;
+    padding: 1px 6px;
+    border-radius: 9999px;
+    font-size: 0.65rem;
+    font-weight: 700;
+    background: #e0f2fe;
+    color: #0284c7;
+    border: 1px solid #bae6fd;
+    line-height: 1.2;
+  }
+
+  /* Role Badges */
+  .role-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    padding: 0.25rem 0.65rem;
+    border-radius: 9999px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    line-height: 1.2;
+    white-space: nowrap;
+  }
+
+  .role-badge-admin {
+    background: #f3e8ff;
+    color: #7e22ce;
+    border: 1px solid #e9d5ff;
+  }
+
+  .role-badge-superadmin {
+    background: #e0e7ff;
+    color: #4338ca;
+    border: 1px solid #c7d2fe;
+  }
+
+  .role-badge-salesman {
+    background: #eff6ff;
+    color: #1d4ed8;
+    border: 1px solid #bfdbfe;
+  }
+
+  .role-badge-manager {
+    background: #fef3c7;
+    color: #b45309;
+    border: 1px solid #fde68a;
+  }
+
+  /* Status Pills */
+  .status-pill-active {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    padding: 0.25rem 0.65rem;
+    border-radius: 9999px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    background: #ecfdf5;
+    color: #059669;
+    border: 1px solid #a7f3d0;
+  }
+
+  .status-pill-active::before {
+    content: '';
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: #10b981;
+    display: inline-block;
+  }
+
+  .status-pill-suspended {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    padding: 0.25rem 0.65rem;
+    border-radius: 9999px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    background: #fef2f2;
+    color: #dc2626;
+    border: 1px solid #fecaca;
+  }
+
+  .status-pill-suspended::before {
+    content: '';
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: #ef4444;
+    display: inline-block;
+  }
+
+  /* User Action Buttons */
+  .btn-user-action {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+    padding: 0.32rem 0.6rem;
+    border-radius: 6px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    cursor: pointer;
+    text-decoration: none;
+    transition: all 0.15s ease;
+    border: 1px solid transparent;
+    line-height: 1.2;
+    white-space: nowrap;
+  }
+
+  .btn-user-action i,
+  .btn-user-action svg {
+    width: 13px;
+    height: 13px;
+    flex-shrink: 0;
+  }
+
+  .btn-user-edit {
+    background: #ffffff;
+    border-color: #bfdbfe;
+    color: #1d4ed8;
+  }
+  .btn-user-edit:hover {
+    background: #eff6ff;
+    border-color: #93c5fd;
+  }
+
+  .btn-user-pwd {
+    background: #ffffff;
+    border-color: #fed7aa;
+    color: #c2410c;
+  }
+  .btn-user-pwd:hover {
+    background: #fff7ed;
+    border-color: #fdba74;
+  }
+
+  .btn-user-suspend {
+    background: #ffffff;
+    border-color: #fecaca;
+    color: #dc2626;
+  }
+  .btn-user-suspend:hover {
+    background: #fef2f2;
+    border-color: #fca5a5;
+  }
+
+  .btn-user-activate {
+    background: #ffffff;
+    border-color: #a7f3d0;
+    color: #059669;
+  }
+  .btn-user-activate:hover {
+    background: #ecfdf5;
+    border-color: #6ee7b7;
+  }
+
+  /* Tab 3: Brochure & Catalogue */
+  .brochure-control-strip {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 0.75rem;
+    padding: 0.75rem 1rem;
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius);
+    margin-bottom: 1.25rem;
+  }
+
+  .brochure-search-wrap {
+    position: relative;
+    flex: 1;
+    min-width: 220px;
+    max-width: 360px;
+  }
+
+  .brochure-search-icon {
+    position: absolute;
+    left: 0.75rem;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 15px;
+    height: 15px;
+    color: var(--color-text-muted);
+    pointer-events: none;
+  }
+
+  .brochure-search-field {
+    width: 100%;
+    padding: 0.45rem 0.75rem 0.45rem 2.2rem;
+    border: 1px solid var(--color-border);
+    border-radius: 6px;
+    font-size: 0.825rem;
+    background: var(--color-bg-muted);
+    color: var(--color-text);
+    outline: none;
+    transition: all 0.15s ease;
+  }
+
+  .brochure-search-field:focus {
+    border-color: var(--color-primary);
+    background: var(--color-surface);
+    box-shadow: 0 0 0 2px rgba(16, 185, 129, 0.2);
+  }
+
+  .brochure-quick-actions {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    flex-wrap: wrap;
+  }
+
+  .btn-brochure-sub {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    padding: 0.4rem 0.65rem;
+    border-radius: 6px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    color: var(--color-text);
+    cursor: pointer;
+    transition: all 0.15s ease;
+  }
+
+  .btn-brochure-sub:hover {
+    border-color: var(--color-primary);
+    color: var(--color-primary);
+    background: var(--color-bg-muted);
+  }
+
+  .brochure-tree-container {
+    display: flex;
+    flex-direction: column;
+    gap: 0.85rem;
+  }
+
+  .brand-accordion-card {
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: 10px;
+    overflow: hidden;
+    transition: border-color 0.15s ease, box-shadow 0.15s ease;
+  }
+
+  .brand-accordion-card[open] {
+    border-color: rgba(3, 163, 117, 0.35);
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.03);
+  }
+
+  .brand-accordion-summary {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0.85rem 1.15rem;
+    background: #f8fafc;
+    cursor: pointer;
+    list-style: none;
+    user-select: none;
+    transition: background 0.15s ease;
+  }
+
+  .brand-accordion-summary::-webkit-details-marker {
+    display: none;
+  }
+
+  .brand-accordion-summary:hover {
+    background: #f1f5f9;
+  }
+
+  .brand-summary-main {
+    display: flex;
+    align-items: center;
+    gap: 0.65rem;
+    flex: 1;
+    min-width: 0;
+  }
+
+  .accordion-chevron {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    color: #64748b;
+    transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+
+  .brand-accordion-card[open] > .brand-accordion-summary .accordion-chevron {
+    transform: rotate(90deg);
+  }
+
+  .brand-title-check {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.55rem;
+    cursor: pointer;
+    margin: 0;
+  }
+
+  .brand-title-check input[type="checkbox"] {
+    width: 17px;
+    height: 17px;
+    accent-color: #03a375;
+    cursor: pointer;
+  }
+
+  .brand-name-text {
+    font-size: 0.95rem;
+    font-weight: 700;
+    color: #0f172a;
+  }
+
+  .brand-badge-tally {
+    font-size: 0.725rem;
+    font-weight: 600;
+    color: #64748b;
+    background: #ffffff;
+    border: 1px solid #e2e8f0;
+    padding: 2px 8px;
+    border-radius: 9999px;
+  }
+
+  .brand-summary-buttons {
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+  }
+
+  .btn-mini-toggle {
+    display: inline-flex;
+    align-items: center;
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-size: 0.7rem;
+    font-weight: 600;
+    background: #ffffff;
+    border: 1px solid #cbd5e1;
+    color: #475569;
+    cursor: pointer;
+    transition: all 0.15s ease;
+  }
+
+  .btn-mini-toggle:hover {
+    border-color: #03a375;
+    color: #03a375;
+    background: #f0fdf4;
+  }
+
+  .brand-accordion-body {
+    padding: 1rem 1.15rem 1.15rem 1.15rem;
+    border-top: 1px solid #e2e8f0;
+    background: #ffffff;
+  }
+
+  .brand-products-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(210px, 1fr));
+    gap: 0.6rem;
+  }
+
+  .product-toggle-chip {
+    display: flex;
+    align-items: center;
+    gap: 0.55rem;
+    padding: 0.5rem 0.75rem;
+    border-radius: 6px;
+    border: 1px solid #e2e8f0;
+    background: #f8fafc;
+    cursor: pointer;
+    transition: all 0.15s ease;
+    user-select: none;
+    min-width: 0;
+  }
+
+  .product-toggle-chip:hover {
+    border-color: #94a3b8;
+    background: #ffffff;
+  }
+
+  .product-toggle-chip.is-selected {
+    background: rgba(3, 163, 117, 0.08);
+    border-color: #03a375;
+  }
+
+  .product-toggle-chip input[type="checkbox"] {
+    width: 15px;
+    height: 15px;
+    accent-color: #03a375;
+    cursor: pointer;
+    flex-shrink: 0;
+  }
+
+  .product-chip-name {
+    font-size: 0.8rem;
+    font-weight: 500;
+    color: #1e293b;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    flex: 1;
+  }
+
+  .brand-empty-notice {
+    font-size: 0.8rem;
+    color: #94a3b8;
+    font-style: italic;
+    margin: 0;
+  }
+</style>
+
+<script>
+  // Instant Logo Preview upon file selection
+  const logoInput = document.getElementById('logoInput');
+  const logoPreviewImg = document.getElementById('logoPreviewImg');
+
+  if (logoInput && logoPreviewImg) {
+    logoInput.addEventListener('change', function(e) {
+      const file = e.target.files && e.target.files[0];
+      if (file) {
+        if (file.size > 2 * 1024 * 1024) {
+          alert("File size exceeds 2MB limit. Please choose a smaller image.");
+          logoInput.value = "";
+          return;
+        }
+        const reader = new FileReader();
+        reader.onload = function(evt) {
+          logoPreviewImg.src = evt.target.result;
+          logoPreviewImg.classList.remove('fallback-mark');
+        };
+        reader.readAsDataURL(file);
+      }
+    });
+  }
+
+  // Brochure Product Accordion & Filter Logic
+  function updateBrandTally(brandId) {
+    const grid = document.getElementById(`grid-${brandId}`);
+    const tally = document.getElementById(`tally-${brandId}`);
+    if (!grid || !tally) return;
+
+    const checkboxes = grid.querySelectorAll('.prod-checkbox');
+    const checked = grid.querySelectorAll('.prod-checkbox:checked');
+    tally.textContent = `${checked.length} / ${checkboxes.length} products`;
+
+    // Also sync brand checkbox if any products selected
+    const brandChk = document.querySelector(`.brand-chk-${brandId}`);
+    if (brandChk && checkboxes.length > 0) {
+      if (checked.length > 0 && !brandChk.checked) {
+        brandChk.checked = true;
+      }
+    }
+  }
+
+  function handleBrandCheckboxChange(chk, brandId) {
+    const isChecked = chk.checked;
+    const grid = document.getElementById(`grid-${brandId}`);
+    if (grid) {
+      grid.querySelectorAll('.prod-checkbox').forEach(p => {
+        p.checked = isChecked;
+        const chip = p.closest('.product-toggle-chip');
+        if (chip) chip.classList.toggle('is-selected', isChecked);
+      });
+      updateBrandTally(brandId);
+    }
+  }
+
+  function handleProductCheckboxChange(chk, brandId) {
+    const chip = chk.closest('.product-toggle-chip');
+    if (chip) {
+      chip.classList.toggle('is-selected', chk.checked);
+    }
+    updateBrandTally(brandId);
+  }
+
+  function toggleGroupProducts(brandId, isChecked) {
+    const grid = document.getElementById(`grid-${brandId}`);
+    if (grid) {
+      grid.querySelectorAll('.prod-checkbox').forEach(p => {
+        p.checked = isChecked;
+        const chip = p.closest('.product-toggle-chip');
+        if (chip) chip.classList.toggle('is-selected', isChecked);
+      });
+      const brandChk = document.querySelector(`.brand-chk-${brandId}`);
+      if (brandChk) brandChk.checked = isChecked;
+      updateBrandTally(brandId);
+    }
+  }
+
+  function toggleAllAccordions(open) {
+    document.querySelectorAll('.brand-accordion-card').forEach(card => {
+      card.open = open;
+    });
+  }
+
+  function selectAllBrochure(check) {
+    document.querySelectorAll('.brand-checkbox').forEach(b => b.checked = check);
+    document.querySelectorAll('.prod-checkbox').forEach(p => {
+      p.checked = check;
+      const chip = p.closest('.product-toggle-chip');
+      if (chip) chip.classList.toggle('is-selected', check);
+    });
+    document.querySelectorAll('.brand-accordion-card').forEach(card => {
+      const id = card.id.replace('brandCard-', '');
+      updateBrandTally(id);
+    });
+  }
+
+  function filterBrochureTree(query) {
+    const q = (query || '').trim().toLowerCase();
+    document.querySelectorAll('.brand-accordion-card').forEach(card => {
+      const brandName = card.querySelector('.brand-name-text')?.textContent.toLowerCase() || '';
+      let matchCount = 0;
+      const chips = card.querySelectorAll('.product-toggle-chip');
+      chips.forEach(chip => {
+        const title = chip.getAttribute('data-product-title') || '';
+        if (!q || title.includes(q) || brandName.includes(q)) {
+          chip.style.display = 'flex';
+          matchCount++;
+        } else {
+          chip.style.display = 'none';
+        }
+      });
+
+      if (!q) {
+        card.style.display = '';
+      } else if (matchCount > 0 || brandName.includes(q)) {
+        card.style.display = '';
+        card.open = true; // Auto-expand matching groups
+      } else {
+        card.style.display = 'none';
+      }
+    });
+  }
+</script>
+{% endblock %}

@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block title %}Shipment #{{ purchase.id }} — AK Distributors{% endblock %}
+{% block title %}Shipment #{{ purchase.id }} — {{ current_company.name if current_company else 'Pallo' }}{% endblock %}
 {% block page_heading %}Purchases (Shipments){% endblock %}
 {% block content %}
 <!-- Detail Header Bar -->

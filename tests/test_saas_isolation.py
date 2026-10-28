@@ -27,33 +27,73 @@ class TestSaaSIsolation(unittest.TestCase):
         database.init_db()
 
     def _clean_test_data(self, conn):
-        try:
-            conn.execute("PRAGMA foreign_keys = OFF")
-        except Exception:
-            pass
-        co_ids = [r[0] for r in conn.execute("SELECT id FROM companies WHERE slug IN ('iso-corp-a', 'iso-corp-b')").fetchall()]
-        if co_ids:
-            ph = ",".join("?" * len(co_ids))
-            tables = [
-                "expenses", "supplier_payments", "purchase_items", "purchases", "suppliers",
-                "inventory_transfer_items", "inventory_transfers", "inventory_history",
-                "warehouse_inventory", "customer_payments", "sale_items", "sales", "customers",
-                "product_variants", "products", "categories", "brands", "warehouses", "users"
-            ]
-            for tbl in tables:
-                chk = conn.execute("SELECT name FROM sqlite_master WHERE type='table' AND name=?", (tbl,)).fetchone()
-                if chk:
-                    cols = [r[1] for r in conn.execute(f"PRAGMA table_info({tbl})").fetchall()]
-                    if "company_id" in cols:
-                        conn.execute(f"DELETE FROM {tbl} WHERE company_id IN ({ph})", co_ids)
-            conn.execute(f"DELETE FROM companies WHERE id IN ({ph})", co_ids)
-        
-        conn.execute("DELETE FROM users WHERE username = 'iso_superadmin'")
-        conn.commit()
-        try:
-            conn.execute("PRAGMA foreign_keys = ON")
-        except Exception:
-            pass
+        if not database.is_postgres_configured():
+            try:
+                conn.execute("PRAGMA foreign_keys = OFF")
+            except Exception:
+                pass
+            co_ids = [r[0] for r in conn.execute("SELECT id FROM companies WHERE slug IN ('iso-corp-a', 'iso-corp-b')").fetchall()]
+            if co_ids:
+                ph = ",".join("?" * len(co_ids))
+                tables = [
+                    "expenses", "supplier_payments", "purchase_items", "purchases", "suppliers",
+                    "inventory_transfer_items", "inventory_transfers", "inventory_history",
+                    "warehouse_inventory", "customer_payments", "sale_items", "sales", "customers",
+                    "product_variants", "products", "categories", "brands", "warehouses", "users"
+                ]
+                for tbl in tables:
+                    chk = conn.execute("SELECT name FROM sqlite_master WHERE type='table' AND name=?", (tbl,)).fetchone()
+                    if chk:
+                        cols = [r[1] for r in conn.execute(f"PRAGMA table_info({tbl})").fetchall()]
+                        if "company_id" in cols:
+                            conn.execute(f"DELETE FROM {tbl} WHERE company_id IN ({ph})", co_ids)
+                conn.execute(f"DELETE FROM companies WHERE id IN ({ph})", co_ids)
+            
+            conn.execute("DELETE FROM users WHERE username = 'iso_superadmin'")
+            conn.commit()
+            try:
+                conn.execute("PRAGMA foreign_keys = ON")
+            except Exception:
+                pass
+        else:
+            try:
+                co_ids = [r[0] for r in conn.execute("SELECT id FROM companies WHERE slug IN ('iso-corp-a', 'iso-corp-b')").fetchall()]
+                if co_ids:
+                    ph = ",".join(["?"] * len(co_ids))
+                    tables = [
+                        "expenses", "supplier_payments", "purchase_items", "purchases", "suppliers",
+                        "inventory_transfer_items", "inventory_transfers", "inventory_history",
+                        "warehouse_inventory", "customer_payments", "sale_items", "sales", "customers",
+                        "product_variants", "products", "categories", "brands", "warehouses", "users"
+                    ]
+                    for tbl in tables:
+                        try:
+                            conn.execute(f"DELETE FROM {tbl} WHERE company_id IN ({ph})", co_ids)
+                        except Exception:
+                            try:
+                                conn.rollback()
+                            except Exception:
+                                pass
+                    try:
+                        conn.execute(f"DELETE FROM companies WHERE id IN ({ph})", co_ids)
+                    except Exception:
+                        try:
+                            conn.rollback()
+                        except Exception:
+                            pass
+                try:
+                    conn.execute("DELETE FROM users WHERE username = 'iso_superadmin'")
+                except Exception:
+                    try:
+                        conn.rollback()
+                    except Exception:
+                        pass
+                conn.commit()
+            except Exception:
+                try:
+                    conn.rollback()
+                except Exception:
+                    pass
 
     def setUp(self):
         self.app = app.app
@@ -69,7 +109,7 @@ class TestSaaSIsolation(unittest.TestCase):
             conn.execute(
                 """
                 INSERT INTO companies (name, slug, currency, invoice_prefix, is_active, max_warehouses)
-                VALUES ('Isolation Corp A', 'iso-corp-a', '$', 'ISOA-', 1, 5)
+                VALUES ('Isolation Corp A', 'iso-corp-a', '$', 'ISOA-', TRUE, 5)
                 """
             )
             self.co_a_id = conn.execute("SELECT id FROM companies WHERE slug = 'iso-corp-a'").fetchone()[0]
@@ -78,7 +118,7 @@ class TestSaaSIsolation(unittest.TestCase):
             conn.execute(
                 """
                 INSERT INTO companies (name, slug, currency, invoice_prefix, is_active, max_warehouses)
-                VALUES ('Isolation Corp B', 'iso-corp-b', '\u20ac', 'ISOB-', 1, 5)
+                VALUES ('Isolation Corp B', 'iso-corp-b', '\u20ac', 'ISOB-', TRUE, 5)
                 """
             )
             self.co_b_id = conn.execute("SELECT id FROM companies WHERE slug = 'iso-corp-b'").fetchone()[0]
@@ -303,6 +343,55 @@ class TestSaaSIsolation(unittest.TestCase):
         self.assertEqual(res.status_code, 200)
         self.assertNotIn(b"paused or suspended", res.data)
 
+    def test_settings_hub_multi_tenant_and_governance(self):
+        """Settings Hub scoped properly per tenant and restricted platform controls."""
+        # 1. Tenant A views settings hub tabs
+        self._login("admin_a")
+        res_comp = self.client.get("/settings?tab=company")
+        self.assertEqual(res_comp.status_code, 200)
+        self.assertIn(b"Isolation Corp A", res_comp.data)
+        self.assertNotIn(b"Isolation Corp B", res_comp.data)
+
+        # 2. Legacy /settings/company renders company tab
+        res_legacy = self.client.get("/settings/company")
+        self.assertEqual(res_legacy.status_code, 200)
+        self.assertIn(b"Isolation Corp A", res_legacy.data)
+
+        # 3. Regular admin cannot view tab=platform (redirected with warning)
+        res_plat = self.client.get("/settings?tab=platform", follow_redirects=True)
+        self.assertEqual(res_plat.status_code, 200)
+        self.assertIn(b"restricted to SuperAdmin", res_plat.data)
+
+        # 4. Tenant A updates operational preferences
+        res_pref = self.client.post("/settings", data={
+            "form_type": "preferences",
+            "default_warehouse_id": str(self.wh_a1),
+            "low_stock_threshold": "12",
+            "starting_invoice_number": "100"
+        }, follow_redirects=True)
+        self.assertEqual(res_pref.status_code, 200)
+        self.assertIn(b"Operational preferences updated successfully", res_pref.data)
+
+        # Verify Tenant A DB row updated
+        conn = database.get_connection()
+        try:
+            row_a = conn.execute("SELECT default_warehouse_id, low_stock_threshold FROM companies WHERE id = ?", (self.co_a_id,)).fetchone()
+            self.assertEqual(row_a["default_warehouse_id"], self.wh_a1)
+            self.assertEqual(row_a["low_stock_threshold"], 12)
+
+            # Tenant B remains completely untouched
+            row_b = conn.execute("SELECT default_warehouse_id, low_stock_threshold FROM companies WHERE id = ?", (self.co_b_id,)).fetchone()
+            self.assertNotEqual(row_b["default_warehouse_id"], self.wh_a1)
+        finally:
+            conn.close()
+
+        # 5. SuperAdmin can view tab=platform
+        self._login("iso_superadmin", "superpass123")
+        res_super = self.client.get("/settings?tab=platform")
+        self.assertEqual(res_super.status_code, 200)
+        self.assertIn(b"SuperAdmin Platform Governance", res_super.data)
+
 
 if __name__ == "__main__":
     unittest.main()
+

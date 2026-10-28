@@ -17,6 +17,8 @@ CREATE TABLE IF NOT EXISTS companies (
     tax_id TEXT,
     logo_url TEXT,
     max_warehouses INTEGER DEFAULT 5,
+    default_warehouse_id INTEGER,
+    low_stock_threshold INTEGER DEFAULT 5,
     is_active BOOLEAN DEFAULT TRUE,
     created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
 );

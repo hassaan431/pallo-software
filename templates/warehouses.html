@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block title %}Warehouses & Storage Facilities — AK Distributors{% endblock %}
+{% block title %}Warehouses & Storage Facilities — {{ current_company.name if current_company else 'Pallo' }}{% endblock %}
 {% block page_heading %}Warehouses & Storage Facilities{% endblock %}
 {% block content %}
 

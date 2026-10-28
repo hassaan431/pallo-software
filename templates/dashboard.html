@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block title %}Dashboard — AK Distributors{% endblock %}
+{% block title %}Dashboard — {{ current_company.name if current_company else 'Pallo' }}{% endblock %}
 {% block page_heading %}Dashboard{% endblock %}
 {% block content %}
 
@@ -355,7 +355,8 @@
       gradient.addColorStop(0, 'rgba(16, 185, 129, 0.22)');
       gradient.addColorStop(1, 'rgba(16, 185, 129, 0.00)');
 
-      new Chart(ctx, {
+      const isDarkInit = document.documentElement.getAttribute('data-theme') === 'dark';
+      const salesChart = new Chart(ctx, {
         type: 'line',
         data: {
           labels: labels,
@@ -411,7 +412,7 @@
             y: {
               beginAtZero: true,
               ticks: {
-                color: '#64748b',
+                color: isDarkInit ? '#94a3b8' : '#64748b',
                 font: { family: 'Inter, sans-serif', size: 11 },
                 callback: function(value) {
                   if (value >= 1000) {
@@ -421,13 +422,13 @@
                 }
               },
               grid: {
-                color: '#f1f5f9',
+                color: isDarkInit ? '#1e293b' : '#f1f5f9',
                 drawBorder: false
               }
             },
             x: {
               ticks: {
-                color: '#64748b',
+                color: isDarkInit ? '#94a3b8' : '#64748b',
                 font: { family: 'Inter, sans-serif', size: 11 },
                 maxRotation: 0,
                 autoSkip: true,
@@ -439,6 +440,16 @@
               }
             }
           }
+        }
+      });
+
+      window.addEventListener('palloThemeChanged', (e) => {
+        const isDark = e.detail && e.detail.theme === 'dark';
+        if (salesChart && salesChart.options && salesChart.options.scales) {
+          salesChart.options.scales.y.ticks.color = isDark ? '#94a3b8' : '#64748b';
+          salesChart.options.scales.y.grid.color = isDark ? '#1e293b' : '#f1f5f9';
+          salesChart.options.scales.x.ticks.color = isDark ? '#94a3b8' : '#64748b';
+          salesChart.update();
         }
       });
     }
@@ -476,7 +487,7 @@
       const driverObj = driver({
         showProgress: true,
         steps: [
-          { popover: { title: 'Welcome to AK Distributors', description: 'This is your centralized command center for monitoring daily revenue, margins, and orders in real time.' } },
+          { popover: { title: 'Welcome to Pallo', description: 'This is your centralized command center for monitoring daily revenue, margins, and orders in real time.' } },
           { element: '.sidebar', popover: { title: 'Streamlined Navigation', description: 'Use the left sidebar to access inventory, sales, customers, transfers, and ledger reports.', side: "right", align: 'start' } },
           { element: '#today-kpis', popover: { title: "Today's Performance", description: 'Real-time daily sales, gross margins, and net profit calculated after expenses.', side: "bottom", align: 'start' } },
           { element: '#monthly-kpis', popover: { title: 'Monthly Financials', description: 'Track month-to-date targets and net profit margins at a glance.', side: "bottom", align: 'start' } },

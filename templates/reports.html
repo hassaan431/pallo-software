@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block title %}Business Intelligence & Reports — AK Distributors{% endblock %}
+{% block title %}Business Intelligence & Reports — {{ current_company.name if current_company else 'Pallo' }}{% endblock %}
 {% block page_heading %}Reports{% endblock %}
 
 {% block content %}
@@ -1815,6 +1815,31 @@
       tbody.appendChild(tr);
     });
   }
+
+  // Dynamic Theme Adaptability for Reports Charts
+  window.addEventListener('palloThemeChanged', (e) => {
+    const isDark = e.detail && e.detail.theme === 'dark';
+    const gridColor = isDark ? '#1e293b' : '#f1f5f9';
+    const textColor = isDark ? '#94a3b8' : '#64748b';
+    [brandChart, categoryChart, profitChartInstance].forEach(chart => {
+      if (chart && chart.options) {
+        if (chart.options.scales) {
+          if (chart.options.scales.x) {
+            if (chart.options.scales.x.ticks) chart.options.scales.x.ticks.color = textColor;
+            if (chart.options.scales.x.grid && chart.options.scales.x.grid.display !== false) chart.options.scales.x.grid.color = gridColor;
+          }
+          if (chart.options.scales.y) {
+            if (chart.options.scales.y.ticks) chart.options.scales.y.ticks.color = textColor;
+            if (chart.options.scales.y.grid) chart.options.scales.y.grid.color = gridColor;
+          }
+        }
+        if (chart.options.plugins && chart.options.plugins.legend && chart.options.plugins.legend.labels) {
+          chart.options.plugins.legend.labels.color = textColor;
+        }
+        chart.update();
+      }
+    });
+  });
 </script>
 
 {% endblock %}

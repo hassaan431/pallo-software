@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block title %}Brochure & Catalog Settings — AK Distributors{% endblock %}
+{% block title %}Brochure & Catalog Settings — {{ current_company.name if current_company else 'Pallo' }}{% endblock %}
 {% block page_heading %}Brochure & Catalog Settings{% endblock %}
 
 {% block content %}
@@ -468,7 +468,7 @@
         Brochure & PDF Catalog Configurator
       </h2>
       <p>
-        Select which partner brands and product lines are compiled into the official AK Distributors static brochure and downloadable PDF catalog.
+        Select which partner brands and product lines are compiled into the official {{ current_company.name if current_company else 'Pallo' }} product brochure and downloadable PDF catalog.
       </p>
     </div>
 

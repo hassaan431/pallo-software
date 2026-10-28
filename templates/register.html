@@ -4,8 +4,8 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Register Business — {{ app_name|default('Pallo') }}</title>
-  <link rel="icon" type="image/png" href="{{ url_for('static', filename='logos/AK_Distributors_Logo.png') }}">
-  <link rel="shortcut icon" type="image/png" href="{{ url_for('static', filename='logos/AK_Distributors_Logo.png') }}">
+  <link rel="icon" type="image/png" href="{{ url_for('static', filename='favicon.png') }}">
+  <link rel="shortcut icon" type="image/x-icon" href="{{ url_for('static', filename='favicon.ico') }}">
   
   <!-- Modern Typography -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -285,6 +285,12 @@
     <div class="register-card-wrapper">
       
       <div class="register-card">
+        <div style="display: flex; justify-content: center; margin-bottom: 1.25rem;">
+          <a href="{{ url_for('login') }}" title="Pallo">
+            <img src="{{ url_for('static', filename='logos/pallo_logo.png') }}" alt="Pallo Logo" style="height: 44px; width: auto; object-fit: contain;">
+          </a>
+        </div>
+
         <div class="brand-badge">
           <i data-lucide="sparkles" style="width: 14px; height: 14px;"></i>
           <span>Multi-Tenant ERP Platform</span>

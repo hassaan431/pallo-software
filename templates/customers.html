@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block title %}Customers & Accounts Receivable — AK Distributors{% endblock %}
+{% block title %}Customers & Accounts Receivable — {{ current_company.name if current_company else 'Pallo' }}{% endblock %}
 {% block page_heading %}Customers & Accounts Receivable{% endblock %}
 {% block content %}
 

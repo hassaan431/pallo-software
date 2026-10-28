@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block title %}{% if purchase %}Edit Shipment #{{ purchase.id }}{% else %}Receive Shipment{% endif %} — AK Distributors{% endblock %}
+{% block title %}{% if purchase %}Edit Shipment #{{ purchase.id }}{% else %}Receive Shipment{% endif %} — {{ current_company.name if current_company else 'Pallo' }}{% endblock %}
 {% block page_heading %}{% if purchase %}Edit Shipment{% else %}Receive Shipment / Add Inventory{% endif %}{% endblock %}
 {% block content %}
 <!-- TomSelect CSS & JS -->

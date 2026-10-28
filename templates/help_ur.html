@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block title %}ہیلپ سینٹر اور رہنمائے سافٹ ویئر — AK Distributors{% endblock %}
+{% block title %}ہیلپ سینٹر اور رہنمائے سافٹ ویئر — {{ current_company.name if current_company else 'Pallo' }}{% endblock %}
 {% block page_heading %}ہیلپ سینٹر اور رہنمائے سافٹ ویئر{% endblock %}
 
 {% block content %}

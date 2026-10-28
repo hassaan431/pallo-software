@@ -13,7 +13,7 @@ from database import get_connection, get_next_invoice_number, get_user_by_id, ge
 
 import urllib.parse
 
-from flask import Flask, Response, abort, flash, jsonify, redirect, render_template, request, url_for, send_from_directory
+from flask import Flask, Response, abort, flash, jsonify, redirect, render_template, request, url_for, send_from_directory, session
 from flask_login import LoginManager, UserMixin, current_user, login_required, login_user, logout_user
 from werkzeug.security import check_password_hash, generate_password_hash
 from werkzeug.exceptions import HTTPException
@@ -181,6 +181,17 @@ def load_user(user_id):
     if company_id is None:
         company_id = 1
 
+    # Superadmin tenant switcher override (session-driven)
+    if role == "superadmin":
+        try:
+            from flask import has_request_context, session
+            if has_request_context():
+                switched_cid = session.get("active_company_id")
+                if switched_cid:
+                    company_id = int(switched_cid)
+        except Exception:
+            pass
+
     # Enforce company soft-deactivation (ADR 0004); superadmins bypass company pause
     if role != "superadmin":
         company = get_company(company_id)
@@ -235,10 +246,27 @@ def inject_pallo_context():
     if not company:
         company = get_company(1)
 
+    is_superadmin = bool(current_user.is_authenticated and current_user.role == "superadmin")
+    all_companies = []
+    active_switched_company_id = None
+    if is_superadmin:
+        try:
+            from flask import session
+            active_switched_company_id = session.get("active_company_id")
+            conn = get_connection()
+            try:
+                all_companies = [dict(c) for c in conn.execute("SELECT id, name, slug, is_active FROM companies ORDER BY name ASC").fetchall()]
+            finally:
+                conn.close()
+        except Exception:
+            pass
+
     return {
         "current_company": company,
         "app_name": "Pallo",
-        "is_superadmin": bool(current_user.is_authenticated and current_user.role == "superadmin"),
+        "is_superadmin": is_superadmin,
+        "all_companies": all_companies,
+        "active_switched_company_id": active_switched_company_id,
     }
 
 @app.template_filter("format_rate")
@@ -5756,27 +5784,31 @@ def users_add():
 @admin_required
 def users_toggle_active(user_id):
     cid = current_user.company_id if hasattr(current_user, "company_id") and current_user.company_id else 1
+    redirect_target = request.referrer or url_for("users_list")
     if user_id == current_user.id:
         flash("You cannot deactivate your own account.", "warning")
-        return redirect(url_for("users_list"))
+        return redirect(redirect_target)
 
     conn = get_connection()
     try:
-        cur = conn.execute("SELECT is_active FROM users WHERE id = ? AND company_id = ?", (user_id, cid))
+        cur = conn.execute("SELECT is_active, username FROM users WHERE id = ? AND company_id = ?", (user_id, cid))
         row = cur.fetchone()
         if not row:
             abort(404)
         new_active = False if row["is_active"] in (1, True, "1") else True
         conn.execute("UPDATE users SET is_active = ? WHERE id = ? AND company_id = ?", (new_active, user_id, cid))
         conn.commit()
+        status_txt = "reactivated" if new_active else "suspended"
+        flash(f"User account '{row['username']}' {status_txt} successfully.", "success")
     finally:
         conn.close()
-    return redirect(url_for("users_list"))
+    return redirect(redirect_target)
 
 @app.route("/users/edit/<int:user_id>", methods=["POST"])
 @admin_required
 def users_edit(user_id):
     cid = current_user.company_id if hasattr(current_user, "company_id") and current_user.company_id else 1
+    redirect_target = request.referrer or url_for("users_list")
     warehouse_id = request.form.get("warehouse_id")
     if not warehouse_id:
         warehouse_id = None
@@ -5784,17 +5816,18 @@ def users_edit(user_id):
     
     conn = get_connection()
     try:
-        target_user = conn.execute("SELECT id, role FROM users WHERE id = ? AND company_id = ?", (user_id, cid)).fetchone()
+        target_user = conn.execute("SELECT id, role, username FROM users WHERE id = ? AND company_id = ?", (user_id, cid)).fetchone()
         if not target_user:
             abort(404)
         if warehouse_id:
             wh_check = conn.execute("SELECT id FROM warehouses WHERE id = ? AND company_id = ?", (warehouse_id, cid)).fetchone()
             if not wh_check:
-                flash("Invalid warehouse.", "danger")
-                return redirect(url_for("users_list"))
+                flash("Invalid warehouse selected.", "danger")
+                return redirect(redirect_target)
         conn.execute("UPDATE users SET role = ?, warehouse_id = ? WHERE id = ? AND company_id = ?", (role, warehouse_id, user_id, cid))
         conn.commit()
-        return redirect(url_for("users_list"))
+        flash(f"User account '{target_user['username']}' updated successfully.", "success")
+        return redirect(redirect_target)
     finally:
         conn.close()
 
@@ -5970,88 +6003,214 @@ def users_reset_password():
 ALLOWED_LOGO_EXTENSIONS = {"png", "jpg", "jpeg", "webp", "svg"}
 MAX_LOGO_BYTES = 2 * 1024 * 1024  # 2MB
 
-@app.route("/settings/company", methods=["GET", "POST"])
+@app.route("/settings", methods=["GET", "POST"])
 @login_required
 @admin_required
-def settings_company():
+def settings_hub():
     cid = current_user.company_id if hasattr(current_user, "company_id") and current_user.company_id else 1
     conn = get_connection()
     try:
         if request.method == "POST":
-            name = (request.form.get("name") or "").strip()
-            tax_id = (request.form.get("tax_id") or "").strip()
-            bill_address = (request.form.get("bill_address") or "").strip()
-            ship_address = (request.form.get("ship_address") or "").strip()
-            phone = (request.form.get("phone") or "").strip()
-            email = (request.form.get("email") or "").strip()
-            currency = (request.form.get("currency") or "$").strip()
-            invoice_prefix = (request.form.get("invoice_prefix") or "INV-").strip()
-            remove_logo = request.form.get("remove_logo") == "1"
+            form_type = request.form.get("form_type", "company")
+            
+            if form_type == "company":
+                name = (request.form.get("name") or "").strip()
+                tax_id = (request.form.get("tax_id") or "").strip()
+                bill_address = (request.form.get("bill_address") or "").strip()
+                ship_address = (request.form.get("ship_address") or "").strip()
+                phone = (request.form.get("phone") or "").strip()
+                email = (request.form.get("email") or "").strip()
+                currency = (request.form.get("currency") or "$").strip()
+                invoice_prefix = (request.form.get("invoice_prefix") or "INV-").strip()
+                remove_logo = request.form.get("remove_logo") == "1"
 
-            if not name:
-                flash("Company legal name is required.", "danger")
-                return redirect(url_for("settings_company"))
+                if not name:
+                    flash("Company legal name is required.", "danger")
+                    dest = "settings_company" if request.path == "/settings/company" else "settings_hub"
+                    return redirect(url_for(dest, tab="company") if dest == "settings_hub" else url_for(dest))
 
-            logo_url = None
-            if "logo" in request.files:
-                file = request.files["logo"]
-                if file and file.filename:
-                    ext = file.filename.rsplit(".", 1)[-1].lower() if "." in file.filename else ""
-                    if ext not in ALLOWED_LOGO_EXTENSIONS:
-                        flash("Invalid image format. Allowed extensions: PNG, JPG, JPEG, WEBP, SVG.", "danger")
-                        return redirect(url_for("settings_company"))
-                    
-                    content = file.read()
-                    if len(content) > MAX_LOGO_BYTES:
-                        flash("Logo file exceeds maximum size of 2MB.", "danger")
-                        return redirect(url_for("settings_company"))
-                    
-                    safe_filename = f"company_{cid}.{ext}"
-                    content_type = f"image/{'svg+xml' if ext == 'svg' else ext}"
-                    logo_url = storage.save_company_logo(content, safe_filename, content_type=content_type)
+                logo_url = None
+                if "logo" in request.files:
+                    file = request.files["logo"]
+                    if file and file.filename:
+                        ext = file.filename.rsplit(".", 1)[-1].lower() if "." in file.filename else ""
+                        if ext not in ALLOWED_LOGO_EXTENSIONS:
+                            flash("Invalid image format. Allowed extensions: PNG, JPG, JPEG, WEBP, SVG.", "danger")
+                            dest = "settings_company" if request.path == "/settings/company" else "settings_hub"
+                            return redirect(url_for(dest, tab="company") if dest == "settings_hub" else url_for(dest))
+                        
+                        content = file.read()
+                        if len(content) > MAX_LOGO_BYTES:
+                            flash("Logo file exceeds maximum size of 2MB.", "danger")
+                            dest = "settings_company" if request.path == "/settings/company" else "settings_hub"
+                            return redirect(url_for(dest, tab="company") if dest == "settings_hub" else url_for(dest))
+                        
+                        safe_filename = f"company_{cid}.{ext}"
+                        content_type = f"image/{'svg+xml' if ext == 'svg' else ext}"
+                        logo_url = storage.save_company_logo(content, safe_filename, content_type=content_type)
 
-            if logo_url:
+                if logo_url:
+                    conn.execute(
+                        """
+                        UPDATE companies
+                        SET name = ?, tax_id = ?, bill_address = ?, ship_address = ?, phone = ?, email = ?, currency = ?, invoice_prefix = ?, logo_url = ?
+                        WHERE id = ?
+                        """,
+                        (name, tax_id, bill_address, ship_address, phone, email, currency, invoice_prefix, logo_url, cid)
+                    )
+                elif remove_logo:
+                    existing_row = conn.execute("SELECT logo_url FROM companies WHERE id = ?", (cid,)).fetchone()
+                    if existing_row and existing_row["logo_url"]:
+                        storage.delete_company_logo(existing_row["logo_url"])
+                    conn.execute(
+                        """
+                        UPDATE companies
+                        SET name = ?, tax_id = ?, bill_address = ?, ship_address = ?, phone = ?, email = ?, currency = ?, invoice_prefix = ?, logo_url = NULL
+                        WHERE id = ?
+                        """,
+                        (name, tax_id, bill_address, ship_address, phone, email, currency, invoice_prefix, cid)
+                    )
+                else:
+                    conn.execute(
+                        """
+                        UPDATE companies
+                        SET name = ?, tax_id = ?, bill_address = ?, ship_address = ?, phone = ?, email = ?, currency = ?, invoice_prefix = ?
+                        WHERE id = ?
+                        """,
+                        (name, tax_id, bill_address, ship_address, phone, email, currency, invoice_prefix, cid)
+                    )
+                conn.commit()
+                flash("Company settings updated successfully.", "success")
+                dest = "settings_company" if request.path == "/settings/company" else "settings_hub"
+                return redirect(url_for(dest, tab="company") if dest == "settings_hub" else url_for(dest))
+
+            elif form_type == "preferences":
+                default_warehouse_id = request.form.get("default_warehouse_id")
+                default_warehouse_id = int(default_warehouse_id) if default_warehouse_id and default_warehouse_id.isdigit() else None
+                low_stock_threshold = request.form.get("low_stock_threshold", "5")
+                try:
+                    low_stock_threshold = max(1, int(low_stock_threshold))
+                except ValueError:
+                    low_stock_threshold = 5
+                starting_inv = request.form.get("starting_invoice_number", "1")
+                try:
+                    starting_inv = max(1, int(starting_inv))
+                except ValueError:
+                    starting_inv = 1
+
                 conn.execute(
                     """
                     UPDATE companies
-                    SET name = ?, tax_id = ?, bill_address = ?, ship_address = ?, phone = ?, email = ?, currency = ?, invoice_prefix = ?, logo_url = ?
+                    SET default_warehouse_id = ?, low_stock_threshold = ?, starting_invoice_number = ?
                     WHERE id = ?
                     """,
-                    (name, tax_id, bill_address, ship_address, phone, email, currency, invoice_prefix, logo_url, cid)
+                    (default_warehouse_id, low_stock_threshold, starting_inv, cid)
                 )
-            elif remove_logo:
-                existing_row = conn.execute("SELECT logo_url FROM companies WHERE id = ?", (cid,)).fetchone()
-                if existing_row and existing_row["logo_url"]:
-                    storage.delete_company_logo(existing_row["logo_url"])
-                conn.execute(
-                    """
-                    UPDATE companies
-                    SET name = ?, tax_id = ?, bill_address = ?, ship_address = ?, phone = ?, email = ?, currency = ?, invoice_prefix = ?, logo_url = NULL
-                    WHERE id = ?
-                    """,
-                    (name, tax_id, bill_address, ship_address, phone, email, currency, invoice_prefix, cid)
-                )
-            else:
-                conn.execute(
-                    """
-                    UPDATE companies
-                    SET name = ?, tax_id = ?, bill_address = ?, ship_address = ?, phone = ?, email = ?, currency = ?, invoice_prefix = ?
-                    WHERE id = ?
-                    """,
-                    (name, tax_id, bill_address, ship_address, phone, email, currency, invoice_prefix, cid)
-                )
-            conn.commit()
-            flash("Company settings updated successfully.", "success")
-            return redirect(url_for("settings_company"))
+                conn.commit()
+                flash("Operational preferences updated successfully.", "success")
+                return redirect(url_for("settings_hub", tab="preferences"))
 
-        company = conn.execute("SELECT * FROM companies WHERE id = ?", (cid,)).fetchone()
-        if not company:
-            company = {"id": cid, "name": "Company", "currency": "$", "invoice_prefix": "INV-"}
-        else:
-            company = dict(company)
-        return render_template("settings_company.html", company=company)
+            elif form_type == "brochure":
+                conn.execute("UPDATE brands SET show_in_brochure = 0 WHERE company_id = ?", (cid,))
+                conn.execute("UPDATE products SET show_in_brochure = 0 WHERE company_id = ?", (cid,))
+                selected_brands = request.form.getlist("brands")
+                selected_products = request.form.getlist("products")
+                for b_id in selected_brands:
+                    conn.execute("UPDATE brands SET show_in_brochure = 1 WHERE id = ? AND company_id = ?", (b_id, cid))
+                for p_id in selected_products:
+                    conn.execute("UPDATE products SET show_in_brochure = 1 WHERE id = ? AND company_id = ?", (p_id, cid))
+                conn.commit()
+                flash("Brochure and catalog settings saved successfully.", "success")
+                return redirect(url_for("settings_hub", tab="brochure"))
+
+        active_tab = (request.args.get("tab") or "company").strip().lower()
+        if active_tab not in {"company", "users", "brochure", "preferences", "platform"}:
+            active_tab = "company"
+
+        if active_tab == "platform" and getattr(current_user, "role", "") != "superadmin":
+            flash("Platform governance settings are restricted to SuperAdmin.", "warning")
+            return redirect(url_for("settings_hub", tab="company"))
+
+        company_row = conn.execute("SELECT * FROM companies WHERE id = ?", (cid,)).fetchone()
+        company = dict(company_row) if company_row else {"id": cid, "name": "Company", "currency": "$", "invoice_prefix": "INV-"}
+
+        # Team / Users
+        users = conn.execute("""
+            SELECT u.id, u.username, u.role, u.is_active, u.warehouse_id, w.name as warehouse_name
+            FROM users u
+            LEFT JOIN warehouses w ON u.warehouse_id = w.id
+            WHERE u.company_id = ?
+            ORDER BY u.id ASC
+        """, (cid,)).fetchall()
+        user_list = [dict(u) for u in users]
+
+        # Warehouses
+        warehouses = [dict(w) for w in conn.execute("SELECT id, name FROM warehouses WHERE company_id = ? ORDER BY name", (cid,)).fetchall()]
+
+        # Brochure brands and products
+        brands = [dict(b) for b in conn.execute("SELECT id, name, show_in_brochure FROM brands WHERE company_id = ? ORDER BY name", (cid,)).fetchall()]
+        products = [dict(p) for p in conn.execute("SELECT id, name, brand, show_in_brochure FROM products WHERE company_id = ? ORDER BY name", (cid,)).fetchall()]
+        products_by_brand = {}
+        for p in products:
+            b = p["brand"] or "Uncategorized"
+            if b not in products_by_brand:
+                products_by_brand[b] = []
+            products_by_brand[b].append(p)
+
+        # Platform stats for SuperAdmin
+        platform_stats = None
+        if getattr(current_user, "role", "") == "superadmin":
+            total_companies = conn.execute("SELECT COUNT(*) as c FROM companies").fetchone()["c"]
+            active_companies = conn.execute("SELECT COUNT(*) as c FROM companies WHERE is_active = TRUE").fetchone()["c"]
+            total_platform_users = conn.execute("SELECT COUNT(*) as c FROM users").fetchone()["c"]
+            platform_stats = {
+                "total_companies": total_companies,
+                "active_companies": active_companies,
+                "total_platform_users": total_platform_users
+            }
+
+        return render_template(
+            "settings.html",
+            company=company,
+            active_tab=active_tab,
+            users=user_list,
+            warehouses=warehouses,
+            brands=brands,
+            products_by_brand=products_by_brand,
+            platform_stats=platform_stats
+        )
     finally:
         conn.close()
+
+@app.route("/settings/company", methods=["GET", "POST"])
+@login_required
+@admin_required
+def settings_company():
+    return settings_hub()
+
+@app.route("/superadmin/switch-tenant/<int:company_id>", methods=["GET", "POST"])
+@login_required
+@superadmin_required
+def superadmin_switch_tenant(company_id):
+    conn = get_connection()
+    try:
+        co = conn.execute("SELECT id, name FROM companies WHERE id = ?", (company_id,)).fetchone()
+        if not co:
+            flash("Target company workspace not found.", "danger")
+            return redirect(request.referrer or url_for("superadmin_dashboard"))
+        session["active_company_id"] = company_id
+        flash(f"Switched active workspace view to '{co['name']}'.", "success")
+        return redirect(request.referrer or url_for("dashboard"))
+    finally:
+        conn.close()
+
+@app.route("/superadmin/switch-tenant/clear", methods=["GET", "POST"])
+@login_required
+@superadmin_required
+def superadmin_clear_tenant_switch():
+    session.pop("active_company_id", None)
+    flash("Reset workspace view to platform default.", "info")
+    return redirect(request.referrer or url_for("superadmin_dashboard"))
 
 @app.route("/superadmin")
 @login_required

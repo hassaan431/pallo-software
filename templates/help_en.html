@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block title %}Knowledge Base & Manual — AK Distributors{% endblock %}
+{% block title %}Knowledge Base & Manual — {{ current_company.name if current_company else 'Pallo' }}{% endblock %}
 {% block page_heading %}Knowledge Base & System Manual{% endblock %}
 
 {% block content %}

@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 
-{% block title %}User Accounts & Security — AK Distributors{% endblock %}
+{% block title %}User Accounts & Security — {{ current_company.name if current_company else 'Pallo' }}{% endblock %}
 {% block page_heading %}Manage Users{% endblock %}
 
 {% block content %}

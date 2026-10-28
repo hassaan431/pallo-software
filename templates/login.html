@@ -3,9 +3,17 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Sign In — AK Distributors</title>
-  <link rel="icon" type="image/png" href="{{ url_for('static', filename='logos/AK_Distributors_Logo.png') }}">
-  <link rel="shortcut icon" type="image/png" href="{{ url_for('static', filename='logos/AK_Distributors_Logo.png') }}">
+  <script>
+    (function() {
+      try {
+        localStorage.removeItem('pallo_theme');
+        document.documentElement.setAttribute('data-theme', 'light');
+      } catch (e) {}
+    })();
+  </script>
+  <title>Sign In — Pallo</title>
+  <link rel="icon" type="image/png" href="{{ url_for('static', filename='favicon.png') }}">
+  <link rel="shortcut icon" type="image/x-icon" href="{{ url_for('static', filename='favicon.ico') }}">
   
   <!-- Modern Typography -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -318,21 +326,17 @@
 <body class="auth-page">
   <div class="auth-card-wrapper">
     <div class="auth-card">
-      <!-- Dual Partner Brand Logos -->
-      <div class="auth-brand-strip">
-        <div class="auth-logo-box" title="AK Distributors LLC">
-          <img src="{{ url_for('static', filename='logos/AK_Distributors_Logo.png') }}" alt="AK Distributors Logo">
-        </div>
-        <span class="auth-logo-divider">•</span>
-        <div class="auth-logo-box" title="Zain Foods Partner">
-          <img src="{{ url_for('static', filename='logos/Zain Foods Logo.jpeg') }}" alt="Zain Foods Logo">
+      <!-- Pallo SaaS Brand Header -->
+      <div class="auth-brand-strip" style="display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 0.5rem; margin-bottom: 1.5rem;">
+        <div class="auth-logo-box" title="Pallo" style="height: 54px; padding: 4px 12px; border: none; box-shadow: none; background: transparent;">
+          <img src="{{ url_for('static', filename='logos/pallo_logo.png') }}" alt="Pallo Logo" style="height: 50px; width: auto; object-fit: contain;">
         </div>
       </div>
 
       <!-- Main Headline & Subtitle -->
-      <div class="auth-header">
-        <h1 class="auth-title">AK Distributors LLC</h1>
-        <p class="auth-subtitle">Enterprise Inventory & Distribution Management System</p>
+      <div class="auth-header" style="margin-bottom: 1.5rem;">
+        <h1 class="auth-title" style="font-size: 1.45rem;">Sign in to your account</h1>
+        <p class="auth-subtitle">Enterprise Distribution & Multi-Warehouse Operating System</p>
       </div>
 
       <!-- Error Feedback Banner -->

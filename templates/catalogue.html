@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Catalogue POS — AK Distributors</title>
+  <title>Catalogue POS — {{ current_company.name if current_company else 'Pallo' }}</title>
   <link rel="icon" type="image/png" href="/static/logos/AK_Distributors_Logo.png">
   
   <!-- Modern Fonts -->
@@ -2097,7 +2097,7 @@
       if (checkoutModal) {
         const obs = new MutationObserver(() => {
           if (checkoutModal.style.display && checkoutModal.style.display !== 'none') {
-            document.title = 'Checkout — AK Distributors';
+            document.title = 'Checkout — {{ current_company.name if current_company else 'Pallo' }}';
           } else {
             document.title = baseTitle;
           }

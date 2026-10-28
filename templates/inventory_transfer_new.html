@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block title %}{% if edit_transfer %}Edit Transfer #{{ edit_transfer.id }}{% else %}Transfer Stock{% endif %} — AK Distributors{% endblock %}
+{% block title %}{% if edit_transfer %}Edit Transfer #{{ edit_transfer.id }}{% else %}Transfer Stock{% endif %} — {{ current_company.name if current_company else 'Pallo' }}{% endblock %}
 {% block page_heading %}{% if edit_transfer %}Edit Transfer #{{ edit_transfer.id }}{% else %}Transfer Stock{% endif %}{% endblock %}
 {% block content %}
 

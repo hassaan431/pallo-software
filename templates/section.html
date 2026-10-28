@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block title %}{{ page_title }} — AK Distributors{% endblock %}
+{% block title %}{{ page_title }} — {{ current_company.name if current_company else 'Pallo' }}{% endblock %}
 {% block page_heading %}{{ page_heading }}{% endblock %}
 {% block content %}
 <div class="section-intro">

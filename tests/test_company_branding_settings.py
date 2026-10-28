@@ -31,7 +31,7 @@ class TestCompanyBrandingSettings(unittest.TestCase):
         co_ids = [r[0] for r in conn.execute("SELECT id FROM companies WHERE slug IN ('test-brand-c1', 'test-brand-c2')").fetchall()]
         if co_ids:
             ph = ",".join("?" * len(co_ids))
-            tables = ["users", "companies"]
+            tables = ["users", "products", "brands", "companies"]
             for tbl in tables:
                 chk = conn.execute("SELECT name FROM sqlite_master WHERE type='table' AND name=?", (tbl,)).fetchone()
                 if chk:
@@ -39,6 +39,10 @@ class TestCompanyBrandingSettings(unittest.TestCase):
                     if "company_id" in cols:
                         conn.execute(f"DELETE FROM {tbl} WHERE company_id IN ({ph})", co_ids)
             conn.execute(f"DELETE FROM companies WHERE id IN ({ph})", co_ids)
+        # Also clean any test brands named Alpha Brand
+        chk_b = conn.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='brands'").fetchone()
+        if chk_b:
+            conn.execute("DELETE FROM brands WHERE name = 'Alpha Brand'")
         conn.commit()
         try:
             conn.execute("PRAGMA foreign_keys = ON")
@@ -292,6 +296,66 @@ class TestCompanyBrandingSettings(unittest.TestCase):
         self.assertTrue(isinstance(pdf_c2, bytes))
         self.assertTrue(len(pdf_c2) > 1000)
         self.assertTrue(pdf_c2.startswith(b"%PDF"))
+
+    def test_brochure_settings_expandable_products(self):
+        """Brochure settings tab renders expandable brands and products and persists selection."""
+        # Setup sample brand and product
+        conn = database.get_connection()
+        try:
+            conn.execute("INSERT INTO brands (name, company_id, show_in_brochure) VALUES ('Alpha Brand', ?, 1)", (self.c1_id,))
+            b_id = conn.execute("SELECT id FROM brands WHERE name = 'Alpha Brand' AND company_id = ?", (self.c1_id,)).fetchone()[0]
+            conn.execute(
+                """
+                INSERT INTO products (name, brand, company_id, show_in_brochure, selling_price, cost_price, stock_quantity)
+                VALUES ('Alpha Product 1', 'Alpha Brand', ?, 1, 10.0, 5.0, 50)
+                """,
+                (self.c1_id,)
+            )
+            p_id = conn.execute("SELECT id FROM products WHERE name = 'Alpha Product 1' AND company_id = ?", (self.c1_id,)).fetchone()[0]
+            conn.commit()
+        finally:
+            conn.close()
+
+        self._login("c1_admin_brand", "pass123")
+
+        # 1. GET brochure tab renders accordion card and product toggle chip
+        res = self.client.get("/settings?tab=brochure")
+        self.assertEqual(res.status_code, 200)
+        self.assertIn(b"brand-accordion-card", res.data)
+        self.assertIn(b"Alpha Brand", res.data)
+        self.assertIn(b"Alpha Product 1", res.data)
+        self.assertIn(b"product-toggle-chip", res.data)
+
+        # 2. POST brochure form with selected brand and product
+        res = self.client.post("/settings?tab=brochure", data={
+            "form_type": "brochure",
+            "brands": [str(b_id)],
+            "products": [str(p_id)]
+        }, follow_redirects=True)
+        self.assertEqual(res.status_code, 200)
+
+        # Verify DB flags
+        conn = database.get_connection()
+        try:
+            b_flag = conn.execute("SELECT show_in_brochure FROM brands WHERE id = ?", (b_id,)).fetchone()[0]
+            p_flag = conn.execute("SELECT show_in_brochure FROM products WHERE id = ?", (p_id,)).fetchone()[0]
+            self.assertEqual(b_flag, 1)
+            self.assertEqual(p_flag, 1)
+        finally:
+            conn.close()
+
+    def test_team_member_table_formatting(self):
+        """Team member tab renders formatted header row, Add Team Member button, status pills, and avatars."""
+        self._login("c1_admin_brand", "pass123")
+
+        res = self.client.get("/settings?tab=users")
+        self.assertEqual(res.status_code, 200)
+        self.assertIn(b"team-header-row", res.data)
+        self.assertIn(b"btn-add-team-member", res.data)
+        self.assertIn(b"Add Team Member", res.data)
+        self.assertIn(b"team-table", res.data)
+        self.assertIn(b"status-pill-active", res.data)
+        self.assertIn(b"user-avatar-monogram", res.data)
 
 
 if __name__ == "__main__":

@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block title %}Expenses & Outflows — AK Distributors{% endblock %}
+{% block title %}Expenses & Outflows — {{ current_company.name if current_company else 'Pallo' }}{% endblock %}
 {% block page_heading %}Expenses{% endblock %}
 
 {% block content %}

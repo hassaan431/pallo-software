@@ -1072,13 +1072,27 @@ def _ensure_sqlite_companies_support(conn):
     if not cur.fetchone():
         conn.execute(
             """
-            INSERT INTO companies (id, name, slug, currency, invoice_prefix, starting_invoice_number, is_active)
-            VALUES (1, 'AK Distributors LLC', 'ak-distributors', '$', 'AK-', 1, 1)
+            INSERT INTO companies (id, name, slug, currency, invoice_prefix, starting_invoice_number, logo_url, is_active)
+            VALUES (1, 'AK Distributors LLC', 'ak-distributors', '$', 'AK-', 1, '/static/logos/AK_Distributors_Logo.png', 1)
             """
         )
     else:
-        # Ensure Company 1 preserves AK- prefix
+        # Ensure Company 1 preserves AK- prefix and authentic AK logo
         conn.execute("UPDATE companies SET invoice_prefix = 'AK-' WHERE id = 1 AND (invoice_prefix = 'INV-' OR invoice_prefix IS NULL)")
+        conn.execute("UPDATE companies SET logo_url = '/static/logos/AK_Distributors_Logo.png' WHERE id = 1 AND (logo_url IS NULL OR logo_url = '')")
+
+    # Ensure settings columns exist on companies in SQLite
+    comp_cols = [r[1] for r in conn.execute("PRAGMA table_info(companies)").fetchall()]
+    if "default_warehouse_id" not in comp_cols:
+        try:
+            conn.execute("ALTER TABLE companies ADD COLUMN default_warehouse_id INTEGER")
+        except Exception:
+            pass
+    if "low_stock_threshold" not in comp_cols:
+        try:
+            conn.execute("ALTER TABLE companies ADD COLUMN low_stock_threshold INTEGER DEFAULT 5")
+        except Exception:
+            pass
 
     multi_tenant_tables = [
         "users", "warehouses", "categories", "brands", "suppliers", "customers",

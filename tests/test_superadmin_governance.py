@@ -21,29 +21,63 @@ class TestSuperAdminPlatformGovernance(unittest.TestCase):
         database.init_db()
 
     def _clean_test_data(self, conn):
-        try:
-            conn.execute("PRAGMA foreign_keys = OFF")
-        except Exception:
-            pass
-        co_ids = [r[0] for r in conn.execute("SELECT id FROM companies WHERE slug IN ('test-sa-c1', 'test-sa-c2')").fetchall()]
-        if co_ids:
-            ph = ",".join("?" * len(co_ids))
-            tables = ["users", "companies"]
-            for tbl in tables:
-                chk = conn.execute("SELECT name FROM sqlite_master WHERE type='table' AND name=?", (tbl,)).fetchone()
-                if chk:
-                    cols = [r[1] for r in conn.execute(f"PRAGMA table_info({tbl})").fetchall()]
-                    if "company_id" in cols:
-                        conn.execute(f"DELETE FROM {tbl} WHERE company_id IN ({ph})", co_ids)
-            conn.execute(f"DELETE FROM companies WHERE id IN ({ph})", co_ids)
-        
-        # Clean superadmin user if created
-        conn.execute("DELETE FROM users WHERE username = 'test_superadmin_user'")
-        conn.commit()
-        try:
-            conn.execute("PRAGMA foreign_keys = ON")
-        except Exception:
-            pass
+        if not database.is_postgres_configured():
+            try:
+                conn.execute("PRAGMA foreign_keys = OFF")
+            except Exception:
+                pass
+            co_ids = [r[0] for r in conn.execute("SELECT id FROM companies WHERE slug IN ('test-sa-c1', 'test-sa-c2')").fetchall()]
+            if co_ids:
+                ph = ",".join("?" * len(co_ids))
+                tables = ["users", "companies"]
+                for tbl in tables:
+                    chk = conn.execute("SELECT name FROM sqlite_master WHERE type='table' AND name=?", (tbl,)).fetchone()
+                    if chk:
+                        cols = [r[1] for r in conn.execute(f"PRAGMA table_info({tbl})").fetchall()]
+                        if "company_id" in cols:
+                            conn.execute(f"DELETE FROM {tbl} WHERE company_id IN ({ph})", co_ids)
+                conn.execute(f"DELETE FROM companies WHERE id IN ({ph})", co_ids)
+            
+            conn.execute("DELETE FROM users WHERE username IN ('test_superadmin_user', 'new_team_member')")
+            conn.commit()
+            try:
+                conn.execute("PRAGMA foreign_keys = ON")
+            except Exception:
+                pass
+        else:
+            try:
+                co_ids = [r[0] for r in conn.execute("SELECT id FROM companies WHERE slug IN ('test-sa-c1', 'test-sa-c2')").fetchall()]
+                if co_ids:
+                    ph = ",".join(["?"] * len(co_ids))
+                    tables = ["users"]
+                    for tbl in tables:
+                        try:
+                            conn.execute(f"DELETE FROM {tbl} WHERE company_id IN ({ph})", co_ids)
+                        except Exception:
+                            try:
+                                conn.rollback()
+                            except Exception:
+                                pass
+                    try:
+                        conn.execute(f"DELETE FROM companies WHERE id IN ({ph})", co_ids)
+                    except Exception:
+                        try:
+                            conn.rollback()
+                        except Exception:
+                            pass
+                try:
+                    conn.execute("DELETE FROM users WHERE username IN ('test_superadmin_user', 'new_team_member')")
+                except Exception:
+                    try:
+                        conn.rollback()
+                    except Exception:
+                        pass
+                conn.commit()
+            except Exception:
+                try:
+                    conn.rollback()
+                except Exception:
+                    pass
 
     def setUp(self):
         self.app = app.app
@@ -68,7 +102,7 @@ class TestSuperAdminPlatformGovernance(unittest.TestCase):
             conn.execute(
                 """
                 INSERT INTO companies (name, slug, currency, invoice_prefix, is_active, max_warehouses)
-                VALUES ('SuperAdmin Test Co 1', 'test-sa-c1', '$', 'SAT1-', 1, 3)
+                VALUES ('SuperAdmin Test Co 1', 'test-sa-c1', '$', 'SAT1-', TRUE, 3)
                 """
             )
             self.c1_id = conn.execute("SELECT id FROM companies WHERE slug = 'test-sa-c1'").fetchone()[0]
@@ -149,7 +183,7 @@ class TestSuperAdminPlatformGovernance(unittest.TestCase):
         conn = database.get_connection()
         try:
             co = conn.execute("SELECT is_active FROM companies WHERE id = ?", (self.c1_id,)).fetchone()
-            self.assertEqual(int(co["is_active"]), 0)
+            self.assertIn(co["is_active"], (0, False, "0"))
         finally:
             conn.close()
 
@@ -167,7 +201,7 @@ class TestSuperAdminPlatformGovernance(unittest.TestCase):
         conn = database.get_connection()
         try:
             co = conn.execute("SELECT is_active FROM companies WHERE id = ?", (self.c1_id,)).fetchone()
-            self.assertEqual(int(co["is_active"]), 1)
+            self.assertIn(co["is_active"], (1, True, "1"))
         finally:
             conn.close()
 
@@ -195,6 +229,86 @@ class TestSuperAdminPlatformGovernance(unittest.TestCase):
         finally:
             conn.close()
 
+    def test_superadmin_tenant_switcher(self):
+        """SuperAdmin can switch tenant context on the fly via /superadmin/switch-tenant/<id>."""
+        self._login("test_superadmin_user", "superpass123")
+
+        # 1. Switch to Tenant Company 1
+        res = self.client.get(f"/superadmin/switch-tenant/{self.c1_id}", follow_redirects=True)
+        self.assertEqual(res.status_code, 200)
+        self.assertIn(b"Switched active workspace view to", res.data)
+        self.assertIn(b"SuperAdmin Test Co 1", res.data)
+
+        with self.client.session_transaction() as sess:
+            self.assertEqual(sess.get("active_company_id"), self.c1_id)
+
+        # 2. Access Settings Hub while switched -> company is SuperAdmin Test Co 1
+        res = self.client.get("/settings?tab=company")
+        self.assertEqual(res.status_code, 200)
+        self.assertIn(b"SuperAdmin Test Co 1", res.data)
+
+        # 3. Clear tenant switch -> returns to platform overview
+        res = self.client.get("/superadmin/switch-tenant/clear", follow_redirects=True)
+        self.assertEqual(res.status_code, 200)
+        self.assertIn(b"Reset workspace view to platform default", res.data)
+
+        with self.client.session_transaction() as sess:
+            self.assertIsNone(sess.get("active_company_id"))
+
+    def test_settings_inline_users_management(self):
+        """Test inline user management from Settings Hub Tab 2."""
+        self._login("test_superadmin_user", "superpass123")
+
+        # 1. Switch to Tenant Company
+        self.client.get(f"/superadmin/switch-tenant/{self.c1_id}")
+
+        # 2. View Team & Users tab in Settings Hub
+        res = self.client.get("/settings?tab=users")
+        self.assertEqual(res.status_code, 200)
+        self.assertIn(b"Team & User Accounts", res.data)
+        self.assertIn(b"Add Team Member", res.data)
+        self.assertIn(b"test_sa_regular_admin", res.data)
+
+        # 3. Add a new team member via /users/add
+        res = self.client.post("/users/add", data={
+            "username": "new_team_member",
+            "password": "securepass123",
+            "role": "salesman"
+        })
+        self.assertEqual(res.status_code, 200)
+        data = res.get_json()
+        self.assertTrue(data.get("ok"))
+
+        # Verify added to database under switched company
+        conn = database.get_connection()
+        try:
+            u = conn.execute("SELECT id, username, company_id, is_active FROM users WHERE username = 'new_team_member'").fetchone()
+            self.assertIsNotNone(u)
+            self.assertEqual(u["company_id"], self.c1_id)
+            user_id = u["id"]
+        finally:
+            conn.close()
+
+        # 4. Toggle active status with Referer header pointing to settings?tab=users
+        res = self.client.post(
+            f"/users/toggle_active/{user_id}",
+            headers={"Referer": "http://localhost/settings?tab=users"},
+            follow_redirects=True
+        )
+        self.assertEqual(res.status_code, 200)
+        self.assertIn(b"suspended successfully", res.data)
+
+        # 5. Edit user role
+        res = self.client.post(
+            f"/users/edit/{user_id}",
+            data={"role": "admin"},
+            headers={"Referer": "http://localhost/settings?tab=users"},
+            follow_redirects=True
+        )
+        self.assertEqual(res.status_code, 200)
+        self.assertIn(b"updated successfully", res.data)
+
 
 if __name__ == "__main__":
     unittest.main()
+
