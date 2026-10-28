@@ -1441,7 +1441,7 @@ def inventory_adjust_stock():
             "SELECT stock_quantity FROM warehouse_inventory WHERE product_id = ? AND warehouse_id = ? AND company_id = ?",
             (product_id, warehouse_id, cid)
         ).fetchone()
-        old_stock = old_stock_row["stock_quantity"] if old_stock_row else 0.0
+        old_stock = float(old_stock_row["stock_quantity"]) if old_stock_row and old_stock_row["stock_quantity"] is not None else 0.0
 
         if old_stock != new_stock:
             conn.execute(
@@ -2125,7 +2125,7 @@ def brands_add():
         if not row:
             conn.execute(
                 "INSERT INTO brands (company_id, name, commission_rate, show_on_website) VALUES (?, ?, ?, ?)",
-                (cid, name, commission_rate, 1 if show_on_website else 0),
+                (cid, name, commission_rate, bool(show_on_website)),
             )
             conn.commit()
             cur = conn.execute("SELECT id, name FROM brands WHERE LOWER(name) = LOWER(?) AND company_id = ?", (name, cid))
@@ -2309,7 +2309,7 @@ def brands_edit(brand_id):
                 if os.path.exists(old_logo_path) and not (logo and logo.filename):
                     os.rename(old_logo_path, new_logo_path)
 
-            conn.execute("UPDATE brands SET name = ?, commission_rate = ?, show_on_website = ? WHERE id = ? AND company_id = ?", (name, commission_rate, 1 if show_on_website else 0, brand_id, cid))
+            conn.execute("UPDATE brands SET name = ?, commission_rate = ?, show_on_website = ? WHERE id = ? AND company_id = ?", (name, commission_rate, bool(show_on_website), brand_id, cid))
             conn.execute("UPDATE products SET brand = ? WHERE brand = ? AND company_id = ?", (name, old_name, cid))
             conn.commit()
     finally:
@@ -2345,7 +2345,7 @@ def products_list():
             SELECT
                 p.id AS id,
                 p.name AS name,
-                b.id AS brand_id,
+                MAX(b.id) AS brand_id,
                 p.brand AS brand_name,
                 p.category_id AS category_id,
                 p.unit AS unit,
@@ -3636,7 +3636,7 @@ def sales_new():
                             """
                             INSERT INTO warehouse_inventory (company_id, product_id, warehouse_id, stock_quantity)
                             VALUES (?, ?, ?, ?)
-                            ON CONFLICT(warehouse_id, product_id) DO UPDATE SET stock_quantity = stock_quantity - ?
+                            ON CONFLICT(warehouse_id, product_id) DO UPDATE SET stock_quantity = warehouse_inventory.stock_quantity - ?
                             """,
                             (cid, product_id, wid, -qty_total, qty_total),
                         )
@@ -4162,7 +4162,7 @@ def sales_update(sale_id: int):
                                     """
                                     INSERT INTO warehouse_inventory (product_id, warehouse_id, stock_quantity, company_id)
                                     VALUES (?, ?, ?, ?)
-                                    ON CONFLICT(warehouse_id, product_id) DO UPDATE SET stock_quantity = stock_quantity - ?
+                                    ON CONFLICT(warehouse_id, product_id) DO UPDATE SET stock_quantity = warehouse_inventory.stock_quantity - ?
                                     """,
                                     (product_id, new_wid, -net_deduct, cid, net_deduct),
                                 )
@@ -4182,7 +4182,7 @@ def sales_update(sale_id: int):
                                 """
                                 INSERT INTO warehouse_inventory (product_id, warehouse_id, stock_quantity, company_id)
                                 VALUES (?, ?, ?, ?)
-                                ON CONFLICT(warehouse_id, product_id) DO UPDATE SET stock_quantity = stock_quantity - ?
+                                ON CONFLICT(warehouse_id, product_id) DO UPDATE SET stock_quantity = warehouse_inventory.stock_quantity - ?
                                 """,
                                 (product_id, new_wid, -net_deduct, cid, net_deduct),
                             )
@@ -4208,7 +4208,7 @@ def sales_update(sale_id: int):
                             """
                             INSERT INTO warehouse_inventory (product_id, warehouse_id, stock_quantity, company_id)
                             VALUES (?, ?, ?, ?)
-                            ON CONFLICT(warehouse_id, product_id) DO UPDATE SET stock_quantity = stock_quantity + ?
+                            ON CONFLICT(warehouse_id, product_id) DO UPDATE SET stock_quantity = warehouse_inventory.stock_quantity + ?
                             """,
                             (product_id, old_wid, qty, cid, qty),
                         )
@@ -4231,7 +4231,7 @@ def sales_update(sale_id: int):
                                 """
                                 INSERT INTO warehouse_inventory (product_id, warehouse_id, stock_quantity, company_id)
                                 VALUES (?, ?, ?, ?)
-                                ON CONFLICT(warehouse_id, product_id) DO UPDATE SET stock_quantity = stock_quantity - ?
+                                ON CONFLICT(warehouse_id, product_id) DO UPDATE SET stock_quantity = warehouse_inventory.stock_quantity - ?
                                 """,
                                 (product_id, new_wid, -qty, cid, qty),
                             )
@@ -4559,7 +4559,7 @@ def sales_mark_sale(sale_id: int):
                     """
                     INSERT INTO warehouse_inventory (product_id, warehouse_id, stock_quantity, company_id)
                     VALUES (?, ?, ?, ?)
-                    ON CONFLICT(warehouse_id, product_id) DO UPDATE SET stock_quantity = stock_quantity - ?
+                    ON CONFLICT(warehouse_id, product_id) DO UPDATE SET stock_quantity = warehouse_inventory.stock_quantity - ?
                     """,
                     (product_id, wid, -qty_total, cid, qty_total),
                 )
@@ -5766,7 +5766,7 @@ def users_toggle_active(user_id):
         row = cur.fetchone()
         if not row:
             abort(404)
-        new_active = 0 if row["is_active"] == 1 else 1
+        new_active = False if row["is_active"] in (1, True, "1") else True
         conn.execute("UPDATE users SET is_active = ? WHERE id = ? AND company_id = ?", (new_active, user_id, cid))
         conn.commit()
     finally:
@@ -6115,11 +6115,11 @@ def superadmin_toggle_company(company_id):
             return redirect(url_for("superadmin_dashboard"))
 
         curr_active = co["is_active"]
-        new_active = 0 if curr_active in (1, True, "1") else 1
+        new_active = False if curr_active in (1, True, "1") else True
         conn.execute("UPDATE companies SET is_active = ? WHERE id = ?", (new_active, company_id))
         conn.commit()
 
-        status_text = "reactivated" if new_active == 1 else "deactivated"
+        status_text = "reactivated" if new_active else "deactivated"
         flash(f"Company '{co['name']}' has been {status_text} successfully.", "success")
         return redirect(url_for("superadmin_dashboard"))
     finally:
@@ -6359,7 +6359,7 @@ def pos_submit_order():
                     """
                     INSERT INTO warehouse_inventory (product_id, warehouse_id, stock_quantity, company_id)
                     VALUES (?, ?, ?, ?)
-                    ON CONFLICT(warehouse_id, product_id) DO UPDATE SET stock_quantity = COALESCE(stock_quantity, 0) - ?
+                    ON CONFLICT(warehouse_id, product_id) DO UPDATE SET stock_quantity = COALESCE(warehouse_inventory.stock_quantity, 0) - ?
                     """,
                     (li["product_id"], wid, -qty_deduct, cid, qty_deduct)
                 )
@@ -7036,10 +7036,12 @@ def add_supplier_payment():
             cur = conn.execute("SELECT grand_total, amount_paid FROM purchases WHERE id = ? AND company_id = ?", (purchase_id, cid))
             purchase = cur.fetchone()
             if purchase:
-                new_paid = purchase["amount_paid"] + amount
-                new_remaining = purchase["grand_total"] - new_paid
+                curr_paid = float(purchase["amount_paid"] or 0)
+                curr_total = float(purchase["grand_total"] or 0)
+                new_paid = curr_paid + amount
+                new_remaining = curr_total - new_paid
                 status = 'unpaid'
-                if abs(new_remaining) < 0.001 or new_paid >= purchase["grand_total"]:
+                if abs(new_remaining) < 0.001 or new_paid >= curr_total:
                     status = 'paid'
                     new_remaining = 0
                 elif new_paid > 0:

@@ -4,6 +4,7 @@ import re
 import sqlite3
 import sys
 import threading
+import time
 from contextlib import contextmanager
 from pathlib import Path
 
@@ -92,7 +93,15 @@ def get_pool():
             minconn = int(os.environ.get("DB_POOL_MIN", 1))
             maxconn = int(os.environ.get("DB_POOL_MAX", 20))
             logger.info("Initializing PostgreSQL ThreadedConnectionPool (min=%d, max=%d)", minconn, maxconn)
-            _pg_pool = ThreadedConnectionPool(minconn=minconn, maxconn=maxconn, dsn=db_url)
+            _pg_pool = ThreadedConnectionPool(
+                minconn=minconn,
+                maxconn=maxconn,
+                dsn=db_url,
+                keepalives=1,
+                keepalives_idle=30,
+                keepalives_interval=10,
+                keepalives_count=5,
+            )
     return _pg_pool
 
 
@@ -131,10 +140,24 @@ class PooledConnectionWrapper:
     """
 
 class PooledCursorWrapper:
-    """Cursor wrapper that adapts '?' parameter placeholders to '%s' for PostgreSQL execution."""
+    """Cursor wrapper that adapts '?' parameter placeholders to '%s' for PostgreSQL execution,
+    and emulates SQLite lastrowid via RETURNING id."""
 
     def __init__(self, raw_cursor):
         self._cur = raw_cursor
+        self._lastrowid = 0
+        self._cached_row = None
+
+    @property
+    def lastrowid(self):
+        return self._lastrowid
+
+    def fetchone(self):
+        if self._cached_row is not None:
+            r = self._cached_row
+            self._cached_row = None
+            return r
+        return self._cur.fetchone()
 
     def execute(self, query, params=None):
         if "?" in query:
@@ -150,11 +173,41 @@ class PooledCursorWrapper:
         if "COLLATE" in query.upper():
             query = re.sub(r'(?i)\bCOLLATE\s+NOCASE\b', '', query)
 
+        # Translate SQLite-specific INSERT OR IGNORE INTO to PostgreSQL ON CONFLICT DO NOTHING
+        if "INSERT OR IGNORE INTO" in query.upper():
+            query = re.sub(r'(?i)\bINSERT\s+OR\s+IGNORE\s+INTO\b', 'INSERT INTO', query)
+            if "ON CONFLICT" not in query.upper():
+                query = query + " ON CONFLICT DO NOTHING"
+
+        appended_returning = False
+        upper_query = query.strip().upper()
+        if (
+            upper_query.startswith("INSERT INTO ")
+            and "RETURNING" not in upper_query
+            and "ON CONFLICT" not in upper_query
+            and "SELECT " not in upper_query
+        ):
+            query = query + " RETURNING id"
+            appended_returning = True
+
+        self._cached_row = None
         if params is None:
-            return self._cur.execute(query)
-        if isinstance(params, list):
-            params = tuple(params)
-        return self._cur.execute(query, params)
+            res = self._cur.execute(query)
+        else:
+            if isinstance(params, list):
+                params = tuple(params)
+            res = self._cur.execute(query, params)
+
+        if appended_returning:
+            try:
+                row = self._cur.fetchone()
+                if row:
+                    self._lastrowid = int(row["id"] if (isinstance(row, dict) or hasattr(row, "get")) else row[0])
+                    self._cached_row = row
+            except Exception:
+                pass
+
+        return self
 
     def executemany(self, query, params_seq):
         if "?" in query:
@@ -194,6 +247,26 @@ class SQLiteCompatibleCursor(RealDictCursor):
         self.row_factory = SQLiteCompatibleRow
 
 
+# Global tracking of connection last-used timestamps for idle-ping validation
+_conn_last_used = {}
+
+
+def _set_conn_last_used(conn, ts: float):
+    if conn is not None:
+        _conn_last_used[id(conn)] = ts
+
+
+def _get_conn_last_used(conn) -> float:
+    if conn is None:
+        return 0.0
+    return _conn_last_used.get(id(conn), 0.0)
+
+
+def _remove_conn_last_used(conn):
+    if conn is not None:
+        _conn_last_used.pop(id(conn), None)
+
+
 class PooledConnectionWrapper:
     """
     A lightweight thread-safe wrapper around a psycopg2 pooled connection that:
@@ -228,14 +301,21 @@ class PooledConnectionWrapper:
     def close(self):
         if not self._returned:
             self._returned = True
+            is_alive = True
             try:
                 # If transaction is in progress or uncommitted, rollback to leave connection clean
-                if not self._conn.closed and self._conn.status != psycopg2.extensions.STATUS_READY:
+                if getattr(self._conn, "closed", 1) == 0 and self._conn.status != psycopg2.extensions.STATUS_READY:
                     self._conn.rollback()
             except Exception as e:
                 logger.warning("Error rolling back uncommitted connection before returning to pool: %s", e)
+                is_alive = False
             try:
-                self._pool.putconn(self._conn)
+                if is_alive and getattr(self._conn, "closed", 1) == 0:
+                    _set_conn_last_used(self._conn, time.time())
+                    self._pool.putconn(self._conn)
+                else:
+                    _remove_conn_last_used(self._conn)
+                    self._pool.putconn(self._conn, close=True)
             except Exception as e:
                 logger.error("Error returning connection to pool: %s", e)
 
@@ -252,6 +332,25 @@ class PooledConnectionWrapper:
 
     def __getattr__(self, name):
         return getattr(self._conn, name)
+
+
+def _is_connection_alive(raw_conn) -> bool:
+    """Validate that a checked-out connection has an active socket without sending redundant pings."""
+    if raw_conn is None or getattr(raw_conn, "closed", 1) != 0:
+        return False
+    now = time.time()
+    last_used = _get_conn_last_used(raw_conn)
+    if (now - last_used) < 45.0:
+        return True
+    try:
+        # Fast query ping only after idle period to verify remote SSL socket is still active
+        with raw_conn.cursor() as cur:
+            cur.execute("SELECT 1")
+        _set_conn_last_used(raw_conn, now)
+        return True
+    except Exception:
+        _remove_conn_last_used(raw_conn)
+        return False
 
 
 @contextmanager
@@ -304,19 +403,29 @@ def get_connection():
     if is_postgres_configured():
         pool = get_pool()
         if pool is not None:
-            try:
-                raw_conn = pool.getconn()
-                # Validate connection is alive; if broken, retry once with fresh connection
-                if raw_conn.closed != 0:
+            raw_conn = None
+            max_retries = 3
+            for _ in range(max_retries):
+                try:
+                    candidate = pool.getconn()
+                except Exception as e:
+                    logger.error("Failed to checkout connection from PostgreSQL pool: %s", e)
+                    raise
+
+                if _is_connection_alive(candidate):
+                    raw_conn = candidate
+                    break
+                else:
+                    logger.info("Discarding stale/dropped PostgreSQL pooled connection and reconnecting...")
                     try:
-                        pool.putconn(raw_conn, close=True)
+                        pool.putconn(candidate, close=True)
                     except Exception:
                         pass
-                    raw_conn = pool.getconn()
-                return PooledConnectionWrapper(raw_conn, pool)
-            except Exception as e:
-                logger.error("Failed to checkout connection from PostgreSQL pool: %s", e)
-                raise
+
+            if raw_conn is None:
+                raw_conn = pool.getconn()
+
+            return PooledConnectionWrapper(raw_conn, pool)
 
     # Fallback to SQLite (preserves current ERP operation prior to full schema migration)
     return get_sqlite_connection()
